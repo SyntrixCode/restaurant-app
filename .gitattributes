@@ -1,0 +1,22 @@
+* text=auto
+
+# Shell scripts and gradle wrapper must use LF (run on Linux in CI)
+*.sh        text eol=lf
+gradlew     text eol=lf
+*.bat       text eol=crlf
+
+# Keep YAML consistent
+*.yml       text eol=lf
+*.yaml      text eol=lf
+
+# Binary files
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.jar       binary
+*.apk       binary
+*.aab       binary
+*.keystore  binary
+*.jks       binary
