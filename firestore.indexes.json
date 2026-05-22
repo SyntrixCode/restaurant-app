@@ -1,0 +1,45 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "kodHash", "order": "ASCENDING" },
+        { "fieldPath": "aktif", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "durum", "order": "ASCENDING" },
+        { "fieldPath": "olusturmaZamani", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "archivedOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "gun", "order": "ASCENDING" },
+        { "fieldPath": "arsivZamani", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "gun", "order": "ASCENDING" },
+        { "fieldPath": "zaman", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "stockMovements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "productId", "order": "ASCENDING" },
+        { "fieldPath": "zaman", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

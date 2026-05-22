@@ -1,0 +1,1271 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Restoran POS Sistemi - Proje Şeması",
+  "version": "1.0.0",
+  "description": "iMin Swan 1 Android POS cihazları için restoran yönetim yazılımı tam spesifikasyonu",
+  "lastUpdated": "2026-05-22",
+
+  "project": {
+    "name": "Restoran POS Sistemi",
+    "target": "Tek şube restoran",
+    "hardware": {
+      "device": "iMin Swan 1 Android POS PC",
+      "count": 3,
+      "deployment": {
+        "device1": { "type": "garson terminali", "primaryUse": "sipariş alma" },
+        "device2": { "type": "garson terminali", "primaryUse": "sipariş alma" },
+        "device3": { "type": "kasa terminali", "primaryUse": "sipariş alma + ödeme + paket servis" }
+      },
+      "specs": {
+        "os": "Android 11",
+        "ram": "4 GB",
+        "storage": "32 GB",
+        "mainScreen": "15.6 inch 1920x1080 touch",
+        "secondaryScreen": "10.1 inch (opsiyonel, müşteri ekranı)",
+        "features": ["NFC (2. ekranda)", "Dahili kamera", "Yerleşik 1.5W hoparlör"],
+        "connectivity": ["WiFi 2.4GHz", "Ethernet 100M", "Bluetooth 4.2"],
+        "ports": ["3x USB-A", "1x RJ12 (şarj)", "1x RJ11 (seri/yazıcı)", "1x RJ45 (Ethernet)", "1x Micro-SD"]
+      }
+    }
+  },
+
+  "techStack": {
+    "frontend": {
+      "framework": { "name": "React", "version": "18.x" },
+      "router": { "name": "React Router DOM", "version": "6.x" },
+      "state": { "name": "Zustand", "version": "latest" },
+      "styling": { "name": "Tailwind CSS", "version": "3.x" },
+      "cssProcessing": ["PostCSS", "Autoprefixer"]
+    },
+    "build": {
+      "bundler": { "name": "Vite", "version": "5.x" },
+      "pwa": "vite-plugin-pwa",
+      "serviceWorker": "Workbox"
+    },
+    "backend": {
+      "platform": "Firebase",
+      "version": "12.x",
+      "services": {
+        "database": "Firestore",
+        "auth": "Firebase Authentication",
+        "hosting": "Firebase Hosting",
+        "functions": "Cloud Functions",
+        "storage": "Firebase Storage"
+      }
+    },
+    "libraries": [
+      { "name": "react-dnd veya dnd-kit", "purpose": "Masa düzeni sürükle-bırak" },
+      { "name": "recharts", "purpose": "Dashboard grafikleri" },
+      { "name": "xlsx veya exceljs", "purpose": "Excel export" },
+      { "name": "date-fns", "purpose": "Tarih işlemleri (TR locale)" },
+      { "name": "react-hot-toast", "purpose": "Bildirim toastları" },
+      { "name": "react-hook-form", "purpose": "Form yönetimi" },
+      { "name": "zod", "purpose": "Şema validasyon" },
+      { "name": "lucide-react", "purpose": "İkonlar" },
+      { "name": "html5-qrcode", "purpose": "QR okuma (kamera)" },
+      { "name": "qrcode.react", "purpose": "QR oluşturma" }
+    ],
+    "posDevice": {
+      "wrapper": { "name": "Capacitor", "version": "6.x", "addedInPhase": 4 },
+      "nativeSDKs": [
+        { "name": "iMin Printer SDK", "purpose": "Yazıcı, kasa çekmecesi" },
+        { "name": "iMin Dual Screen SDK", "purpose": "2. ekran kontrolü" },
+        { "name": "Capacitor NFC plugin", "purpose": "NFC okuma (opsiyonel)" }
+      ]
+    }
+  },
+
+  "roles": {
+    "admin": {
+      "description": "Restoran sahibi/yöneticisi, tam yetkili",
+      "authMethod": "Firebase Auth (email/şifre)",
+      "permissions": {
+        "userManagement": true,
+        "menuManagement": true,
+        "tableLayoutEditor": true,
+        "orderEntry": true,
+        "payment": true,
+        "orderCancel": true,
+        "dashboard": true,
+        "reports": true,
+        "campaigns": true,
+        "stockManagement": true,
+        "notificationSettings": true,
+        "packageDelivery": true,
+        "systemSettings": true
+      }
+    },
+    "kasiyer": {
+      "description": "Kasa terminalinde çalışır",
+      "authMethod": "4 haneli kod",
+      "permissions": {
+        "userManagement": false,
+        "menuManagement": false,
+        "tableLayoutEditor": false,
+        "orderEntry": true,
+        "payment": true,
+        "orderCancel": false,
+        "dashboard": true,
+        "reports": false,
+        "campaigns": false,
+        "stockManagement": false,
+        "notificationSettings": false,
+        "packageDelivery": true,
+        "systemSettings": false
+      }
+    },
+    "garson": {
+      "description": "POS terminallerinde çalışır, sadece sipariş alır",
+      "authMethod": "4 haneli kod",
+      "permissions": {
+        "userManagement": false,
+        "menuManagement": false,
+        "tableLayoutEditor": false,
+        "orderEntry": true,
+        "payment": false,
+        "orderCancel": false,
+        "dashboard": false,
+        "reports": false,
+        "campaigns": false,
+        "stockManagement": false,
+        "notificationSettings": false,
+        "packageDelivery": false,
+        "systemSettings": false
+      }
+    }
+  },
+
+  "firestore": {
+    "collections": {
+      "users": {
+        "description": "Sistem kullanıcıları (admin, kasiyer, garson)",
+        "fields": {
+          "id": { "type": "string", "required": true, "description": "Doküman ID (otomatik)" },
+          "ad": { "type": "string", "required": true, "maxLength": 100 },
+          "kodHash": { "type": "string", "required": true, "description": "4 haneli kodun SHA-256 hash'i" },
+          "kodIpucu": { "type": "string", "maxLength": 4, "description": "Maskelenmiş kod (örn. '1***')" },
+          "rol": { "type": "string", "enum": ["admin", "kasiyer", "garson"], "required": true },
+          "aktif": { "type": "boolean", "default": true },
+          "createdAt": { "type": "timestamp" },
+          "updatedAt": { "type": "timestamp" }
+        }
+      },
+      "categories": {
+        "description": "Menü kategorileri",
+        "fields": {
+          "id": { "type": "string", "required": true },
+          "ad": { "type": "string", "required": true, "maxLength": 100 },
+          "sira": { "type": "number", "default": 0, "description": "Drag-drop ile değişen sıralama" },
+          "aktif": { "type": "boolean", "default": true },
+          "yaziciId": { "type": "string", "nullable": true, "ref": "printers", "description": "Bu kategorideki ürünler hangi mutfak yazıcısına gider. null ise varsayılan yazıcı." },
+          "urunSayisi": { "type": "number", "default": 0, "description": "Cached, Cloud Function ile güncellenir" },
+          "createdAt": { "type": "timestamp" },
+          "updatedAt": { "type": "timestamp" }
+        },
+        "defaults": [
+          "Kahvaltı", "Çorbalar", "Ara Sıcaklar", "Salatalar", "Pideler",
+          "Yöresel Lezzetler", "Tatlılar", "İçecekler", "Dürümler", "Şarküteri"
+        ]
+      },
+      "products": {
+        "description": "Menü ürünleri",
+        "fields": {
+          "id": { "type": "string", "required": true },
+          "ad": { "type": "string", "required": true, "maxLength": 200 },
+          "fiyat": { "type": "number", "required": true, "min": 0, "description": "TL cinsinden" },
+          "stok": { "type": "number", "required": true, "min": 0, "default": 0 },
+          "dusukStokEsigi": { "type": "number", "nullable": true, "description": "null ise global ayar kullanılır" },
+          "categoryId": { "type": "string", "required": true, "ref": "categories" },
+          "categoryAd": { "type": "string", "description": "Denormalize, hızlı görüntüleme için" },
+          "aciklama": { "type": "string" },
+          "gorsel": { "type": "string", "description": "Firebase Storage URL" },
+          "aktif": { "type": "boolean", "default": true },
+          "createdAt": { "type": "timestamp" },
+          "updatedAt": { "type": "timestamp" }
+        }
+      },
+      "tables": {
+        "description": "Restoran masaları",
+        "fields": {
+          "id": { "type": "string", "required": true },
+          "ad": { "type": "string", "required": true, "examples": ["Masa 1", "Teras-3"] },
+          "zone": { "type": "string", "enum": ["ic", "dis", "teras"], "required": true },
+          "kapasite": { "type": "number", "enum": [2, 4, 6, 8], "required": true },
+          "x": { "type": "number", "description": "Layout editor X koordinatı (px)" },
+          "y": { "type": "number", "description": "Layout editor Y koordinatı (px)" },
+          "w": { "type": "number", "description": "Genişlik" },
+          "h": { "type": "number", "description": "Yükseklik" },
+          "durum": { "type": "string", "enum": ["bos", "dolu", "rezerve"], "default": "bos" },
+          "grupId": { "type": "string", "nullable": true, "ref": "tableGroups" },
+          "rezervasyonNotu": { "type": "string", "nullable": true },
+          "siraNo": { "type": "number" },
+          "createdAt": { "type": "timestamp" }
+        }
+      },
+      "tableGroups": {
+        "description": "Birleştirilmiş masa grupları",
+        "fields": {
+          "id": { "type": "string", "required": true },
+          "masaIds": { "type": "array", "items": "string", "description": "Gruba dahil masa ID'leri" },
+          "durum": { "type": "string", "enum": ["dolu", "rezerve"] },
+          "anaMasaId": { "type": "string", "description": "Siparişlerin yazıldığı ana masa" },
+          "createdAt": { "type": "timestamp" }
+        }
+      },
+      "orders": {
+        "description": "Aktif siparişler (tamamlananlar archivedOrders'a taşınır)",
+        "fields": {
+          "id": { "type": "string", "required": true },
+          "masaId": { "type": "string", "nullable": true, "description": "Paket sipariş ise null" },
+          "masaAd": { "type": "string", "nullable": true, "description": "Denormalize" },
+          "garsonId": { "type": "string", "required": true },
+          "garsonAd": { "type": "string", "required": true },
+          "durum": {
+            "type": "string",
+            "enum": ["aktif", "hazirlandi", "masayaGitti", "tamamlandi", "iptal"],
+            "default": "aktif"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "productId": "string",
+              "ad": "string",
+              "fiyat": "number",
+              "adet": "number",
+              "notlar": "string",
+              "eklenmeZamani": "timestamp"
+            }
+          },
+          "araToplam": { "type": "number" },
+          "indirim": { "type": "number", "default": 0 },
+          "kuponKodu": { "type": "string", "nullable": true },
+          "kampanyaId": { "type": "string", "nullable": true },
+          "toplam": { "type": "number" },
+          "paketMi": { "type": "boolean", "default": false },
+          "paketKaynak": {
+            "type": "string",
+            "enum": ["yemeksepeti", "getir", "telefon", null],
+            "nullable": true
+          },
+          "musteriAd": { "type": "string", "nullable": true },
+          "musteriTel": { "type": "string", "nullable": true },
+          "musteriAdres": { "type": "string", "nullable": true },
+          "olusturmaZamani": { "type": "timestamp", "required": true },
+          "hazirlandiZamani": { "type": "timestamp", "nullable": true },
+          "masayaGittiZamani": { "type": "timestamp", "nullable": true },
+          "tamamlandiZamani": { "type": "timestamp", "nullable": true },
+          "gecikmeli": { "type": "boolean", "default": false }
+        }
+      },
+      "archivedOrders": {
+        "description": "Tamamlanmış ve ödenmiş siparişler",
+        "extends": "orders",
+        "additionalFields": {
+          "arsivZamani": { "type": "timestamp", "required": true },
+          "gun": { "type": "string", "format": "YYYY-MM-DD", "indexed": true }
+        }
+      },
+      "payments": {
+        "description": "Tahsilatlar",
+        "fields": {
+          "id": { "type": "string", "required": true },
+          "orderId": { "type": "string", "required": true, "ref": "orders" },
+          "masaId": { "type": "string", "nullable": true },
+          "tutar": { "type": "number", "required": true },
+          "yontem": { "type": "string", "enum": ["nakit", "kart", "yemekKarti"], "required": true },
+          "kartTipi": {
+            "type": "string",
+            "nullable": true,
+            "enum": ["Multinet", "Sodexo", "Ticket", "Setcard", "Edenred", "Metropol", "Diger", null]
+          },
+          "kasiyerId": { "type": "string", "required": true },
+          "kasiyerAd": { "type": "string" },
+          "fisBasildi": { "type": "boolean", "default": true },
+          "zaman": { "type": "timestamp", "required": true },
+          "gun": { "type": "string", "format": "YYYY-MM-DD", "indexed": true }
+        }
+      },
+      "campaigns": {
+        "description": "Kampanyalar",
+        "fields": {
+          "id": { "type": "string", "required": true },
+          "ad": { "type": "string", "required": true },
+          "tip": { "type": "string", "enum": ["indirim", "kampanya"], "required": true },
+          "oranTipi": { "type": "string", "enum": ["yuzde", "sabitTutar"], "required": true },
+          "oran": { "type": "number", "required": true, "description": "% veya TL" },
+          "program": {
+            "type": "object",
+            "properties": {
+              "baslangic": { "type": "string", "format": "HH:mm" },
+              "bitis": { "type": "string", "format": "HH:mm" },
+              "gunler": { "type": "array", "items": { "enum": ["pazartesi", "sali", "carsamba", "persembe", "cuma", "cumartesi", "pazar"] } }
+            }
+          },
+          "aciklama": { "type": "string" },
+          "aktif": { "type": "boolean", "default": true },
+          "baslangicTarihi": { "type": "timestamp" },
+          "bitisTarihi": { "type": "timestamp" }
+        }
+      },
+      "coupons": {
+        "description": "Kupon kodları",
+        "fields": {
+          "id": { "type": "string", "required": true },
+          "kod": { "type": "string", "required": true, "unique": true, "description": "Büyük harf, benzersiz" },
+          "indirimTipi": { "type": "string", "enum": ["yuzde", "sabitTutar"], "required": true },
+          "deger": { "type": "number", "required": true },
+          "maksKullanim": { "type": "number", "required": true },
+          "kullanimSayisi": { "type": "number", "default": 0 },
+          "sonKullanma": { "type": "timestamp", "required": true },
+          "aktif": { "type": "boolean", "default": true }
+        }
+      },
+      "notifications": {
+        "description": "Sistem bildirimleri",
+        "fields": {
+          "id": { "type": "string", "required": true },
+          "tip": {
+            "type": "string",
+            "enum": ["gecikme", "dusukStok", "stoktaYok", "yeniPaket", "callerID", "rezervasyon"],
+            "required": true
+          },
+          "baslik": { "type": "string", "required": true },
+          "mesaj": { "type": "string", "required": true },
+          "hedef": { "type": "string", "enum": ["hepsi", "kasa", "admin"], "default": "hepsi" },
+          "ilgiliId": { "type": "string", "nullable": true, "description": "Sipariş/ürün/masa referansı" },
+          "okundu": { "type": "boolean", "default": false },
+          "zaman": { "type": "timestamp", "required": true }
+        }
+      },
+      "settings": {
+        "description": "Sistem ayarları (tek doküman: settings/global)",
+        "fields": {
+          "gecikmeEsigiDk": { "type": "number", "default": 15, "description": "Sipariş gecikme eşiği (dakika)" },
+          "dusukStokEsigi": { "type": "number", "default": 5 },
+          "restoranAd": { "type": "string" },
+          "restoranAdres": { "type": "string" },
+          "restoranTel": { "type": "string" },
+          "vergiNo": { "type": "string" },
+          "vergiOrani": { "type": "number", "default": 10 },
+          "paraBirimi": { "type": "string", "default": "TL" },
+          "kdvDahilFiyat": { "type": "boolean", "default": true },
+          "kasaAcilis": { "type": "string", "format": "HH:mm" },
+          "kasaKapanis": { "type": "string", "format": "HH:mm" },
+          "fisBasligi": { "type": "string" },
+          "fisAltMesaji": { "type": "string", "default": "Teşekkür ederiz" },
+          "mutfakYaziciIp": { "type": "string" },
+          "otomatikFisBas": { "type": "boolean", "default": true },
+          "bildirimAyarlari": {
+            "type": "object",
+            "properties": {
+              "gecikme": "boolean",
+              "dusukStok": "boolean",
+              "yeniPaket": "boolean",
+              "callerID": "boolean",
+              "rezervasyon": "boolean",
+              "sesliUyari": "boolean"
+            }
+          }
+        }
+      },
+      "printers": {
+        "description": "Mutfak/bar yazıcıları (kategori-bazlı yönlendirme için)",
+        "fields": {
+          "id": { "type": "string", "required": true },
+          "ad": { "type": "string", "required": true, "examples": ["Mutfak", "Bar", "Pastane"] },
+          "ip": { "type": "string", "required": true, "description": "Ağdaki ESC/POS yazıcı IP adresi" },
+          "port": { "type": "number", "default": 9100 },
+          "varsayilan": { "type": "boolean", "default": false, "description": "Kategorisi yazıcı atanmamış ürünler buraya gider" },
+          "aktif": { "type": "boolean", "default": true },
+          "createdAt": { "type": "timestamp" }
+        }
+      },
+      "callerLogs": {
+        "description": "Gelen telefon aramaları (CallerID)",
+        "fields": {
+          "id": { "type": "string", "required": true },
+          "telefon": { "type": "string", "required": true },
+          "ad": { "type": "string", "nullable": true, "description": "Tanınan müşteri adı" },
+          "zaman": { "type": "timestamp", "required": true },
+          "cevaplandi": { "type": "boolean", "default": false },
+          "siparisId": { "type": "string", "nullable": true, "ref": "orders" },
+          "notlar": { "type": "string" }
+        }
+      },
+      "reservations": {
+        "description": "Masa rezervasyonları",
+        "fields": {
+          "id": { "type": "string", "required": true },
+          "masaId": { "type": "string", "required": true, "ref": "tables" },
+          "masaAd": { "type": "string" },
+          "musteriAd": { "type": "string", "required": true },
+          "musteriTel": { "type": "string", "required": true },
+          "kisiSayisi": { "type": "number", "required": true },
+          "baslangic": { "type": "timestamp", "required": true },
+          "bitis": { "type": "timestamp", "required": true, "description": "Rezervasyon bitiş saati. Masa bu aralıkta 'rezerve' durumunda kalır." },
+          "notlar": { "type": "string" },
+          "durum": { "type": "string", "enum": ["bekliyor", "geldi", "iptal"], "default": "bekliyor" }
+        }
+      },
+      "stockMovements": {
+        "description": "Stok hareketleri. Faz 1'den itibaren her stok değişiminde (sipariş, manuel, sayım, fire) trigger ile yazılır; UI Faz 10'da genişletilir.",
+        "fields": {
+          "id": { "type": "string", "required": true },
+          "productId": { "type": "string", "required": true, "ref": "products" },
+          "productAd": { "type": "string" },
+          "tip": { "type": "string", "enum": ["giris", "cikis", "sayim", "fire"], "required": true },
+          "miktar": { "type": "number", "required": true },
+          "oncekiStok": { "type": "number" },
+          "yeniStok": { "type": "number" },
+          "kaynak": { "type": "string", "enum": ["siparis", "manuel", "satinAlma"] },
+          "ilgiliId": { "type": "string", "nullable": true },
+          "kullaniciId": { "type": "string", "required": true },
+          "zaman": { "type": "timestamp", "required": true },
+          "aciklama": { "type": "string" }
+        }
+      }
+    }
+  },
+
+  "screens": {
+    "admin": {
+      "login": {
+        "path": "/admin/login",
+        "access": ["public"],
+        "components": [
+          "Restoran logosu",
+          "Email input",
+          "Şifre input (göster/gizle toggle)",
+          "Beni Hatırla checkbox",
+          "Giriş Yap butonu",
+          "POS Girişi linki"
+        ],
+        "behaviors": [
+          "Email ve şifre formatı validate (zod)",
+          "Firebase Auth ile giriş",
+          "5 yanlış denemede 60sn kilit",
+          "Sadece admin rolü giriş yapabilir",
+          "Başarılı → /admin/dashboard"
+        ]
+      },
+      "dashboard": {
+        "path": "/admin/dashboard",
+        "access": ["admin", "kasiyer"],
+        "components": {
+          "kpiCards": ["Günlük Satış (TL)", "Aktif Masa", "Bekleyen Sipariş", "Tamamlanan Sipariş"],
+          "charts": ["Saatlik satış (line)", "Son 7 gün karşılaştırma (bar)"],
+          "lists": ["Son 5 sipariş", "En çok satan 5 ürün (bugün)", "Aktif uyarılar"]
+        },
+        "behaviors": [
+          "Firestore realtime listener ile canlı güncelleme",
+          "Karta tıklayınca ilgili detay sayfasına yönlendirme"
+        ]
+      },
+      "categories": {
+        "path": "/admin/categories",
+        "access": ["admin"],
+        "components": {
+          "topCards": ["Toplam Kategori", "Aktif Kategori", "Toplam Ürün"],
+          "topBar": ["Yeni Kategori Ekle", "Arama", "Sıralamayı Kaydet"],
+          "table": {
+            "rows": "Drag-drop ile sıralanabilir",
+            "columns": ["Tutamak", "Sıra", "Ad", "Ürün sayısı", "Aktif toggle", "Düzenle", "Sil"]
+          },
+          "modal": ["Kategori adı (zorunlu)", "Aktif toggle", "Kaydet", "İptal"]
+        },
+        "behaviors": [
+          "Drag-drop sıralama anında görsel, kaydet basılınca Firestore'a yazılır",
+          "İçinde ürünü olan kategori silinemez (uyarı)",
+          "Pasif kategori POS'ta görünmez"
+        ]
+      },
+      "products": {
+        "path": "/admin/products",
+        "access": ["admin"],
+        "components": {
+          "topCards": ["Toplam Ürün", "Aktif Ürün", "Düşük Stoklu", "Stokta Yok"],
+          "filters": ["Kategori dropdown", "Arama", "Stok durumu", "Excel export"],
+          "table": ["Görsel", "Ad", "Kategori", "Fiyat", "Stok", "Durum", "İşlemler"],
+          "modal": [
+            "Ürün adı (zorunlu)",
+            "Kategori (dropdown)",
+            "Fiyat (zorunlu, >0)",
+            "Stok (zorunlu, >=0)",
+            "Düşük stok eşiği (opsiyonel)",
+            "Açıklama",
+            "Görsel yükleme",
+            "Aktif toggle"
+          ]
+        },
+        "behaviors": [
+          "Sipariş edildikçe stok otomatik düşer (Cloud Function)",
+          "Stok 0 → POS'ta gri ve seçilemez",
+          "Stok eşik altında → bildirim oluşur",
+          "Pasif ürün QR menü ve POS'ta görünmez"
+        ]
+      },
+      "orders": {
+        "path": "/admin/orders",
+        "access": ["admin", "kasiyer"],
+        "components": {
+          "tabs": ["Aktif Siparişler", "Tamamlanan Siparişler"],
+          "filters": ["Masa", "Garson", "Saat aralığı", "Arama"],
+          "activeCard": [
+            "Masa adı (büyük)",
+            "Başlangıç saati",
+            "Durum rozeti",
+            "Geçen süre (15dk+ kırmızı)",
+            "Garson",
+            "Ürün özeti",
+            "Toplam",
+            "Aksiyonlar: Detay, Durum Değiştir, İptal"
+          ],
+          "completedTable": ["ID", "Masa", "Garson/Kasiyer", "Tutar", "Ödeme yöntemi", "Zaman", "Detay"],
+          "detailModal": [
+            "Tüm sipariş ürünleri",
+            "Zaman damgaları",
+            "Uygulanan indirim/kampanya/kupon",
+            "Ödeme bilgisi",
+            "Fişi Yeniden Bas butonu"
+          ]
+        }
+      },
+      "archive": {
+        "path": "/admin/archive",
+        "access": ["admin"],
+        "components": {
+          "filters": ["Tarih aralığı (max 90 gün)", "Masa", "Garson", "Ödeme yöntemi", "Arama"],
+          "table": ["Tarih/Saat", "ID", "Masa", "Garson", "Ürün sayısı", "Toplam", "Ödeme", "Detay"],
+          "actions": ["Excel'e Aktar"]
+        }
+      },
+      "reports": {
+        "path": "/admin/reports",
+        "access": ["admin"],
+        "components": {
+          "dateFilters": ["Bugün", "Dün", "Son 7 gün", "Son 30 gün", "Özel Tarih"],
+          "summaryCards": ["Toplam Satış", "Sipariş Sayısı", "Ortalama Sepet", "Aktif Masa-Saat"],
+          "sections": [
+            { "name": "Satış Grafiği", "type": "line chart (saatlik veya günlük)" },
+            { "name": "En Çok Satan Ürünler", "type": "tablo (top 20)" },
+            { "name": "Kategori Bazlı Satış", "type": "pie chart + tablo" },
+            { "name": "Masa Analizi", "type": "tablo (sipariş sayısı, ciro, doluluk)" },
+            { "name": "Garson Performansı", "type": "tablo" },
+            { "name": "Ödeme Yöntemi Dağılımı", "type": "pie chart" }
+          ],
+          "export": "Excel (çok sekme: Özet, Siparişler, En Çok Satan, Kategori, Masa, Garson, Ödemeler)"
+        }
+      },
+      "tables": {
+        "path": "/admin/tables",
+        "access": ["admin"],
+        "components": {
+          "topCards": ["Toplam", "Boş (yeşil)", "Dolu (kırmızı)", "Rezerve (sarı)"],
+          "zoneTabs": ["İç Mekan", "Dış Mekan", "Teras", "Tümü"],
+          "layoutEditor": {
+            "toolbox": [
+              "Yeni Masa: 2/4/6/8 kişilik",
+              "Bar/Bölüm (dekoratif)",
+              "Sil modu toggle",
+              "Düzeni Kaydet",
+              "Grid'e Hizala"
+            ],
+            "canvasFeatures": [
+              "Sürükle-bırak yeni masa",
+              "Mevcut masayı taşıma",
+              "Çift tıklayınca düzenleme modalı",
+              "20px grid snap",
+              "Çakışma kontrolü"
+            ],
+            "tableColors": {
+              "bos": "#10B981 (yeşil)",
+              "dolu": "#EF4444 (kırmızı)",
+              "rezerve": "#F59E0B (sarı)"
+            },
+            "tableCardInfo": ["Masa adı", "Kapasite", "Aktif tutar (dolu ise)", "Geçen süre (dolu ise)"]
+          },
+          "mergeBehavior": [
+            "5px yakınlık ile birleştirme önerisi tooltip",
+            "Onay → tableGroups dokümanı oluşur",
+            "Görsel olarak çizgi kalkar",
+            "Durum değişimi grup içinde senkronize",
+            "Ayır butonu ile grup bozulur"
+          ],
+          "rightClickMenu": ["Rezerve Et", "Rezervasyonu İptal", "Detaylar"]
+        }
+      },
+      "notifications": {
+        "path": "/admin/notifications",
+        "access": ["admin"],
+        "components": {
+          "filters": ["Tümü", "Okunmamış", "Gecikme", "Düşük Stok", "Paket", "CallerID"],
+          "list": ["Tip ikonu", "Başlık+mesaj", "Zaman", "İlgili kayıt linki", "Okundu işareti"],
+          "settingsModal": [
+            "Uzun süren sipariş eşiği (dk)",
+            "Düşük stok eşiği (adet)",
+            "Her bildirim tipi için aç/kapa toggle",
+            "Sesli uyarı toggle"
+          ]
+        },
+        "behaviors": [
+          "Cloud Function her dakika gecikme kontrolü",
+          "Cloud Function her 5 dk düşük stok kontrolü",
+          "Yeni bildirim → toast + beep (eğer açıksa)"
+        ]
+      },
+      "campaigns": {
+        "path": "/admin/campaigns",
+        "access": ["admin"],
+        "components": {
+          "topCards": ["Aktif Kampanya", "Toplam Kupon", "Kullanılan Kupon"],
+          "tabs": ["Kampanyalar", "Kupon Kodları"],
+          "campaignTable": ["Ad", "Tip", "Oran", "Program", "Açıklama", "Aktif", "Düzenle/Sil"],
+          "campaignModal": [
+            "Ad (zorunlu)",
+            "Tip (İndirim/Kampanya)",
+            "Oran tipi (Yüzde/Sabit)",
+            "Oran",
+            "Program (Saat/Gün/Tarih)",
+            "Açıklama",
+            "Aktif"
+          ],
+          "couponTable": ["Kod", "İndirim tipi", "Değer", "Kullanım (3/10)", "Son kullanma", "Durum"],
+          "couponModal": [
+            "Kupon adı/kodu (Otomatik Oluştur)",
+            "İndirim tipi",
+            "İndirim değeri",
+            "Maks kullanım",
+            "Son kullanma",
+            "Aktif"
+          ]
+        },
+        "behaviors": [
+          "Kupon kodu benzersiz olmalı",
+          "Tükenmiş/süresi dolmuş kupon POS'ta uygulanamaz",
+          "Saat aralıklı kampanya otomatik aktif olur",
+          "Birden fazla indirim varsa en büyüğü uygulanır (kümülatif değil)"
+        ]
+      },
+      "packages": {
+        "path": "/admin/packages",
+        "access": ["admin", "kasiyer"],
+        "components": {
+          "tabs": ["Bekleyen", "Giden", "Tamamlanan", "Arayanlar"],
+          "card": [
+            "Kaynak logosu",
+            "Müşteri ad/tel",
+            "Adres",
+            "Sipariş özeti",
+            "Toplam",
+            "Geçen süre",
+            "Aksiyonlar: Hazırlandı, İptal"
+          ],
+          "callerTab": [
+            "Telefon",
+            "Tanınan müşteri adı",
+            "Zaman",
+            "Cevaplandı durumu",
+            "Sipariş linki",
+            "Hızlı Sipariş Gir"
+          ]
+        },
+        "behaviors": [
+          "Yeni paket → toast + ses (kasa terminalinde)",
+          "Yemeksepeti/Getir webhook entegrasyonu",
+          "Paket siparişler 'PAKET' başlığıyla mutfağa basılır"
+        ]
+      },
+      "stock": {
+        "path": "/admin/stock",
+        "access": ["admin"],
+        "phase1Components": {
+          "table": "Ürünler + mevcut stok",
+          "actions": ["Inline edit", "Stok Ekle hızlı buton", "Stok Düş hızlı buton"]
+        },
+        "phase10Components": {
+          "history": "Stok hareketleri geçmişi",
+          "recipes": "Reçete bazlı stok",
+          "inventory": "Sayım modu",
+          "suppliers": "Tedarikçi yönetimi"
+        }
+      },
+      "finance": {
+        "path": "/admin/finance",
+        "access": ["admin"],
+        "tabs": ["Dashboard", "Gelir/Gider", "Kasa Yönetimi", "Bütçe & Raporlar", "Faturalar"],
+        "note": "Faz 11'de detaylandırılacak"
+      },
+      "users": {
+        "path": "/admin/users",
+        "access": ["admin"],
+        "components": {
+          "filters": ["Rol", "Aktif/Pasif"],
+          "table": ["Ad", "Rol", "Kod (****)", "Son giriş", "Aktif", "İşlemler"],
+          "modal": [
+            "Ad soyad",
+            "Rol (Garson/Kasiyer)",
+            "4 haneli kod (manuel veya Otomatik Oluştur)",
+            "Aktif"
+          ]
+        },
+        "behaviors": [
+          "Kod benzersiz",
+          "Kod hash'lenerek saklanır",
+          "Kodu Sıfırla yeni kod üretir",
+          "Silinen kullanıcının geçmiş siparişleri korunur (denormalize)"
+        ]
+      },
+      "settings": {
+        "path": "/admin/settings",
+        "access": ["admin"],
+        "sections": {
+          "restaurant": ["Ad", "Adres", "Tel", "Vergi no", "Logo"],
+          "receipt": ["Fiş başlığı", "Fiş alt mesajı", "KDV oranı", "KDV dahil mi"],
+          "operation": ["Kasa açılış/kapanış", "Para birimi", "Tarih formatı"],
+          "printer": ["Mutfak yazıcı IP", "Test yazdır", "Otomatik fiş bas"],
+          "notifications": "Bildirim ayarlarına yönlendirme"
+        }
+      }
+    },
+
+    "pos": {
+      "login": {
+        "path": "/pos/login",
+        "access": ["public"],
+        "components": [
+          "Restoran logosu",
+          "4 boş kutu (kod gösterimi)",
+          "Sayısal tuş takımı (0-9, temizle, onay)",
+          "Cihaz adı (POS-1, Kasa vb.)"
+        ],
+        "behaviors": [
+          "4. rakam otomatik onaylar",
+          "Yanlış kod → titreşim + uyarı",
+          "5 yanlış denemede 60sn kilit",
+          "Başarılı → /pos/tables"
+        ]
+      },
+      "tables": {
+        "path": "/pos/tables",
+        "access": ["garson", "kasiyer", "admin"],
+        "components": {
+          "topBar": [
+            "Kullanıcı adı + rol",
+            "Bölge sekmeleri",
+            "Yeni Paket (kasiyer)",
+            "Aktif Siparişler",
+            "Paket Servis (kasiyer)",
+            "Çıkış"
+          ],
+          "counters": ["Boş", "Dolu", "Rezerve"],
+          "mainArea": "Read-only masa düzeni, renkli durumlar",
+          "tableCard": [
+            "Ad",
+            "Kapasite",
+            "Aktif tutar (dolu)",
+            "Oturma süresi (dolu)",
+            "Garson adı (dolu)"
+          ]
+        },
+        "behaviors": [
+          "Boş masa tıklama → /pos/order/new?masaId=XXX",
+          "Dolu masa tıklama → detay modalı",
+          "Rezerve masa tıklama → 'Rezervasyonu aç' sorusu",
+          "Realtime senkron"
+        ],
+        "fullTableModal": {
+          "info": ["Masa adı + süre", "Sipariş özeti", "Toplam"],
+          "buttons": [
+            "Sipariş Ekle",
+            "Ödeme Al (kasiyer)",
+            "Hesabı Bas (ara fiş)",
+            "Masayı Aktar",
+            "İptal (admin)"
+          ]
+        }
+      },
+      "newOrder": {
+        "path": "/pos/order/new",
+        "access": ["garson", "kasiyer", "admin"],
+        "layout": "3 bölümlü: üst kategori çubuğu, sol/orta ürün grid, sağ sepet",
+        "components": {
+          "categoryBar": "Yatay scroll, aktif vurgu",
+          "productGrid": [
+            "Görsel",
+            "Ad",
+            "Fiyat",
+            "Stok durumu (yeşil/sarı/kırmızı)"
+          ],
+          "cartPanel": {
+            "header": ["Masa adı", "Garson adı"],
+            "items": ["Ürün adı", "Adet (- / +)", "Birim fiyat", "Satır toplamı", "Not ekle", "Sil"],
+            "footer": ["Toplam (büyük)", "İptal", "Siparişi Onayla (tutarlı)"]
+          }
+        },
+        "behaviors": [
+          "Aynı ürüne tıklayınca adet artar",
+          "Adet 0 → satır silinir",
+          "Stok aşıldığında engellenir",
+          "Onayla → Firestore order + stok düş + mutfak yazıcısı + masalar'a dön"
+        ],
+        "existingOrderAddition": [
+          "Mevcut order güncellenir",
+          "Sadece yeni ürünler 'EKLEME' fişi olarak basılır"
+        ]
+      },
+      "payment": {
+        "path": "/pos/payment",
+        "access": ["kasiyer", "admin"],
+        "components": {
+          "leftPanel": [
+            "Masa adı",
+            "Başlangıç saati",
+            "Ürün satırları detaylı",
+            "Ara Toplam",
+            "Kampanya/Kupon",
+            "Kupon Uygula buton",
+            "Kampanya Uygula buton",
+            "İkram/Manuel İndirim buton",
+            "TOPLAM (büyük)"
+          ],
+          "rightPanel": ["NAKİT (yeşil)", "KART (mavi)", "YEMEK KARTI (turuncu, dropdown)"]
+        },
+        "secondaryScreen": [
+          "Restoran logosu",
+          "Sipariş satırları (büyük yazı)",
+          "Toplam (çok büyük)",
+          "Teşekkür mesajı"
+        ],
+        "flows": {
+          "nakit": [
+            "Verilen tutar input",
+            "Para üstü otomatik hesap",
+            "Fiş bas toggle",
+            "Ödemeyi Tamamla"
+          ],
+          "kart": [
+            "POS cihazına yönlendir",
+            "Banka POS entegrasyonu",
+            "Onay sonrası fiş + slip"
+          ],
+          "yemekKarti": "Önce kart tipi seç, sonra kart akışı gibi"
+        },
+        "splitPayment": "Bölünmüş Öde butonu, her bölüm ayrı payment kaydı"
+      },
+      "activeOrders": {
+        "path": "/pos/orders/active",
+        "access": ["garson", "kasiyer", "admin"],
+        "components": {
+          "filters": ["Bekleyen", "Hazırlanan", "Masaya Gitti"],
+          "card": "Admin sipariş yönetimine benzer, hızlı 'Masaya Gitti' butonu",
+          "highlight": "Gecikmeli olanlar kırmızı çerçeve"
+        }
+      },
+      "packages": {
+        "path": "/pos/packages",
+        "access": ["kasiyer", "admin"],
+        "components": {
+          "tabs": ["Bekleyen", "Hazırlanan", "Gelen Aramalar"],
+          "newPackageModal": [
+            "Kaynak (Telefon/Yemeksepeti/Getir)",
+            "Müşteri ad",
+            "Tel (CallerID'den otomatik)",
+            "Adres",
+            "Notlar",
+            "Siparişe Devam (ürün seçim ekranı)"
+          ],
+          "callerIdPopup": [
+            "5 sn sağ üst popup",
+            "Arayan numara",
+            "Tanınan müşteri adı",
+            "Son sipariş",
+            "Hızlı Sipariş Gir",
+            "Kaydet (sipariş olmadan)"
+          ]
+        }
+      }
+    },
+
+    "menu": {
+      "qrMenu": {
+        "path": "/menu/:masaId",
+        "access": ["public"],
+        "components": {
+          "header": ["Restoran logosu", "Masa adı", "Garsonu Çağır (opsiyonel)"],
+          "categoryNav": "Yatay scroll chip butonlar, scroll spy",
+          "content": "Kategoriler altında ürünler (ad, açıklama, fiyat, görsel)",
+          "footer": ["İletişim", "Çalışma saatleri", "Sosyal medya"]
+        },
+        "features": [
+          "Sadece okuma",
+          "Aktif olmayan ürün/kategori gizli",
+          "Kampanyalı ürün rozeti",
+          "Mobile first",
+          "Lazy load görseller",
+          "Service worker offline cache",
+          "Türkçe (gelecekte çoklu dil)"
+        ]
+      }
+    }
+  },
+
+  "cloudFunctions": {
+    "auth": {
+      "verifyUserCode": {
+        "type": "HTTPS Callable",
+        "input": { "kod": "string (4 hane)" },
+        "output": { "token": "string", "userId": "string", "rol": "string", "ad": "string" },
+        "errors": ["auth/invalid-code", "auth/rate-limited"],
+        "logic": "Kod hash, users'ta ara, aktif ise custom token üret",
+        "rateLimit": "5 yanlış deneme → 60sn kilit"
+      },
+      "hashUserCode": {
+        "type": "Firestore onCreate trigger",
+        "collection": "users",
+        "logic": "Yeni kullanıcının kodunu otomatik hash'le"
+      }
+    },
+    "orders": {
+      "onOrderCreate": {
+        "type": "Firestore onCreate trigger",
+        "collection": "orders",
+        "actions": [
+          "Stokları atomik transaction ile düş",
+          "Masa durumunu 'dolu' yap",
+          "Mutfak yazıcısına ESC/POS gönder",
+          "Admin bildirimi oluştur"
+        ]
+      },
+      "onOrderUpdate": {
+        "type": "Firestore onUpdate trigger",
+        "collection": "orders",
+        "actions": [
+          "Items değişti ise stok farkını hesapla",
+          "Durum 'tamamlandi' → archivedOrders'a kopyala",
+          "Durum 'iptal' → stokları geri yükle"
+        ]
+      },
+      "onPaymentCreate": {
+        "type": "Firestore onCreate trigger",
+        "collection": "payments",
+        "actions": [
+          "İlgili order'ı 'tamamlandi' yap",
+          "Masa'yı 'boş' yap (grup ise tümü)",
+          "Günlük satış istatistiğini güncelle"
+        ]
+      }
+    },
+    "scheduled": {
+      "checkLateOrders": {
+        "schedule": "every 1 minutes",
+        "logic": "Aktif siparişleri tara, 15dk eşiği geçenleri işaretle ve bildirim oluştur"
+      },
+      "checkLowStock": {
+        "schedule": "every 5 minutes",
+        "logic": "Aktif ürünleri tara, eşik altındakiler için bildirim (saatte 1 kez)"
+      },
+      "archiveOldOrders": {
+        "schedule": "every day at 03:00",
+        "logic": "30 günden eski archivedOrders'ı sil (özet ayrı koleksiyonda kalır)"
+      },
+      "dailyReportSnapshot": {
+        "schedule": "every day at 23:59",
+        "logic": "Günlük rapor snapshot'ı dailyReports'a kaydet"
+      }
+    },
+    "integrations": {
+      "yemeksepetiWebhook": {
+        "type": "HTTPS endpoint",
+        "logic": "Yemeksepeti'nden gelen siparişi orders'a ekle (paketMi: true)"
+      },
+      "getirWebhook": {
+        "type": "HTTPS endpoint",
+        "logic": "Getir entegrasyonu"
+      },
+      "callerIdHandler": {
+        "type": "HTTPS endpoint",
+        "logic": "CallerID donanımından gelen aramayı callerLogs'a yaz"
+      }
+    },
+    "printing": {
+      "printKitchenReceipt": {
+        "logic": "Yazıcı IP'sine ESC/POS, format: tarih+masa+garson+ürünler (büyük)+notlar",
+        "optional": "Kategori bazlı yazıcı yönlendirme"
+      },
+      "printCustomerReceipt": {
+        "logic": "POS terminal yazıcısı için yedek (Faz 4'te Capacitor native ile yapılır)"
+      }
+    }
+  },
+
+  "phases": [
+    {
+      "phase": 1,
+      "name": "Temel Altyapı",
+      "duration": "1-2 hafta",
+      "deliverables": [
+        "Vite + React + Tailwind + Firebase kurulum",
+        "Router (admin/pos/menu)",
+        "Zustand store",
+        "Admin login (email/şifre)",
+        "POS login (4 haneli kod)",
+        "Kullanıcı yönetimi",
+        "Kategori yönetimi (drag-drop, yazıcı atama)",
+        "Ürün yönetimi (stok dahil)",
+        "Yazıcı (printers) koleksiyonu ve admin ekranı",
+        "stockMovements koleksiyonu + her stok değişiminde trigger ile audit kaydı",
+        "Firebase Hosting deploy"
+      ],
+      "output": "Admin menü tanımlayabilir, kullanıcı ekleyebilir"
+    },
+    {
+      "phase": 2,
+      "name": "Sipariş Çekirdeği",
+      "duration": "2 hafta",
+      "deliverables": [
+        "Basit masa listesi",
+        "Sipariş giriş ekranı",
+        "Sipariş onaylama",
+        "Stok düşürme (Cloud Function)",
+        "Aktif siparişler listesi",
+        "Realtime senkron"
+      ],
+      "output": "Garson sipariş alabilir, POS'lar arası anında senkron"
+    },
+    {
+      "phase": 3,
+      "name": "Masa Yönetimi",
+      "duration": "1-2 hafta",
+      "deliverables": [
+        "Bölge sistemi (iç/dış/teras)",
+        "Drag-drop layout editor",
+        "Masa birleştirme",
+        "Renk durumu",
+        "Rezervasyon",
+        "POS'ta masa düzeni görüntüleme"
+      ],
+      "output": "Restoran masa düzeni tam çalışır halde"
+    },
+    {
+      "phase": 4,
+      "name": "Ödeme ve Yazıcı",
+      "duration": "1-2 hafta",
+      "deliverables": [
+        "Ödeme ekranı (nakit/kart/yemek kartı)",
+        "Bölünmüş ödeme",
+        "Capacitor APK üretme",
+        "iMin Printer SDK native plugin",
+        "Mutfak ve müşteri fişi",
+        "İkincil ekran kontrolü",
+        "Banka POS entegrasyonu"
+      ],
+      "blockers": ["Banka POS markası seçimi"],
+      "output": "Tam sipariş + ödeme + fiş akışı"
+    },
+    {
+      "phase": 5,
+      "name": "Admin Dashboard ve Sipariş Yönetimi",
+      "duration": "1 hafta",
+      "deliverables": [
+        "Dashboard (KPI + grafikler)",
+        "Sipariş yönetimi",
+        "Arşivlenen siparişler",
+        "Bildirimler + ayarları"
+      ],
+      "output": "Yönetici tüm operasyonu takip eder"
+    },
+    {
+      "phase": 6,
+      "name": "Raporlama",
+      "duration": "1 hafta",
+      "deliverables": [
+        "Günlük raporlar",
+        "Tarih filtreleri",
+        "Satış grafikleri (Recharts)",
+        "En çok satan ürünler",
+        "Masa analizi",
+        "Garson performansı",
+        "Excel export (çok sekmeli)"
+      ],
+      "output": "Detaylı raporlar Excel'e indirilir"
+    },
+    {
+      "phase": 7,
+      "name": "Kampanya ve Kupon",
+      "duration": "3-4 gün",
+      "deliverables": [
+        "Kampanya CRUD",
+        "Kupon CRUD",
+        "Saat/gün program",
+        "Ödeme ekranında uygulama",
+        "Otomatik kampanya tespiti"
+      ],
+      "output": "İndirim ve kampanya sistemi"
+    },
+    {
+      "phase": 8,
+      "name": "Paket Servis ve CallerID",
+      "duration": "1-2 hafta",
+      "deliverables": [
+        "Manuel paket sipariş",
+        "Paket servis ekranı",
+        "CallerID donanım entegrasyonu",
+        "Yemeksepeti webhook",
+        "Getir webhook"
+      ],
+      "blockers": ["CallerID donanım seçimi", "Yemeksepeti/Getir API erişimi"],
+      "output": "Tüm dış kanal siparişleri ekranda"
+    },
+    {
+      "phase": 9,
+      "name": "QR Müşteri Menüsü",
+      "duration": "3-4 gün",
+      "deliverables": [
+        "Mobile-first menü sayfası",
+        "QR üretimi (admin)",
+        "QR yazdırma (A6 PDF)",
+        "Service worker cache"
+      ],
+      "output": "Müşteriler QR ile menü görür"
+    },
+    {
+      "phase": 10,
+      "name": "Stok Detayı ve Finans",
+      "duration": "Açık (sonra)",
+      "deliverables": [
+        "Stok hareketleri UI (stockMovements zaten Faz 1'den itibaren yazılıyor)",
+        "Reçete bazlı stok",
+        "Sayım modu, fire takibi, tedarikçi yönetimi",
+        "Finans modülü tüm sekmeleri"
+      ],
+      "output": "Tam finansal kontrol"
+    }
+  ],
+
+  "businessRules": {
+    "order": {
+      "stockCheck": "Sipariş eklerken stok kontrolü yapılır, aşılırsa engellenir",
+      "pricingLock": "Sipariş onaylandığında ürün fiyatları kayıtta sabitlenir (sonradan değişse de etkilenmez)",
+      "timeStamps": "olusturma → hazirlandi → masayaGitti → tamamlandi sıralaması",
+      "cancellation": "Sadece admin iptal edebilir; iptal → stoklar geri yüklenir"
+    },
+    "table": {
+      "colorRules": {
+        "bos": "yeşil",
+        "dolu": "kırmızı (en az 1 aktif sipariş var)",
+        "rezerve": "sarı"
+      },
+      "merging": {
+        "trigger": "İki masa 5px yakınlıkta",
+        "groupSync": "Grup içindeki tüm masaların durumu birlikte değişir",
+        "anchorTable": "Sipariş ana masaya yazılır",
+        "deletion": "Aktif siparişi olan masa silinemez"
+      },
+      "reservation": "Rezerve masa açılırken müşteri onayı sorulur"
+    },
+    "payment": {
+      "splitPayment": "Bölünmüş ödemede her parça ayrı payment kaydı",
+      "discount": "Birden fazla indirim varsa sadece en büyüğü uygulanır (kümülatif değil)",
+      "receipt": "Fiş basma toggle ile opsiyonel",
+      "kdv": "Settings'ten KDV dahil/hariç hesaplama"
+    },
+    "notification": {
+      "lateOrder": "Sipariş açılışından 15 dk (settings) sonra durumu hala 'aktif' ise gecikme bildirimi",
+      "lowStock": "Ürün stoku eşik altına düşünce bildirim (saatte 1 kez tekrar)",
+      "outOfStock": "Stok 0 ise ürün POS'ta gri ve seçilemez"
+    },
+    "coupon": {
+      "uniqueness": "Kupon kodu sistemde benzersiz",
+      "expiration": "Süresi dolmuş veya tükenmiş kupon uygulanamaz",
+      "atomicUsage": "Kullanım sayısı atomik artırılır (race condition önleme)"
+    },
+    "auth": {
+      "rateLimit": "5 yanlış denemede 60sn kilit (IP bazlı)",
+      "sessionDuration": "Token 12 saat (settings'ten ayarlanabilir)",
+      "codeHash": "4 haneli kod hash'lenmiş saklanır, asla plain text yok"
+    },
+    "stock": {
+      "atomicUpdate": "Tüm stok değişiklikleri Cloud Function transaction ile",
+      "negativeBlock": "Stok asla negatif olamaz",
+      "denormalization": "products.categoryAd denormalize tutulur (hızlı görüntüleme)"
+    }
+  },
+
+  "i18n": {
+    "currentLanguage": "tr",
+    "futureLanguages": ["en"],
+    "currency": "TL",
+    "timezone": "Europe/Istanbul",
+    "dateFormat": "DD.MM.YYYY",
+    "timeFormat": "HH:mm"
+  },
+
+  "security": {
+    "firestoreRules": "Tüm okuma/yazma authentication + role kontrolü",
+    "cloudFunctionsSecrets": "Firebase Config'te saklanır",
+    "bankPosKeys": "Sadece Cloud Function tarafında",
+    "webhookSignature": "Yemeksepeti/Getir webhook imza doğrulaması zorunlu",
+    "backup": "Günlük Firestore export → Google Cloud Storage"
+  },
+
+  "deployment": {
+    "development": "Local (Vite dev server) + Firebase emulator suite",
+    "staging": "Firebase Preview Channel",
+    "production": "Firebase Hosting + Functions + Firestore",
+    "posDevices": {
+      "initial": "PWA üzerinden Chrome 'Ana ekrana ekle'",
+      "final": "Capacitor APK (Faz 4 sonrası)"
+    }
+  },
+
+  "openDecisions": [
+    {
+      "topic": "Banka POS markası",
+      "options": ["Ingenico", "Verifone", "PayFlex/Ziraat", "Diğer"],
+      "deadline": "Faz 4 başlangıcı",
+      "status": "pending",
+      "note": "Müşteriden bilgi bekleniyor. Faz 4'e kadar ödeme akışı mock/stub ile geliştirilecek."
+    },
+    {
+      "topic": "CallerID donanımı",
+      "options": ["Modem-based", "VoIP/SIP", "Bulut santral"],
+      "deadline": "Faz 8 başlangıcı",
+      "status": "pending",
+      "note": "Müşteride IP telefon kullanılıyor; VoIP/SIP yönünde, donanım teyidi bekleniyor."
+    },
+    {
+      "topic": "Yemeksepeti & Getir entegrasyonu",
+      "requirement": "Restoran panel API key (her iki platform için)",
+      "status": "decided",
+      "decision": "Her iki platform da entegre edilecek. Faz 8'de webhook'lar paralel kurulur."
+    },
+    {
+      "topic": "Custom domain",
+      "options": ["restoran.com", "firebaseapp.com"],
+      "status": "pending"
+    }
+  ],
+
+  "testing": {
+    "strategy": "Kritik akışlar için E2E + utility/store seviyesinde unit test",
+    "unit": {
+      "framework": "Vitest",
+      "scope": ["utility fonksiyonlar (format, hesaplama)", "Zustand store'ları", "custom hooks", "validatorlar"]
+    },
+    "integration": {
+      "framework": "Firestore Emulator + Cloud Functions Emulator",
+      "scope": ["onOrderCreate stok düşürme", "onPaymentCreate masa boşaltma", "verifyUserCode rate limit"]
+    },
+    "e2e": {
+      "framework": "Playwright",
+      "scope": [
+        "Admin login → kategori ekle → ürün ekle → POS'ta görünmesi",
+        "POS login → masa seç → sipariş ekle → ödeme al",
+        "Masa birleştirme akışı",
+        "3 POS eşzamanlı stok yarış (race condition)"
+      ]
+    },
+    "manual": "Her faz sonu manuel test senaryoları (offline mod, yazıcı kopukluğu, son adet eşzamanlı sipariş)",
+    "completionCriteria": "E2E suite yeşil olmadan faz tamamlanmış sayılmaz"
+  }
+}

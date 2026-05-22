@@ -1,0 +1,395 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import toast from 'react-hot-toast';
+import { Plus, Pencil, Trash2, Package, Image as ImageIcon, Upload } from 'lucide-react';
+import PageHeader from '../../components/layout/PageHeader';
+import StatCard from '../../components/ui/StatCard';
+import Modal from '../../components/ui/Modal';
+import Toggle from '../../components/ui/Toggle';
+import { watchCollection, createDoc, patchDoc, removeDoc, orderBy } from '../../firebase/firestore';
+import { productSchema } from '../../utils/validators';
+import { useSettingsStore } from '../../store/settingsStore';
+import { formatTL } from '../../utils/format';
+import { SPARK_MODE, getStorageRef } from '../../firebase/config';
+
+export default function Products() {
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const { settings } = useSettingsStore();
+  const [filter, setFilter] = useState({ categoryId: 'all', stock: 'all', search: '' });
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+
+  useEffect(() => watchCollection('products', setProducts), []);
+  useEffect(() => watchCollection('categories', setCategories, orderBy('sira', 'asc')), []);
+
+  const globalEsigi = settings.dusukStokEsigi || 5;
+
+  const stockState = (p) => {
+    const esik = p.dusukStokEsigi ?? globalEsigi;
+    if (p.stok <= 0) return 'out';
+    if (p.stok <= esik) return 'low';
+    return 'ok';
+  };
+
+  const filtered = useMemo(() => {
+    return products.filter((p) => {
+      if (filter.categoryId !== 'all' && p.categoryId !== filter.categoryId) return false;
+      if (filter.search && !p.ad.toLowerCase().includes(filter.search.toLowerCase())) return false;
+      const s = stockState(p);
+      if (filter.stock === 'in' && s === 'out') return false;
+      if (filter.stock === 'low' && s !== 'low') return false;
+      if (filter.stock === 'out' && s !== 'out') return false;
+      return true;
+    });
+  }, [products, filter]);
+
+  const stats = {
+    toplam: products.length,
+    aktif: products.filter((p) => p.aktif).length,
+    dusuk: products.filter((p) => stockState(p) === 'low').length,
+    bitti: products.filter((p) => stockState(p) === 'out').length,
+  };
+
+  const handleDelete = async (p) => {
+    if (!confirm(`"${p.ad}" silinsin mi?`)) return;
+    await removeDoc('products', p.id);
+    toast.success('Ürün silindi');
+  };
+
+  const toggleActive = (p) => patchDoc('products', p.id, { aktif: !p.aktif });
+
+  return (
+    <div className="p-8">
+      <PageHeader
+        title="Ürünler"
+        subtitle="Menü ürünleri, stok ve fiyat yönetimi"
+        actions={
+          <button
+            onClick={() => {
+              setEditing(null);
+              setOpen(true);
+            }}
+            className="btn-primary"
+          >
+            <Plus size={16} /> Yeni Ürün
+          </button>
+        }
+      />
+
+      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+        <StatCard label="Toplam Ürün" value={stats.toplam} icon={Package} />
+        <StatCard label="Aktif" value={stats.aktif} color="green" />
+        <StatCard label="Düşük Stok" value={stats.dusuk} color="amber" />
+        <StatCard label="Stokta Yok" value={stats.bitti} color="red" />
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        <input
+          value={filter.search}
+          onChange={(e) => setFilter((f) => ({ ...f, search: e.target.value }))}
+          placeholder="Ürün ara..."
+          className="input max-w-xs"
+        />
+        <select
+          value={filter.categoryId}
+          onChange={(e) => setFilter((f) => ({ ...f, categoryId: e.target.value }))}
+          className="input max-w-xs"
+        >
+          <option value="all">Tüm Kategoriler</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.ad}
+            </option>
+          ))}
+        </select>
+        <select
+          value={filter.stock}
+          onChange={(e) => setFilter((f) => ({ ...f, stock: e.target.value }))}
+          className="input max-w-xs"
+        >
+          <option value="all">Tüm Stok</option>
+          <option value="in">Stokta Var</option>
+          <option value="low">Düşük Stok</option>
+          <option value="out">Stokta Yok</option>
+        </select>
+      </div>
+
+      <div className="card overflow-hidden p-0">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+            <tr>
+              <th className="px-3 py-3">Görsel</th>
+              <th className="px-3 py-3">Ad</th>
+              <th className="px-3 py-3">Kategori</th>
+              <th className="px-3 py-3">Fiyat</th>
+              <th className="px-3 py-3">Stok</th>
+              <th className="px-3 py-3">Aktif</th>
+              <th className="px-3 py-3 text-right">İşlem</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan="7" className="py-12 text-center text-slate-500">
+                  {products.length === 0 ? 'Henüz ürün yok.' : 'Filtreyle eşleşen ürün yok.'}
+                </td>
+              </tr>
+            )}
+            {filtered.map((p) => {
+              const cat = categories.find((c) => c.id === p.categoryId);
+              const state = stockState(p);
+              const stockColor =
+                state === 'out' ? 'bg-red-100 text-red-700' : state === 'low' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700';
+              return (
+                <tr key={p.id} className="hover:bg-slate-50">
+                  <td className="px-3 py-2">
+                    {p.gorsel ? (
+                      <img src={p.gorsel} alt={p.ad} className="h-10 w-10 rounded object-cover" />
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded bg-slate-100 text-slate-400">
+                        <ImageIcon size={16} />
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 font-medium text-slate-900">{p.ad}</td>
+                  <td className="px-3 py-2 text-slate-600">{cat?.ad || '-'}</td>
+                  <td className="px-3 py-2 font-semibold text-slate-900">{formatTL(p.fiyat)}</td>
+                  <td className="px-3 py-2">
+                    <span className={`rounded-full px-2 py-0.5 text-xs ${stockColor}`}>{p.stok}</span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <Toggle checked={p.aktif} onChange={() => toggleActive(p)} />
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <div className="inline-flex gap-1">
+                      <button
+                        onClick={() => {
+                          setEditing(p);
+                          setOpen(true);
+                        }}
+                        className="btn-ghost px-2 py-1"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(p)}
+                        className="btn-ghost px-2 py-1 text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <ProductModal open={open} onClose={() => setOpen(false)} editing={editing} categories={categories} />
+    </div>
+  );
+}
+
+function ProductModal({ open, onClose, editing, categories }) {
+  const isEdit = !!editing;
+  const [uploading, setUploading] = useState(false);
+  const [imageUrl, setImageUrl] = useState('');
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    resolver: zodResolver(productSchema),
+    defaultValues: { ad: '', categoryId: '', fiyat: 0, stok: 0, aciklama: '', aktif: true },
+  });
+
+  useEffect(() => {
+    if (open) {
+      reset(
+        editing
+          ? {
+              ad: editing.ad,
+              categoryId: editing.categoryId,
+              fiyat: editing.fiyat,
+              stok: editing.stok,
+              dusukStokEsigi: editing.dusukStokEsigi ?? null,
+              aciklama: editing.aciklama || '',
+              aktif: editing.aktif ?? true,
+            }
+          : {
+              ad: '',
+              categoryId: categories[0]?.id || '',
+              fiyat: 0,
+              stok: 0,
+              dusukStokEsigi: null,
+              aciklama: '',
+              aktif: true,
+            },
+      );
+      setImageUrl(editing?.gorsel || '');
+    }
+  }, [open, editing, reset, categories]);
+
+  const handleImage = async (file) => {
+    if (!file) return;
+    if (SPARK_MODE) {
+      toast.error('Görsel yüklemek için Firebase Blaze plana geçmeniz gerekir.');
+      return;
+    }
+    setUploading(true);
+    try {
+      const { ref: storageRef, uploadBytes, getDownloadURL } = await import('firebase/storage');
+      const storage = await getStorageRef();
+      const path = `products/${Date.now()}-${file.name}`;
+      const r = storageRef(storage, path);
+      await uploadBytes(r, file);
+      const url = await getDownloadURL(r);
+      setImageUrl(url);
+      toast.success('Görsel yüklendi');
+    } catch (err) {
+      toast.error('Görsel yüklenemedi');
+      console.error(err);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const onSubmit = async (data) => {
+    try {
+      const cat = categories.find((c) => c.id === data.categoryId);
+      const payload = {
+        ...data,
+        fiyat: Number(data.fiyat),
+        stok: Number(data.stok),
+        dusukStokEsigi: data.dusukStokEsigi != null && data.dusukStokEsigi !== '' ? Number(data.dusukStokEsigi) : null,
+        categoryAd: cat?.ad || '',
+        gorsel: imageUrl || null,
+      };
+      if (isEdit) {
+        await patchDoc('products', editing.id, payload);
+        toast.success('Ürün güncellendi');
+      } else {
+        await createDoc('products', payload);
+        toast.success('Ürün eklendi');
+      }
+      onClose();
+    } catch (err) {
+      toast.error('Kayıt hatası');
+      console.error(err);
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={isEdit ? 'Ürün Düzenle' : 'Yeni Ürün'}
+      size="lg"
+      footer={
+        <>
+          <button onClick={onClose} className="btn-secondary">
+            İptal
+          </button>
+          <button type="submit" form="prod-form" disabled={isSubmitting} className="btn-primary">
+            Kaydet
+          </button>
+        </>
+      }
+    >
+      <form id="prod-form" onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-2 gap-4">
+        <div className="col-span-2">
+          <label className="mb-1 block text-sm font-medium text-slate-700">Ürün Adı</label>
+          <input {...register('ad')} className="input" autoFocus />
+          {errors.ad && <p className="mt-1 text-xs text-red-600">{errors.ad.message}</p>}
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Kategori</label>
+          <select {...register('categoryId')} className="input">
+            <option value="">Seçin...</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.ad}
+              </option>
+            ))}
+          </select>
+          {errors.categoryId && <p className="mt-1 text-xs text-red-600">{errors.categoryId.message}</p>}
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Fiyat (TL)</label>
+          <input type="number" step="0.01" {...register('fiyat')} className="input" />
+          {errors.fiyat && <p className="mt-1 text-xs text-red-600">{errors.fiyat.message}</p>}
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Stok</label>
+          <input type="number" {...register('stok')} className="input" />
+          {errors.stok && <p className="mt-1 text-xs text-red-600">{errors.stok.message}</p>}
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Düşük Stok Eşiği (opsiyonel)
+          </label>
+          <input
+            type="number"
+            {...register('dusukStokEsigi')}
+            className="input"
+            placeholder="Boş = global ayar"
+          />
+        </div>
+
+        <div className="col-span-2">
+          <label className="mb-1 block text-sm font-medium text-slate-700">Açıklama</label>
+          <textarea {...register('aciklama')} rows={2} className="input" />
+        </div>
+
+        <div className="col-span-2">
+          <label className="mb-1 block text-sm font-medium text-slate-700">Görsel</label>
+          <div className="flex items-center gap-3">
+            {imageUrl ? (
+              <img src={imageUrl} className="h-16 w-16 rounded object-cover" alt="" />
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded bg-slate-100 text-slate-400">
+                <ImageIcon size={20} />
+              </div>
+            )}
+            <label className={`btn-secondary cursor-pointer ${SPARK_MODE ? 'opacity-60' : ''}`}>
+              <Upload size={14} />
+              {SPARK_MODE
+                ? 'Görsel (Blaze gerekli)'
+                : uploading
+                  ? 'Yükleniyor...'
+                  : 'Görsel Yükle'}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={SPARK_MODE}
+                onChange={(e) => handleImage(e.target.files?.[0])}
+              />
+            </label>
+            {imageUrl && (
+              <button type="button" onClick={() => setImageUrl('')} className="btn-ghost text-xs">
+                Kaldır
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="col-span-2 flex items-center justify-between rounded-lg bg-slate-50 p-3">
+          <span className="text-sm font-medium text-slate-700">Aktif</span>
+          <Toggle checked={watch('aktif')} onChange={(v) => setValue('aktif', v)} />
+        </div>
+      </form>
+    </Modal>
+  );
+}

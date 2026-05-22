@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(try { $j = Get-Content \"d:\\\\source\\\\RestorantPos\\\\restoran-pos-schema.json\" -Raw | ConvertFrom-Json; Write-Output \"OK\"; Write-Output \"Phases: $\\($j.phases.Count\\)\"; Write-Output \"Collections: $\\($j.firestore.collections | Get-Member -MemberType NoteProperty | Measure-Object | ForEach-Object Count\\)\"; Write-Output \"Has testing: $\\($null -ne $j.testing\\)\"; Write-Output \"Has printers: $\\($null -ne $j.firestore.collections.printers\\)\" } catch { Write-Output \"JSON HATA: $\\($_.Exception.Message\\)\" })",
+      "Bash(npm run *)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue)"
+    ]
+  }
+}

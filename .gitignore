@@ -1,0 +1,16 @@
+node_modules
+dist
+dist-ssr
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.firebase
+*.firebaserc.local
+.firebaserc.*.local
+firebase-debug.log
+ui-debug.log
+firestore-debug.log

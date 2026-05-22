@@ -1,0 +1,116 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() { return request.auth != null; }
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function role() {
+      return isSignedIn() ? userDoc().rol : null;
+    }
+    function isActive() {
+      return isSignedIn() && userDoc().aktif == true;
+    }
+    function isAdmin() { return isActive() && role() == 'admin'; }
+    function isKasiyer() { return isActive() && role() == 'kasiyer'; }
+    function isStaff() {
+      return isActive() && role() in ['admin', 'kasiyer', 'garson'];
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if isAdmin() || request.auth.uid == userId;
+      allow update: if isAdmin() || request.auth.uid == userId;
+      allow delete: if isAdmin();
+    }
+
+    match /categories/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /products/{id} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+                    || (isStaff()
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['stok', 'updatedAt']));
+    }
+
+    match /printers/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    match /tables/{id} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+                    || (isStaff()
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['durum', 'grupId', 'rezervasyonNotu']));
+    }
+
+    match /tableGroups/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    match /orders/{id} {
+      allow read: if isStaff();
+      allow create: if isStaff();
+      allow update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /archivedOrders/{id} {
+      allow read: if isStaff();
+      allow create: if isAdmin() || isKasiyer();
+      allow update, delete: if isAdmin();
+    }
+
+    match /payments/{id} {
+      allow read: if isStaff();
+      allow create: if isAdmin() || isKasiyer();
+      allow update, delete: if isAdmin();
+    }
+
+    match /campaigns/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    match /coupons/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    match /notifications/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    match /settings/{id} {
+      allow read: if isStaff() || id == 'public';
+      allow write: if isAdmin();
+    }
+
+    match /callerLogs/{id} {
+      allow read: if isAdmin() || isKasiyer();
+      allow write: if isAdmin();
+    }
+
+    match /reservations/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin() || isKasiyer();
+    }
+
+    match /stockMovements/{id} {
+      allow read: if isAdmin();
+      allow create: if isStaff();
+      allow update, delete: if isAdmin();
+    }
+  }
+}
