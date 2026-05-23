@@ -193,6 +193,62 @@ export async function addItemsToOrder({ orderId, garsonId, newItems }) {
   });
 }
 
+/**
+ * Manuel stok hareketi: giriş veya çıkış. Ürün stoğunu atomik günceller +
+ * stockMovements koleksiyonuna audit kaydı yazar.
+ */
+export async function recordManualStockMovement({
+  productId,
+  tip, // 'giris' | 'cikis'
+  miktar,
+  kaynak, // 'manuel' | 'fire' | 'tedarik' | 'iade' | 'sayim'
+  tedarikciId,
+  tedarikciAd,
+  aciklama,
+  kullaniciId,
+  kullaniciAd,
+}) {
+  if (!productId) throw new Error('Ürün seçin');
+  if (!miktar || miktar <= 0) throw new Error('Geçerli miktar girin');
+
+  const productRef = doc(db, 'products', productId);
+
+  return runTransaction(db, async (txn) => {
+    const productSnap = await txn.get(productRef);
+    if (!productSnap.exists()) throw new Error('Ürün bulunamadı');
+    const product = productSnap.data();
+    const oncekiStok = Number(product.stok || 0);
+    const delta = tip === 'cikis' ? -miktar : miktar;
+    const yeniStok = oncekiStok + delta;
+
+    if (yeniStok < 0) {
+      throw new Error(`Çıkış miktarı stoktan fazla: stok ${oncekiStok}, çıkış ${miktar}`);
+    }
+
+    txn.update(productRef, { stok: yeniStok, updatedAt: serverTimestamp() });
+
+    const movRef = doc(collection(db, 'stockMovements'));
+    txn.set(movRef, {
+      productId,
+      productAd: product.ad,
+      tip,
+      miktar,
+      oncekiStok,
+      yeniStok,
+      kaynak: kaynak || 'manuel',
+      tedarikciId: tedarikciId || null,
+      tedarikciAd: tedarikciAd || null,
+      ilgiliId: null,
+      kullaniciId: kullaniciId || null,
+      kullaniciAd: kullaniciAd || null,
+      zaman: serverTimestamp(),
+      aciklama: aciklama || '',
+    });
+
+    return { productId, oncekiStok, yeniStok, movementId: movRef.id };
+  });
+}
+
 export async function updateOrderStatus(orderId, newStatus) {
   const orderRef = doc(db, 'orders', orderId);
   const timestampField = {

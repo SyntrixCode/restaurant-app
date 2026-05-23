@@ -121,5 +121,15 @@ service cloud.firestore {
       allow create: if isStaff();
       allow update, delete: if isAdmin();
     }
+
+    match /suppliers/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    match /transactions/{id} {
+      allow read: if isAdmin() || isKasiyer();
+      allow write: if isAdmin();
+    }
   }
 }

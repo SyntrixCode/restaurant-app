@@ -18,6 +18,7 @@ import {
   LogOut,
   CalendarClock,
   QrCode,
+  Truck as TruckIcon,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -32,6 +33,7 @@ const NAV = [
   { to: '/admin/reservations', label: 'Rezervasyonlar', icon: CalendarClock },
   { to: '/admin/qr-codes', label: 'QR Kodları', icon: QrCode },
   { to: '/admin/stock', label: 'Stok', icon: Boxes },
+  { to: '/admin/suppliers', label: 'Tedarikçiler', icon: TruckIcon },
   { to: '/admin/campaigns', label: 'Kampanyalar', icon: Megaphone },
   { to: '/admin/coupons', label: 'Kupon Kodları', icon: Megaphone },
   { to: '/admin/packages', label: 'Paket Servis', icon: Truck },

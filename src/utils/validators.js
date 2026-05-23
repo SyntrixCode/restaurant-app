@@ -75,6 +75,36 @@ export const settingsSchema = z.object({
   }),
 });
 
+export const supplierSchema = z.object({
+  ad: z.string().min(1, 'Tedarikçi adı zorunlu').max(100),
+  iletisimAd: z.string().max(100).optional().or(z.literal('')),
+  telefon: z.string().max(30).optional().or(z.literal('')),
+  email: z.string().email('Geçersiz email').max(100).optional().or(z.literal('')),
+  adres: z.string().max(300).optional().or(z.literal('')),
+  kategori: z.string().max(100).optional().or(z.literal('')),
+  notlar: z.string().max(500).optional().or(z.literal('')),
+  aktif: z.boolean(),
+});
+
+export const stockMovementManualSchema = z.object({
+  productId: z.string().min(1, 'Ürün seçin'),
+  tip: z.enum(['giris', 'cikis']),
+  miktar: z.coerce.number().positive('Miktar 0\'dan büyük olmalı'),
+  kaynak: z.enum(['manuel', 'fire', 'tedarik', 'iade', 'sayim']),
+  tedarikciId: z.string().optional().or(z.literal('')),
+  aciklama: z.string().max(300).optional().or(z.literal('')),
+});
+
+export const financeTxSchema = z.object({
+  tarih: z.string().min(1, 'Tarih zorunlu'),
+  tip: z.enum(['gelir', 'gider']),
+  kategori: z.string().min(1, 'Kategori seçin'),
+  miktar: z.coerce.number().positive('Tutar 0\'dan büyük olmalı'),
+  aciklama: z.string().max(300).optional().or(z.literal('')),
+  odemeYontemi: z.enum(['nakit', 'kart', 'havale', 'diger']).optional(),
+  belgeNo: z.string().max(50).optional().or(z.literal('')),
+});
+
 export const paketSchema = z.object({
   musteriAd: z.string().min(2, 'Ad en az 2 karakter').max(100),
   musteriTel: z

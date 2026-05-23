@@ -23,6 +23,9 @@ import AdminCampaigns from './pages/admin/Campaigns';
 import AdminCoupons from './pages/admin/Coupons';
 import AdminQrCodes from './pages/admin/QrCodes';
 import AdminPackages from './pages/admin/Packages';
+import AdminStock from './pages/admin/Stock';
+import AdminSuppliers from './pages/admin/Suppliers';
+import AdminFinance from './pages/admin/Finance';
 import AdminPlaceholder from './pages/admin/Placeholder';
 
 import PosLogin from './pages/pos/Login';
@@ -77,13 +80,14 @@ export default function App() {
         <Route path="tables" element={<AdminTables />} />
         <Route path="reservations" element={<AdminReservations />} />
         <Route path="qr-codes" element={<AdminQrCodes />} />
-        <Route path="stock" element={<AdminPlaceholder title="Stok Yönetimi" phase="Faz 10 detay, Faz 1 basit" />} />
+        <Route path="stock" element={<AdminStock />} />
+        <Route path="suppliers" element={<AdminSuppliers />} />
+        <Route path="finance" element={<AdminFinance />} />
         <Route path="campaigns" element={<AdminCampaigns />} />
         <Route path="coupons" element={<AdminCoupons />} />
         <Route path="packages" element={<AdminPackages />} />
         <Route path="notifications" element={<AdminNotifications />} />
         <Route path="reports" element={<AdminReports />} />
-        <Route path="finance" element={<AdminPlaceholder title="Finans & Kasa" phase="Faz 11" />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>
 
