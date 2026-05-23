@@ -28,10 +28,23 @@ export const useCartStore = create((set, get) => ({
     let items = [...get().items];
     const item = items.find((it) => it.productId === productId);
     if (!item) return;
-    item.adet += delta;
+    item.adet = Math.round((item.adet + delta) * 2) / 2; // 0.5 step'e snap
     if (item.adet <= 0) {
       items = items.filter((it) => it.productId !== productId);
     }
+    set({ items });
+  },
+
+  toggleHalf: (productId) => {
+    let items = get().items.map((it) => {
+      if (it.productId !== productId) return it;
+      const integerPart = Math.floor(it.adet);
+      const isHalf = it.adet > integerPart;
+      // 1 → 1.5, 1.5 → 1, 2 → 2.5, 2.5 → 2, 0.5 → 0
+      const newAdet = isHalf ? integerPart : integerPart + 0.5;
+      return { ...it, adet: newAdet };
+    });
+    items = items.filter((it) => it.adet > 0);
     set({ items });
   },
 

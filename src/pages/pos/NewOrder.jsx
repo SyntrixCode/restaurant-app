@@ -5,9 +5,10 @@ import toast from 'react-hot-toast';
 import { watchCollection, orderBy, fetchOne } from '../../firebase/firestore';
 import { useCartStore } from '../../store/cartStore';
 import { useAuthStore } from '../../store/authStore';
-import { formatTL } from '../../utils/format';
+import { formatTL, formatAdet } from '../../utils/format';
 import { createOrder, addItemsToOrder } from '../../firebase/orders';
 import Modal from '../../components/ui/Modal';
+import KitchenTicket from '../../components/KitchenTicket';
 
 export default function NewOrder() {
   const navigate = useNavigate();
@@ -16,8 +17,9 @@ export default function NewOrder() {
   const orderId = params.get('orderId');
   const kisi = Number(params.get('kisi')) || null;
   const { user, profile, rol } = useAuthStore();
-  const { masaAd, items, start, addItem, changeQuantity, removeItem, setNote, clear, total } =
+  const { masaAd, items, start, addItem, changeQuantity, toggleHalf, removeItem, setNote, clear, total } =
     useCartStore();
+  const [kitchenTicket, setKitchenTicket] = useState(null);
 
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
@@ -85,6 +87,11 @@ export default function NewOrder() {
     }
     setSubmitting(true);
     try {
+      const ticketItems = items.map((it) => ({
+        ad: it.ad,
+        adet: it.adet,
+        notlar: it.notlar,
+      }));
       if (orderId) {
         const result = await addItemsToOrder({
           orderId,
@@ -95,7 +102,17 @@ export default function NewOrder() {
             notlar: it.notlar,
           })),
         });
-        toast.success(`${result.added} ürün eklendi (mutfağa yazıldı)`);
+        toast.success(`${result.added} ürün eklendi`);
+        setKitchenTicket({
+          isAddendum: true,
+          order: {
+            id: orderId,
+            masaAd,
+            kisiSayisi: null,
+            garsonAd: profile?.ad || 'Garson',
+          },
+          items: ticketItems,
+        });
       } else {
         const result = await createOrder({
           masaId,
@@ -110,15 +127,30 @@ export default function NewOrder() {
           })),
         });
         toast.success(`Sipariş alındı (${formatTL(result.araToplam)})`);
+        setKitchenTicket({
+          isAddendum: false,
+          order: {
+            id: result.orderId,
+            masaAd,
+            kisiSayisi: kisi,
+            garsonAd: profile?.ad || 'Garson',
+          },
+          items: ticketItems,
+        });
       }
       clear();
-      navigate('/pos/tables');
+      // navigate'i mutfak fişi modal kapanınca yapacağız
     } catch (err) {
       toast.error(err.message || 'Sipariş kaydedilemedi');
       console.error(err);
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const closeKitchenTicket = () => {
+    setKitchenTicket(null);
+    navigate('/pos/tables');
   };
 
   const subtotal = total();
@@ -221,12 +253,23 @@ export default function NewOrder() {
                     >
                       <Minus size={14} />
                     </button>
-                    <span className="w-10 text-center font-semibold">{it.adet}</span>
+                    <span className="w-10 text-center font-semibold">{formatAdet(it.adet)}</span>
                     <button
                       onClick={() => changeQuantity(it.productId, 1)}
                       className="rounded bg-slate-100 p-1.5 hover:bg-slate-200"
                     >
                       <Plus size={14} />
+                    </button>
+                    <button
+                      onClick={() => toggleHalf(it.productId)}
+                      title="Yarım porsiyon (½)"
+                      className={`rounded px-1.5 py-1 text-xs font-bold transition ${
+                        it.adet % 1 !== 0
+                          ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      ½
                     </button>
                     <button
                       onClick={() => setNoteFor(it)}
@@ -281,6 +324,14 @@ export default function NewOrder() {
           if (noteFor) setNote(noteFor.productId, note);
           setNoteFor(null);
         }}
+      />
+
+      <KitchenTicket
+        open={!!kitchenTicket}
+        onClose={closeKitchenTicket}
+        order={kitchenTicket?.order}
+        items={kitchenTicket?.items}
+        isAddendum={kitchenTicket?.isAddendum}
       />
     </div>
   );

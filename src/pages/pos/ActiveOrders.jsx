@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { watchCollection, where, orderBy } from '../../firebase/firestore';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
-import { formatTL, minutesSince } from '../../utils/format';
+import { formatTL, minutesSince, formatAdet } from '../../utils/format';
 import { updateOrderStatus } from '../../firebase/orders';
 
 const TABS = [
@@ -125,7 +125,7 @@ export default function ActiveOrders() {
                     {o.items.map((it, idx) => (
                       <li key={idx} className="flex justify-between text-slate-700">
                         <span>
-                          <strong>{it.adet}×</strong> {it.ad}
+                          <strong>{formatAdet(it.adet)}×</strong> {it.ad}
                         </span>
                       </li>
                     ))}

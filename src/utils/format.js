@@ -28,3 +28,9 @@ export function minutesSince(date) {
   const d = date.toDate ? date.toDate() : new Date(date);
   return Math.floor((Date.now() - d.getTime()) / 60000);
 }
+
+export function formatAdet(n) {
+  if (n == null || isNaN(n)) return '0';
+  // 1 → "1", 1.5 → "1,5", 2.5 → "2,5"
+  return n % 1 === 0 ? String(n) : n.toFixed(1).replace('.', ',');
+}

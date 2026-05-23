@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Wallet, CreditCard, UtensilsCrossed, Plus, Trash2, ArrowLeft, Printer } from 'lucide-react';
 import { watchDoc } from '../../firebase/firestore';
-import { formatTL, minutesSince } from '../../utils/format';
+import { formatTL, minutesSince, formatAdet } from '../../utils/format';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { recordPayment } from '../../firebase/payments';
@@ -137,7 +137,7 @@ export default function Payment() {
             {order.items.map((it, idx) => (
               <li key={idx} className="flex justify-between px-3 py-2 text-sm">
                 <span>
-                  <strong className="mr-1">{it.adet}×</strong>
+                  <strong className="mr-1">{formatAdet(it.adet)}×</strong>
                   {it.ad}
                   {it.notlar && <em className="ml-2 text-xs text-slate-500">({it.notlar})</em>}
                 </span>

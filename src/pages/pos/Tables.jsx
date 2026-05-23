@@ -20,7 +20,7 @@ import toast from 'react-hot-toast';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { watchCollection, orderBy, where } from '../../firebase/firestore';
-import { formatTL, minutesSince } from '../../utils/format';
+import { formatTL, minutesSince, formatAdet } from '../../utils/format';
 import { useAuthStore } from '../../store/authStore';
 import Modal from '../../components/ui/Modal';
 import { createTableGroup, dissolveTableGroup } from '../../firebase/tableGroups';
@@ -1049,7 +1049,7 @@ function FullTableModal({ open, onClose, table, rol, navigate, onDissolve }) {
               {order.items.map((it, idx) => (
                 <li key={idx} className="flex justify-between px-3 py-2 text-sm">
                   <span>
-                    <strong>{it.adet}×</strong> {it.ad}
+                    <strong>{formatAdet(it.adet)}×</strong> {it.ad}
                     {it.notlar && <em className="ml-2 text-xs text-slate-500">({it.notlar})</em>}
                   </span>
                   <span className="font-semibold">{formatTL(it.fiyat * it.adet)}</span>

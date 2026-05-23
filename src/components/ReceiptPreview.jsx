@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Printer, X } from 'lucide-react';
-import { formatTL, formatDate } from '../utils/format';
+import { formatTL, formatDate, formatAdet } from '../utils/format';
 
 const YONTEM_LABEL = {
   nakit: 'NAKİT',
@@ -72,7 +72,7 @@ export default function ReceiptPreview({ open, onClose, order, payments, setting
             {order.items.map((it, idx) => (
               <div key={idx} className="flex justify-between text-xs">
                 <span className="flex-1">
-                  {it.adet}× {it.ad}
+                  {formatAdet(it.adet)}× {it.ad}
                   {it.notlar && <em className="block pl-4 text-slate-500">({it.notlar})</em>}
                 </span>
                 <span className="ml-2 tabular-nums">{formatTL(it.fiyat * it.adet)}</span>
