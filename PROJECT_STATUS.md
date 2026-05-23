@@ -4,29 +4,28 @@
 **Firebase Project ID:** `alazligida-e77b9`
 **Bölge:** `europe-west3` (Frankfurt)
 **Plan:** Spark (ücretsiz) — Cloud Functions ve Storage **kapalı**
+**Repo:** [SyntrixOps/restaurant-app](https://github.com/SyntrixOps/restaurant-app)
+**Hedef cihaz:** iMin Swan 1 Pro (Android 11+, dahili termal yazıcı)
 
 ---
 
-## 1. Hızlı Başlangıç (Klasör Taşıdıktan Sonra)
+## 1. Hızlı Başlangıç
 
 ```powershell
 # 1. Bağımlılıkları yükle
 npm install
 
-# 2. Functions klasörü için de yükle (Blaze'e geçilirse lazım)
-cd functions
-npm install
-cd ..
-
-# 3. Firebase CLI'ye giriş
-npx firebase login
-npx firebase use alazligida-e77b9
-
-# 4. Dev server'ı başlat
+# 2. Dev sunucusu
 npm run dev
-```
+# → http://localhost:5173/admin/login
 
-Tarayıcı: <http://localhost:5173/admin/login>
+# 3. Firestore rules deploy (rules değişirse)
+npm run deploy:rules
+
+# 4. APK al (GitHub Actions, manuel tetikleme)
+# https://github.com/SyntrixOps/restaurant-app/actions/workflows/build-apk.yml
+# → "Run workflow" → main → debug
+```
 
 ---
 
@@ -51,236 +50,298 @@ Tarayıcı: <http://localhost:5173/admin/login>
 
 ---
 
-## 3. Yapılanlar (Faz 1, 2, 4 kısmi)
+## 3. Tamamlanan Fazlar
 
-### ✅ Faz 1 — Temel Altyapı (TAMAM)
-- Vite + React 18 + Tailwind 3 + Firebase 10 SDK kurulumu
+### ✅ Faz 1 — Temel Altyapı
+- Vite + React 18 + Tailwind 3 + Firebase 10 SDK
 - React Router 6 (`/admin/*`, `/pos/*`, `/menu/:masaId`)
 - Zustand store'ları (`authStore`, `settingsStore`, `cartStore`)
-- Admin login (email/şifre, 5/60sn rate limit, Beni Hatırla)
-- POS login (4 haneli numerik klavye, **derived email/password** mantığıyla — Spark uyumlu)
+- Admin login (email/şifre, Beni Hatırla persistence, rate-limit)
+- POS login (4 haneli numerik klavye, derived email/password — Spark uyumlu)
 - Dashboard (KPI kartları + canlı Firestore listener)
-- Kategori yönetimi (drag-drop sıralama @dnd-kit + yazıcı atama)
-- Ürün yönetimi (CRUD, stok rozetleri; görsel upload Spark'ta kapalı)
-- Yazıcı (printers) yönetimi (yeni koleksiyon, varsayılan yazıcı işaretleme)
-- Kullanıcı yönetimi (secondary Firebase app pattern ile POS user yaratma)
+- Kategori yönetimi (drag-drop sıralama + yazıcı atama)
+- Ürün yönetimi (CRUD, stok rozetleri)
+- Yazıcı yönetimi (eski yapı, tek-yazıcı modeline geçti — bkz. Faz 4)
+- Kullanıcı yönetimi (secondary Firebase app pattern)
 - QR Müşteri Menüsü (mobile-first, scroll-spy)
-- Firebase Console: proje + Auth + Firestore + Web App
-- Firestore rules (doc-lookup, custom claims yok)
-- Firestore composite index'leri deploy
-- Seed script (admin + 3 POS user + 8 kategori + 20 ürün + 6 masa + 2 yazıcı + ayarlar)
+- Seed script (admin + 3 POS user + kategori/ürün/masa)
+- Firestore rules (doc-lookup yetkilendirme, custom claims yok)
 
-### ✅ Faz 2 — Sipariş Çekirdeği (TAMAM)
-- POS Tables sayfası (zone sekmeli, renkli durum kartları)
-- POS NewOrder sayfası (3 bölümlü: kategori bar / ürün grid / sepet panel)
-- POS ActiveOrders sayfası (filtreli sekmeler, durum geçişleri)
+### ✅ Faz 2 — Sipariş Çekirdeği
+- POS Tables (canvas görünüm, x/y koordinatları)
+- POS NewOrder (3 bölüm: kategori/ürün/sepet)
+- POS ActiveOrders (sadeleştirilmiş — tek liste, masa+paket bölümleri)
 - Firestore transaction ile sipariş oluşturma:
   - `orders` yazma
   - `products.stok` atomik düşürme
   - `tables.durum` → "dolu"
-  - `stockMovements` audit kaydı (Faz 1 kararı gereği baştan yazılıyor)
-- Mevcut siparişe ekleme (transaction ile yeni stok düşürme)
-- Dolu masa modal'ı (Sipariş Ekle / Ödeme Al butonları)
-- Realtime senkron (Firestore listeners)
+  - `stockMovements` audit
+- Mevcut siparişe ekleme (`addItemsToOrder` transaction)
+- Realtime senkron
 
-### ✅ Faz 4 — Ödeme Ekranı (KISMEN TAMAM)
-- POS Payment sayfası (sol özet, sağ ödeme yöntemi butonları)
-- Nakit akışı (verilen tutar + para üstü hesabı)
-- Kart akışı (mock POS spinner, marka kararı bekleniyor)
-- Yemek kartı (7 marka: Multinet, Sodexo, Ticket, Setcard, Edenred, Metropol, Diğer)
-- Bölünmüş ödeme (her parça ayrı `payments` kaydı)
+### ✅ Faz 3 — Masa Yönetimi
+- Admin → Masalar drag-drop canvas layout editor
+- Masa ekle/sil/düzenle (kapasite seç: 2/4/6/8)
+- Bölge (zone) yönetimi (İç Salon / Teras / serbest)
+- Dekoratif öğeler: Bar / Mutfak / WC / Çıkış / Duvar / Yazı (tabela tarzı, 90° dönebilir)
+- **Drag-to-merge**: POS'ta boş masayı sürükleyip başka boş masanın üstüne bırak → "Birleştir?" modalı → grup oluşur
+- Grup için bounding-box hull + "Grup · N kişilik" rozeti
+- **Ödeme sonrası otomatik grup dağılma** (atomik transaction)
+- Kişi sayısı zorunluluğu (sipariş modal'ında girilir, fişte görünür)
+- Rezervasyon sistemi:
+  - POS'ta boş masaya tıkla → "Rezerve Et" geçişi
+  - Form: ad, telefon, tarih, saat, kişi, not
+  - Rezerve masa canvas'ta "Ahmet · 20:30" gösterir
+  - `/admin/reservations` listele/iptal/tamamlandı
+- POS'ta canvas görünüm (admin koordinatları)
+
+### ✅ Faz 4 — Ödeme + Native Yazıcı
+- POS Payment sayfası (sol özet, sağ ödeme yöntemi)
+- **Yarım porsiyon desteği** (½ butonu, 0.5 step, fiyat otomatik 1.5×)
+- Nakit (verilen tutar + para üstü)
+- Kart (mock 1.2 sn spinner — gerçek banka POS markası bekliyor)
+- Yemek kartı (Multinet/Sodexo/Ticket/Setcard/Edenred/Metropol/Diğer)
+- **Bölünmüş ödeme** (her parça ayrı `payments` doc)
 - Firestore transaction ile ödeme tamamlama:
   - `payments` koleksiyonuna kayıt
   - `orders.durum` → `tamamlandi`
-  - `archivedOrders/{id}`'ye kopya (rapor için)
+  - `archivedOrders/{id}` kopya
   - `tables.durum` → `bos`
-- Fiş önizleme + tarayıcı yazdırma (`window.print`, 80mm + A4)
-- Otomatik fiş bas toggle (settings'ten)
+  - Auto-dissolve group (eğer grup masaysa)
+  - Kupon kullanılırsa sayaç artışı
+- **iMin termal yazıcı entegrasyonu** (Capacitor plugin):
+  - `IminPrinterPlugin.java` (com.imin.printer.PrinterHelper SDK)
+  - JS API: `IminPrinter.printReceipt({ lines, cut, feedLines })`
+  - Mutfak adisyonu (sipariş alınınca otomatik): masa/kişi/garson/saat + ürün listesi (fiyat yok)
+  - Hesap fişi (ödeme sonu): tüm detaylar
+  - Tarayıcıda fallback: `window.print()`
+- **Sipariş durum akışı sadeleştirildi:**
+  - Masa: `aktif → tamamlandi` (ödeme ile)
+  - Paket: `aktif → yolda → tamamlandi` (kurye gönderildiğinde + ödeme ile)
 
-### Faz 4'ten Kalan (Capacitor Aşamasında)
-- ❌ Capacitor APK üretme (iMin Swan 1 deploy için)
-- ❌ iMin Printer SDK native plugin (Kotlin)
-- ❌ iMin Dual Screen SDK (ikincil müşteri ekranı)
-- ❌ Banka POS gerçek entegrasyon (marka kararı bekleniyor: Ingenico/Verifone/PayFlex)
+### ✅ Faz 5 — Admin Sipariş Yönetimi + Bildirimler
+- `/admin/orders` — açık masa siparişleri, garson filtresi, arama, detay modal, iptal
+- `/admin/archive` — tamamlanan siparişler, tarih aralığı, CSV export (Excel uyumlu)
+- `/admin/notifications` — pasif uyarı listesi:
+  - Geciken siparişler
+  - Düşük stoklu ürünler (settings eşiği veya per-ürün override)
+  - Yaklaşan rezervasyonlar (2 saat içinde)
+  - 30sn'de bir geçen süreler yenilenir
+
+### ✅ Faz 6 — Raporlama
+- `/admin/reports` — Recharts grafikleri:
+  - Günlük ciro trendi (LineChart)
+  - Saatlik satış dağılımı (BarChart)
+  - Garson performansı top 8 (yatay BarChart)
+  - Ürün/kategori dağılımı top 10 (PieChart)
+  - Ödeme yöntemi dağılımı (Donut)
+  - En çok satan ürünler tablosu
+- KPI: ciro, sipariş, ortalama sepet, kişi, kişi başı
+- Tarih filtreleri (Bugün / 7 / 30 / 90 gün + serbest)
+- **Excel export** (xlsx): 6 sekme
+
+### ✅ Faz 7 — Kampanya + Kupon
+- `/admin/campaigns` — kampanya CRUD
+  - Tarih/gün/saat aralığı programları
+  - %/sabit indirim, min sepet
+  - "Şu an geçerli" rozeti realtime
+- `/admin/coupons` — kupon CRUD
+  - Kod (büyük harf+rakam+_/-), max kullanım, son geçerlilik
+  - Kullanım sayacı (auto-increment)
+- Ödeme ekranında:
+  - Aktif kampanya otomatik gösterilir + uygulanır
+  - Kupon kodu manuel girilir
+  - **"En büyük indirim" kuralı** — kümülatif değil, biri seçilir
+  - Order'a `indirim` + `kampanyaId/kuponKod` atomik yazılır
+
+### ✅ Faz 8 (kısmi) — Paket Servis + CallerID
+- **POS `/pos/packages`** — manuel paket sipariş girişi
+  - Müşteri formu (ad/tel/adres/not) + kaynak (Manuel/Telefon/YS/Getir/Trendyol/Diğer)
+  - Sepet (yarım porsiyon, not, ürün picker)
+  - Mutfak adisyonu otomatik
+- **Admin `/admin/packages`** — paket sipariş yönetimi
+  - 2 sekme: Yeni / Yolda
+  - Kaynak filtresi + arama
+  - "Yola Çıkar" butonu (kurye gönderildiğinde)
+  - Detay modal: tel'e tıkla = arama, adres göster
+- **CallerID popup** ([CallerIdPopup.jsx](src/components/CallerIdPopup.jsx)):
+  - Sağ üstte 30sn açık kalan mavi popup
+  - Geçmiş siparişler (archivedOrders'tan musteriTel match)
+  - "Paket Sipariş Aç" → `/pos/packages?tel=X` form auto-fill
+  - **Mock test:** `window.__mockCall("0555 555 55 55")` (DevTools)
+  - settings.bildirimAyarlari.callerID toggle'a saygı
+
+**Atlanan (üçüncü taraf bekliyor):**
+- ❌ Yemeksepeti webhook — Cloud Functions gerek (Blaze)
+- ❌ Getir webhook — aynı
+- ❌ Gerçek IP telefon entegrasyonu — donanım kararı
+
+### ✅ Faz 9 — QR Menü + PWA
+- `/admin/qr-codes` — her masa için canlı QR kod (qrcode.react)
+- Base URL ayarlanabilir (localStorage)
+- Bölge filtresi
+- **A6 PDF yazdırma** (CSS `@page A6 portrait` — her QR ayrı sayfa)
+- Vite PWA plugin: auto-update service worker, static asset cache, manifest.json link
+
+### ✅ Faz 10 — Detaylı Stok + Finans
+- **`/admin/stock`** — stok hareketleri (tüm stockMovements):
+  - Filtre: tarih, tip (giriş/çıkış), kaynak, ürün, arama
+  - **Manuel hareket** modal: tedarik geldi / fire / iade / sayım düzeltme
+  - Excel export
+  - Düşük stok uyarı paneli
+- **`/admin/suppliers`** — tedarikçi rehberi (CRUD)
+  - Kategori, iletişim, tel, email, adres, not
+  - Manuel stok hareketinde "Tedarik" kaynağı seçildiğinde dropdown'a düşer
+- **`/admin/inventory`** — sayım modu
+  - "Yeni Sayım Başlat" → tüm aktif ürünlerin snapshot
+  - Sayım modal: her ürün için sistem stoğu + fiziksel stok
+  - "Sayımı Kapat" → atomik finalize (products.stok güncellenir, audit yazılır)
+  - Geçmiş sayımlar listesi
+- **`/admin/ingredients`** — malzemeler (hammadde)
+  - Birim: adet/kg/g/lt/ml/paket
+  - Stok, eşik, birim maliyet, tedarikçi
+  - Düşük stok uyarı paneli
+- **`/admin/recipes`** — ürün bazlı reçete
+  - Ürün → malzemeler + miktar
+  - Otomatik maliyet ve kar % hesabı
+  - **Sipariş entegrasyonu**: reçeteli ürün satılınca ingredients.stok atomik düşer
+  - Reçetesi olmayan ürünler eski akışla (sadece product.stok)
+- **`/admin/finance`** — gelir/gider defteri
+  - Predefined kategoriler (Kira, Elektrik, Maaş, vb.)
+  - Tarih + tip + kategori filtreleri
+  - KPI: gelir/gider/net
+  - Excel export (Hareketler + Kategori Özeti)
+  - **POS satışları HARİÇ** — onlar Raporlar'da
+
+### ✅ Settings (Faz 5 alt başlığı, ayrı çıkarıldı)
+- `/admin/settings` — react-hook-form + zod
+  - Restoran bilgileri (ad, adres, tel, vergi no)
+  - Operasyon (vergi oranı, KDV dahil, kasa saatleri, eşikler)
+  - Fiş (başlık, alt mesaj, otomatik bas)
+  - 6 bildirim kategori toggle
+
+### ✅ DevOps / CI
+- **GitHub Actions:**
+  - `build-apk.yml` — **manuel tetiklemeli** (her commit'te değil)
+  - `deploy-firestore.yml` — `firestore.rules` veya indexes değişirse otomatik deploy
+- **Capacitor Android:**
+  - JitPack: `com.github.iminsoftware:IminPrinterLibrary:V2.0.0.19`
+  - Native plugin Kotlin değil Java (MainActivity ile tutarlı)
+  - JDK 21, Android SDK 34, Node 22
 
 ---
 
-## 4. Sıradaki Fazlar (Planlanan)
+## 4. Bekleyen (üçüncü taraf bağımlı)
 
-### 📋 Faz 3 — Masa Yönetimi
-- Admin → Masalar sayfasında **drag-drop layout editor** (canvas üzerine masa yerleştir, taşı, sil)
-- Yeni masa ekleme (2/4/6/8 kişilik tipleri)
-- Bar/Bölüm Duvarı dekoratif öğeler
-- **Masa birleştirme** (5px yakınlık → `tableGroups` dokümanı, ana masa ataması)
-- Rezervasyon yönetimi (sağ-tık menüsü, `reservations` koleksiyonu)
-- POS'ta canvas görünümü (read-only, x/y koordinatlarına göre)
-
-### 📋 Faz 5 — Admin Sipariş Yönetimi + Bildirimler
-- `/admin/orders` — aktif + tamamlanan sekmeleri, filtreler, detay modal
-- `/admin/archive` — 90 günlük arşiv, Excel export
-- `/admin/notifications` — bildirim listesi + ayarlar modal'ı
-- **Sorun:** Cloud Functions olmadan scheduled bildirimler (gecikme/düşük stok) yapılamaz.
-  - **Workaround A:** Client-side periodic check (kullanıcı oturum açtığında her dakika)
-  - **Workaround B:** Blaze'e geçiş
-
-### 📋 Faz 6 — Raporlama
-- `/admin/reports` — tarih filtreleri + KPI kartları
-- Recharts grafikleri (saatlik/günlük satış, kategori dağılımı, garson performansı)
-- Excel export (`xlsx` kütüphanesi, çok sekmeli)
-
-### 📋 Faz 7 — Kampanya + Kupon
-- `/admin/campaigns` ve `/admin/coupons` CRUD ekranları
-- Saat/gün/tarih aralığı programları
-- Ödeme ekranında kupon/kampanya uygulama
-- "En büyük indirim" kuralı (kümülatif değil)
-
-### 📋 Faz 8 — Paket Servis + CallerID
-- `/admin/packages` ve `/pos/packages`
-- Manuel paket sipariş girişi
-- CallerID popup (5sn, sağ üstte)
-- **Yemeksepeti webhook** — Cloud Functions gerekli (Blaze)
-- **Getir webhook** — Cloud Functions gerekli (Blaze)
-- IP telefon entegrasyonu — Faz 8 başlangıcında karar verilecek
-
-### 📋 Faz 9 — QR Menü İyileştirme
-- Admin: masa başına QR kod üretici + A6 PDF yazdır
-- Service worker (offline cache, vite-plugin-pwa)
-- "Garsonu Çağır" butonu (opsiyonel, sonra)
-
-### 📋 Faz 10 — Detaylı Stok + Finans
-- `stockMovements` UI (geçmiş listesi, filtreler)
-- Reçete bazlı stok (1 köfte = 150g kıyma + 1 yumurta)
-- Sayım modu, fire takibi, tedarikçi yönetimi
-- Finans modülü tüm sekmeleri (Gelir/Gider, Kasa, Bütçe, Faturalar)
-
----
-
-## 5. Mimari Kararlar (Önemli)
-
-### Spark Planı için Yapılan Adaptasyonlar
-1. **Cloud Functions yok** → POS login client-side derived email/password ile yapılıyor (`src/utils/hash.js` SHA-256 → email + password türetir)
-2. **Storage yok** → Ürün görseli upload UI'si Spark mode'da disabled (`SPARK_MODE` flag'i `.env.local`'de)
-3. **stockMovements trigger yerine** → Sipariş transaction'ı içinde client-side yazılıyor (`src/firebase/orders.js`)
-4. **scheduled checkLateOrders yerine** → Faz 5'te client-side polling planlanıyor
-5. **Custom claims yerine** → Firestore rules `get(users/{uid}).rol` doc-lookup yapıyor
-
-### Firestore Rules — Staff Yazma Yetkileri (Önemli)
-Spark planında client-side transaction çalıştığı için staff'a (garson/kasiyer) belirli alanlarda yazma izni verildi:
-
-| Koleksiyon | Staff yetkisi | Admin yetkisi |
-|---|---|---|
-| `products` | Sadece `stok` + `updatedAt` (diff kontrolü ile) | Tüm alanlar |
-| `tables` | Sadece `durum`, `grupId`, `rezervasyonNotu` | Tüm alanlar |
-| `stockMovements` | create (audit log) | tam yetki |
-| `archivedOrders` | kasiyer + admin create | update/delete |
-| `payments` | kasiyer + admin create | update/delete |
-
-`request.resource.data.diff(resource.data).affectedKeys().hasOnly([...])` ile fiyat değiştirme gibi yetki aşımı engelleniyor.
-
-### Sözleşilmiş Tasarım Kararları (8 soruya verilen yanıtlar)
-1. **Kupon ekranı** → Ayrı sayfa (`/admin/coupons`), Word doküman yapısı
-2. **Mutfak yazıcısı** → Kategori → yazıcı eşleme. Yeni `printers` koleksiyonu + `categories.yaziciId` alanı
-3. **Rezervasyon bitişi** → Zorunlu, sabit süre
-4. **Stok hareketleri** → Faz 1'den itibaren `stockMovements`'a yazılıyor
-5. **Banka POS markası** → Karar bekleniyor (mock kullanılıyor)
-6. **CallerID donanımı** → Müşteride IP telefon var, VoIP yönünde, donanım teyidi bekleniyor
-7. **Yemeksepeti/Getir** → Her ikisi entegre edilecek (Faz 8)
-8. **Test stratejisi** → Playwright E2E + Vitest unit (henüz kurulmadı)
-
----
-
-## 6. Açık Konular / Karar Bekleyenler
-
-| # | Konu | Durum | Son tarih |
+| # | Konu | Bağımlılık | Etki |
 |---|---|---|---|
-| 1 | Banka POS markası (Ingenico/Verifone/PayFlex) | Müşteriden bilgi bekleniyor | Faz 4 native (Capacitor APK) |
-| 2 | CallerID donanımı (IP telefon detayı) | Müşteri araştırması bekleniyor | Faz 8 başı |
-| 3 | Spark → Blaze geçişi | Bekliyor | Faz 5/8'den önce gerekecek |
-| 4 | Custom domain | Bekliyor | Production deploy öncesi |
-| 5 | iMin Swan 1 cihaz alımı | Bekliyor | Faz 4 native |
+| 1 | Banka POS markası | Müşteriden seçim (Ingenico/Verifone/PayFlex) | Şu an mock spinner, gerçek SDK gelecek |
+| 2 | Yemeksepeti webhook | Blaze plan + müşterinin YS hesabı | Manuel paket girişi var, otomatik webhook yok |
+| 3 | Getir webhook | Blaze plan + Getir hesabı | Aynı |
+| 4 | IP telefon entegrasyonu | Donanım/VoIP detayı | Mock CallerID popup hazır |
+| 5 | Custom domain | İsteğe bağlı | Production deploy öncesi |
+| 6 | iMin Dual Screen (varsa) | Donanım var mı? | İkincil ekran için ayrı plugin |
 
 ---
 
-## 7. Önemli Dosyalar (Klasör Taşıma Sonrası Bilmen Gerekenler)
+## 5. Mimari Kararlar
+
+### Spark Planı Adaptasyonları
+1. **Cloud Functions yok** → POS login client-side derived email/password (`src/utils/hash.js`)
+2. **Storage yok** → Ürün görseli upload UI'si disabled (`SPARK_MODE` flag)
+3. **stockMovements trigger yerine** → client-side transaction
+4. **Scheduled checkLateOrders yerine** → client-side polling (Notifications + Dashboard)
+5. **Custom claims yerine** → Firestore rules `get(users/{uid}).rol` doc-lookup
+
+### Önemli Tasarım Kararları
+1. **Tek fiş modeli (kategori → yazıcı routing YOK)** — kullanıcı kararı: "mutfaktan ayrı garsondan ayrı fiş çıkmayacak"
+2. **Mutfak adisyonu = fiyatsız sipariş listesi** — sipariş alınınca otomatik basılır
+3. **Hesap fişi = ödeme sonu detaylı** — `ReceiptPreview` + iMin native
+4. **Yarım porsiyon = adet decimal (0.5 step)** — schema değişikliği gerektirmedi, mevcut `fiyat × adet` çalışıyor
+5. **Reçete bazlı stok = hibrit** — reçeteli ürün ingredients düşer, reçetesiz ürün product.stok düşer
+6. **Sipariş durumu = 2 state** — `aktif → tamamlandi` (masa), `aktif → yolda → tamamlandi` (paket). KDS yok, ara state gereksiz.
+7. **Drag-to-merge** — POS'ta boş masa sürükle bırak, ödeme sonrası otomatik dağıl
+8. **"En büyük indirim" kuralı** — kampanya + kupon aynı anda olsa biri seçilir
+9. **APK build manuel tetiklemeli** — kullanıcı tercihi, her commit'te otomatik APK yok
+
+### Firestore Koleksiyonları (tam liste)
+| Koleksiyon | Read | Write | Notlar |
+|---|---|---|---|
+| users | self/admin | self/admin | rol field |
+| categories | public | admin | yaziciId artık kullanılmıyor (tek fiş) |
+| products | public | admin (+ staff stok update) | |
+| printers | staff | admin | Tek yazıcı modeline geçti, UI gizlenmedi |
+| tables | public | admin (+ staff durum/grupId/rezervasyonNotu) | |
+| tableGroups | staff | staff | drag-merge için staff yazar |
+| decorations | public | admin | |
+| orders | staff | staff | |
+| archivedOrders | staff | kasiyer/admin | |
+| payments | staff | kasiyer/admin | |
+| campaigns | staff | admin | |
+| coupons | staff | admin (+ staff kullanılan update) | |
+| notifications | staff | admin | |
+| settings | staff/public | admin | |
+| callerLogs | admin/kasiyer | admin | |
+| reservations | staff | admin/kasiyer | |
+| stockMovements | admin | staff (create) | |
+| suppliers | staff | admin | |
+| transactions | admin/kasiyer | admin | finans gelir/gider |
+| ingredients | staff | admin (+ staff stok update) | |
+| recipes | staff | admin | |
+| inventoryCounts | admin | admin | sayım sessiyonları |
+
+---
+
+## 6. Bilinen Sorunlar / Sınırlar
+
+- **Banka POS mock** — Faz 4 1.2sn spinner ile onayı simüle eder
+- **Bundle 1MB+** — Code splitting yapılmadı (Faz 9 PWA aşamasında route-level lazy yapılabilir)
+- **Görsel upload kapalı** — Spark + Storage yok
+- **Bildirim push yok** — Pasif liste var, gerçek push (ses/popup) Cloud Functions gerek
+- **Test suite yok** — Playwright + Vitest schema'da kararlaştırıldı, henüz kurulmadı
+- **Sayım modu sadece products için** — ingredients için ayrı sayım UI yok (gelecek sürüm)
+- **Reçete cascade silme yok** — Bir ürün silindiğinde reçetesi kalır (orphan); bir malzeme silindiğinde reçetelerde orphan referans kalır
+- **Floating-point ödeme toleransı 0.005 TL** — Olağan senaryolarda yeterli
+
+---
+
+## 7. Sıradaki Adım
+
+Tüm geliştirilebilir özellikler bitti. Şimdi:
+
+1. **Tablette uçtan uca test** (en son APK ile):
+   - Mutfak adisyonu termal yazıcıdan çıkıyor mu?
+   - Hesap fişi otomatik basıyor mu?
+   - Reçete entegrasyonu (malzeme stoğu düşüyor mu?)
+   - Sayım akışı
+   - Paket sipariş + CallerID mock
+2. **Müşteriye demo** — tüm akışları göster
+3. **Müşteri kararlarını bekle:**
+   - Banka POS markası → SDK entegrasyonu
+   - Yemeksepeti/Getir hesap → webhook (Blaze geçişi)
+   - IP telefon detayı → CallerID gerçek tetikleyici
+4. **Production deploy öncesi:**
+   - Custom domain (opsiyonel)
+   - Firebase Hosting deploy (`firebase deploy --only hosting`)
+   - Release APK + signing (production keystore)
+   - Test suite kurulumu (Playwright + Vitest)
+
+---
+
+## 8. Son Commit'ler (özet)
 
 ```
-RestorantPos/
-├── PROJECT_STATUS.md          ← Bu dosya
-├── restoran-pos-schema.json   ← Tam spec (1221 satır, 16 koleksiyon, 10 faz, testing)
-├── Restoran-POS-Teknik-Sartname.docx  ← İnsan-okunabilir şartname
-├── package.json               ← Scripts: dev, build, seed, deploy:rules, ...
-├── firebase.json              ← Functions, rules, indexes, storage, hosting config
-├── firestore.rules            ← GÜVENLİK: doc-lookup yetkilendirme
-├── firestore.indexes.json     ← users.kodHash + diğer composite index'ler
-├── storage.rules              ← Blaze'e geçince kullanılacak
-├── .env.local                 ← Firebase config (real values, gitignored)
-├── .firebaserc                ← project: alazligida-e77b9
-├── functions/                 ← Cloud Functions kodu (Blaze'e geçince deploy)
-│   ├── index.js               ← verifyUserCode, hashUserCode (kullanılmıyor şu an)
-│   └── package.json
-├── scripts/
-│   └── seed.mjs               ← Web SDK ile seed (Admin SDK gerektirmez)
-└── src/
-    ├── App.jsx                ← Tüm route'lar
-    ├── main.jsx
-    ├── firebase/
-    │   ├── config.js          ← Firebase init + SPARK_MODE + secondary app helper
-    │   ├── auth.js            ← loginAdmin, loginPos (derived), createPosUser
-    │   ├── firestore.js       ← CRUD helpers (createDoc, patchDoc, watchCollection)
-    │   ├── orders.js          ← createOrder, addItemsToOrder transaction'ları
-    │   └── payments.js        ← recordPayment transaction'ı (archive + masa boşalt)
-    ├── store/
-    │   ├── authStore.js       ← Firebase Auth state + Firestore profile
-    │   ├── settingsStore.js   ← settings/global doc listener
-    │   └── cartStore.js       ← POS sipariş sepeti
-    ├── utils/
-    │   ├── hash.js            ← SHA-256 + POS credential türetme
-    │   ├── format.js          ← TL, tarih, "5dk önce"
-    │   └── validators.js      ← Zod şemaları
-    ├── components/
-    │   ├── ui/                ← Modal, Toggle, StatCard
-    │   ├── layout/            ← AdminLayout, PosLayout, PageHeader, ProtectedRoute
-    │   └── ReceiptPreview.jsx ← Fiş yazdırma modal'ı
-    └── pages/
-        ├── admin/
-        │   ├── Login.jsx
-        │   ├── Dashboard.jsx
-        │   ├── Categories.jsx
-        │   ├── Products.jsx
-        │   ├── Printers.jsx
-        │   ├── Users.jsx
-        │   └── Placeholder.jsx (Faz 3, 5-10 için)
-        ├── pos/
-        │   ├── Login.jsx      ← 4 haneli klavye
-        │   ├── Tables.jsx     ← Masa listesi (Faz 2)
-        │   ├── NewOrder.jsx   ← Sipariş giriş (Faz 2)
-        │   ├── ActiveOrders.jsx (Faz 2)
-        │   ├── Payment.jsx    ← Ödeme (Faz 4)
-        │   └── Placeholder.jsx
-        └── menu/
-            └── Menu.jsx       ← QR public menü
+a57bbcb Faz 10 final: Sayım modu + Reçete bazlı stok
+ad26b20 Faz 10 başlangıç: Stok hareketleri + Tedarikçiler + Finans
+d44b8db Sadeleştir: ara durum (Hazırlandı / Masaya Gitti) kaldırıldı
+ce55107 Faz 8 (kısmi): Manuel paket sipariş + CallerID iskeleti
+a754efb Faz 9: QR Menü iyileştirme — admin QR üretici + PWA
+f42d2bd Faz 7: Kampanya + Kupon sistemi
+092e97e Settings ekranı + Faz 5: Orders, Archive, Notifications
+a6f993c Faz 6: Raporlama — recharts grafikleri + Excel export
+318ff49 Yarım porsiyon desteği + mutfak adisyonu fişi
+339eee9 Fix: doğru iMin Printer SDK'sı (IminPrinterLibrary)
+664fd5f iMin termal yazıcı Capacitor plugin entegrasyonu
+cefcdb7 Faz 3: Masa Yönetimi, Birleştirme, Dekorlar, Kişi Sayısı, Rezervasyon
+bc1b8bd Add Capacitor Android platform and GitHub Actions APK build
 ```
-
----
-
-## 8. Bilinen Sorunlar / Notlar
-
-- **Bundle size 1MB+** — code splitting yapılmadı, Faz 9 PWA aşamasında manuel chunks ile böleceğiz.
-- **Görsel upload kapalı** — Spark planında Storage olmadığı için. `.env.local`'de `VITE_SPARK_MODE=false` yap + Blaze'e geç → otomatik aktive olur.
-- **Bildirimler scheduled değil** — `checkLateOrders` ve `checkLowStock` Cloud Functions gerektiriyor. Faz 5'te client-side polling alternatifi yazılacak.
-- **Banka POS mock** — Faz 4 sayfası 1.2sn spinner ile onayı simüle ediyor. Marka kararı sonrası gerçek SDK entegrasyonu.
-- **Test suite yok** — Playwright + Vitest schema'da kararlaştırıldı ama henüz kurulmadı. Faz 5'ten önce kurmak gerek.
-
----
-
-## 9. Sonraki Önerilen Adım
-
-İki yol var:
-
-**A) Faz 3 — Masa Yönetimi:** Drag-drop layout editor + masa birleştirme + rezervasyon.
-Gerekçe: Şu an masalar seed'den geliyor, admin düzenleyemiyor. Faz 5'ten önce yapmak mantıklı.
-
-**B) Faz 5 — Admin Sipariş Yönetimi + Bildirimler:** Admin'in tüm operasyonu tek ekranda görmesi.
-Gerekçe: Ödeme ekranı çalışıyor; tamamlanan siparişleri görüntülemek + arşiv işlevsel kullanım için kritik.
-
-Önerim: **Faz 5** önce, sonra **Faz 3** (masalar daha az sık değişir, müşteri Faz 5'i daha çok kullanır).
