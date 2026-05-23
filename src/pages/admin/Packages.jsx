@@ -10,7 +10,11 @@ import {
   Package as PackageIcon,
   AlertTriangle,
   Trash2,
+  Smartphone,
+  Wallet,
 } from 'lucide-react';
+import { recordPayment } from '../../firebase/payments';
+import { useAuthStore } from '../../store/authStore';
 import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import Modal from '../../components/ui/Modal';
@@ -33,6 +37,8 @@ const KAYNAK_LABELS = {
   diger: 'Diğer',
 };
 
+const APP_KAYNAKLAR = ['yemeksepeti', 'getir', 'trendyol'];
+
 const KAYNAK_COLORS = {
   manuel: 'bg-slate-100 text-slate-700',
   telefon: 'bg-blue-100 text-blue-700',
@@ -43,6 +49,7 @@ const KAYNAK_COLORS = {
 };
 
 export default function AdminPackages() {
+  const { user, profile } = useAuthStore();
   const [orders, setOrders] = useState([]);
   const [tab, setTab] = useState('yeni');
   const [search, setSearch] = useState('');
@@ -98,6 +105,32 @@ export default function AdminPackages() {
     } catch (err) {
       console.error(err);
       toast.error('Durum güncellenemedi');
+    }
+  };
+
+  const handleAppPaid = async (order) => {
+    const appLabel = KAYNAK_LABELS[order.paketKaynak] || 'Uygulama';
+    if (!confirm(`${appLabel} üzerinden ödeme alındı olarak işaretlensin mi?\n\nSipariş arşivlenecek.`))
+      return;
+    try {
+      await recordPayment({
+        orderId: order.id,
+        kasiyerId: user?.uid,
+        kasiyerAd: profile?.ad || 'Admin',
+        payments: [
+          {
+            tutar: order.toplam,
+            yontem: 'uygulama',
+            kartTipi: appLabel,
+          },
+        ],
+        fisBasildi: false,
+      });
+      toast.success(`${appLabel} üzerinden ödendi olarak arşivlendi`);
+      setDetail(null);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || 'Arşivlenemedi');
     }
   };
 
@@ -236,12 +269,21 @@ export default function AdminPackages() {
                       <button
                         onClick={() => handleStatusChange(o, 'masayaGitti')}
                         className="rounded bg-purple-100 px-2 py-1 text-xs font-medium text-purple-700 hover:bg-purple-200"
-                        title="Yola çıktı"
+                        title="Yola çıkar"
                       >
                         <Truck size={12} />
                       </button>
                     )}
-                    {o.durum === 'masayaGitti' && (
+                    {o.durum === 'masayaGitti' && APP_KAYNAKLAR.includes(o.paketKaynak) && (
+                      <button
+                        onClick={() => handleAppPaid(o)}
+                        className="rounded bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-200"
+                        title={`${KAYNAK_LABELS[o.paketKaynak]} ile ödendi`}
+                      >
+                        <Smartphone size={12} />
+                      </button>
+                    )}
+                    {o.durum === 'masayaGitti' && !APP_KAYNAKLAR.includes(o.paketKaynak) && (
                       <span className="rounded bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-700">
                         Yolda
                       </span>
@@ -260,14 +302,17 @@ export default function AdminPackages() {
         onClose={() => setDetail(null)}
         onCancel={() => detail && handleCancel(detail)}
         onStatusChange={(s) => detail && handleStatusChange(detail, s)}
+        onAppPaid={() => detail && handleAppPaid(detail)}
       />
     </div>
   );
 }
 
-function PackageDetail({ open, order, onClose, onCancel, onStatusChange }) {
+function PackageDetail({ open, order, onClose, onCancel, onStatusChange, onAppPaid }) {
   if (!open || !order) return null;
   const mins = minutesSince(order.olusturmaZamani);
+  const yolda = order.durum === 'masayaGitti';
+  const appOrder = APP_KAYNAKLAR.includes(order.paketKaynak);
 
   return (
     <Modal
@@ -283,14 +328,19 @@ function PackageDetail({ open, order, onClose, onCancel, onStatusChange }) {
           <button onClick={onClose} className="btn-secondary">
             Kapat
           </button>
-          {['aktif', 'hazirlandi'].includes(order.durum) && (
+          {!yolda && (
             <button onClick={() => onStatusChange('masayaGitti')} className="btn-primary">
               <Truck size={14} /> Yola Çıkar
             </button>
           )}
-          {order.durum === 'masayaGitti' && (
-            <span className="rounded-lg bg-purple-100 px-3 py-1 text-sm font-medium text-purple-700">
-              Yolda
+          {yolda && appOrder && (
+            <button onClick={onAppPaid} className="btn-primary">
+              <Smartphone size={14} /> {KAYNAK_LABELS[order.paketKaynak]} ile Ödendi
+            </button>
+          )}
+          {yolda && !appOrder && (
+            <span className="rounded-lg bg-purple-100 px-3 py-1.5 text-sm font-medium text-purple-700">
+              Yolda · POS'tan ödeme alın
             </span>
           )}
         </>

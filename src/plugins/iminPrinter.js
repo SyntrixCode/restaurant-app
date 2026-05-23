@@ -174,7 +174,9 @@ export function buildCustomerReceiptLines({ order, payments = [], settings = {},
           ? 'NAKİT'
           : p.yontem === 'kart'
             ? `KART${p.kartTipi ? ` (${p.kartTipi})` : ''}`
-            : 'YEMEK KARTI';
+            : p.yontem === 'uygulama'
+              ? `${(p.kartTipi || 'UYGULAMA').toUpperCase()}`
+              : 'YEMEK KARTI';
       lines.push({ type: 'text', text: `${lbl}: ${fmt(p.tutar)} TL`, align: 'right', size: 24 });
     }
     if (change > 0) {

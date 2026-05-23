@@ -5,19 +5,33 @@ import {
   Users as UsersIcon,
   Truck,
   Receipt,
+  Send,
+  Smartphone,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { watchCollection, where, orderBy } from '../../firebase/firestore';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL, minutesSince, formatAdet } from '../../utils/format';
+import { updateOrderStatus } from '../../firebase/orders';
+import { recordPayment } from '../../firebase/payments';
+
+const APP_KAYNAKLAR = ['yemeksepeti', 'getir', 'trendyol'];
+
+const KAYNAK_LABELS = {
+  yemeksepeti: 'Yemeksepeti',
+  getir: 'Getir',
+  trendyol: 'Trendyol',
+};
 
 export default function ActiveOrders() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
-  const { user, rol } = useAuthStore();
+  const { user, profile, rol } = useAuthStore();
   const { settings } = useSettingsStore();
   const gecikmeEsigi = settings.gecikmeEsigiDk || 15;
+  const canPay = ['kasiyer', 'admin'].includes(rol);
 
   useEffect(
     () =>
@@ -38,6 +52,45 @@ export default function ActiveOrders() {
 
   const masaOrders = visible.filter((o) => !o.paketMi);
   const paketOrders = visible.filter((o) => o.paketMi);
+
+  const handleYolaCikar = async (order) => {
+    try {
+      await updateOrderStatus(order.id, 'masayaGitti');
+      toast.success(`${order.musteriAd || 'Paket'} yola çıkarıldı`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Durum güncellenemedi');
+    }
+  };
+
+  const handleAppPaid = async (order) => {
+    if (!canPay) {
+      toast.error('Ödeme yetkisi yok');
+      return;
+    }
+    const appLabel = KAYNAK_LABELS[order.paketKaynak] || 'Uygulama';
+    if (!confirm(`${appLabel} üzerinden ödeme alındı olarak işaretlensin mi?\n\nSipariş arşivlenecek.`))
+      return;
+    try {
+      await recordPayment({
+        orderId: order.id,
+        kasiyerId: user.uid,
+        kasiyerAd: profile?.ad || 'Kasiyer',
+        payments: [
+          {
+            tutar: order.toplam,
+            yontem: 'uygulama',
+            kartTipi: appLabel,
+          },
+        ],
+        fisBasildi: false,
+      });
+      toast.success(`${appLabel} üzerinden ödendi olarak arşivlendi`);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || 'Arşivlenemedi');
+    }
+  };
 
   return (
     <div className="flex h-full flex-col bg-slate-100">
@@ -65,15 +118,12 @@ export default function ActiveOrders() {
               <Section title="Masa Siparişleri" count={masaOrders.length}>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {masaOrders.map((o) => (
-                    <OrderCard
+                    <MasaOrderCard
                       key={o.id}
                       order={o}
                       gecikmeEsigi={gecikmeEsigi}
-                      onPay={() =>
-                        ['kasiyer', 'admin'].includes(rol) &&
-                        navigate(`/pos/payment?orderId=${o.id}`)
-                      }
-                      canPay={['kasiyer', 'admin'].includes(rol)}
+                      canPay={canPay}
+                      onPay={() => navigate(`/pos/payment?orderId=${o.id}`)}
                     />
                   ))}
                 </div>
@@ -84,16 +134,14 @@ export default function ActiveOrders() {
               <Section title="Paket Siparişleri" count={paketOrders.length} icon={Truck}>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {paketOrders.map((o) => (
-                    <OrderCard
+                    <PaketOrderCard
                       key={o.id}
                       order={o}
                       gecikmeEsigi={gecikmeEsigi}
-                      onPay={() =>
-                        ['kasiyer', 'admin'].includes(rol) &&
-                        navigate(`/pos/payment?orderId=${o.id}`)
-                      }
-                      canPay={['kasiyer', 'admin'].includes(rol)}
-                      paket
+                      canPay={canPay}
+                      onYolaCikar={() => handleYolaCikar(o)}
+                      onAppPaid={() => handleAppPaid(o)}
+                      onManuelPay={() => navigate(`/pos/payment?orderId=${o.id}`)}
                     />
                   ))}
                 </div>
@@ -119,32 +167,24 @@ function Section({ title, count, icon: Icon, children }) {
   );
 }
 
-function OrderCard({ order, gecikmeEsigi, onPay, canPay, paket }) {
+function MasaOrderCard({ order, gecikmeEsigi, canPay, onPay }) {
   const mins = minutesSince(order.olusturmaZamani);
   const late = mins > gecikmeEsigi;
-  const yolda = order.durum === 'masayaGitti';
 
   return (
     <div
       className={`rounded-xl border-2 bg-white p-4 shadow-sm ${
-        late ? 'border-red-500' : yolda ? 'border-purple-400' : 'border-slate-200'
+        late ? 'border-red-500' : 'border-slate-200'
       }`}
     >
       <div className="mb-3 flex items-start justify-between">
         <div className="min-w-0">
-          <h3 className="truncate text-lg font-bold text-slate-900">
-            {order.masaAd || 'Paket'}
-          </h3>
+          <h3 className="truncate text-lg font-bold text-slate-900">{order.masaAd}</h3>
           <p className="flex items-center gap-2 text-xs text-slate-500">
             <span>{order.garsonAd}</span>
             {order.kisiSayisi != null && (
               <span className="inline-flex items-center gap-0.5 rounded-full bg-blue-50 px-1.5 py-0.5 text-blue-700">
                 <UsersIcon size={10} /> {order.kisiSayisi}
-              </span>
-            )}
-            {yolda && (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-purple-100 px-1.5 py-0.5 text-purple-700">
-                <Truck size={10} /> Yolda
               </span>
             )}
             <span>· #{order.id.slice(0, 6)}</span>
@@ -160,22 +200,7 @@ function OrderCard({ order, gecikmeEsigi, onPay, canPay, paket }) {
         </div>
       </div>
 
-      <ul className="mb-3 max-h-32 space-y-1 overflow-y-auto text-sm">
-        {order.items.map((it, idx) => (
-          <li key={idx} className="flex justify-between text-slate-700">
-            <span>
-              <strong>{formatAdet(it.adet)}×</strong> {it.ad}
-              {it.notlar && <em className="ml-1 text-xs text-slate-400">({it.notlar})</em>}
-            </span>
-          </li>
-        ))}
-      </ul>
-
-      {paket && order.musteriAdres && (
-        <p className="mb-2 line-clamp-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
-          📍 {order.musteriAdres}
-        </p>
-      )}
+      <ItemList items={order.items} />
 
       {canPay && (
         <button onClick={onPay} className="btn-primary w-full text-sm">
@@ -183,5 +208,101 @@ function OrderCard({ order, gecikmeEsigi, onPay, canPay, paket }) {
         </button>
       )}
     </div>
+  );
+}
+
+function PaketOrderCard({ order, gecikmeEsigi, canPay, onYolaCikar, onAppPaid, onManuelPay }) {
+  const mins = minutesSince(order.olusturmaZamani);
+  const late = mins > gecikmeEsigi;
+  const yolda = order.durum === 'masayaGitti';
+  const appOrder = APP_KAYNAKLAR.includes(order.paketKaynak);
+
+  return (
+    <div
+      className={`rounded-xl border-2 bg-white p-4 shadow-sm ${
+        late && !yolda
+          ? 'border-red-500'
+          : yolda
+            ? 'border-purple-400'
+            : 'border-slate-200'
+      }`}
+    >
+      <div className="mb-3 flex items-start justify-between">
+        <div className="min-w-0">
+          <h3 className="truncate text-base font-bold text-slate-900">
+            {order.musteriAd || 'Paket'}
+          </h3>
+          <p className="flex items-center gap-2 text-xs text-slate-500">
+            <span>{order.garsonAd}</span>
+            {appOrder && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-purple-50 px-1.5 py-0.5 text-purple-700">
+                <Smartphone size={10} /> {KAYNAK_LABELS[order.paketKaynak]}
+              </span>
+            )}
+            {yolda && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-purple-100 px-1.5 py-0.5 text-purple-700">
+                <Truck size={10} /> Yolda
+              </span>
+            )}
+          </p>
+          {order.musteriAdres && (
+            <p className="mt-1 line-clamp-2 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-800">
+              📍 {order.musteriAdres}
+            </p>
+          )}
+        </div>
+        <div className="text-right">
+          <p className={`text-sm font-semibold ${late && !yolda ? 'text-red-600' : 'text-slate-700'}`}>
+            {late && !yolda && <AlertTriangle size={14} className="mr-1 inline" />}
+            <Clock size={12} className="mr-1 inline" />
+            {mins} dk
+          </p>
+          <p className="text-base font-bold text-slate-900">{formatTL(order.toplam)}</p>
+        </div>
+      </div>
+
+      <ItemList items={order.items} />
+
+      {/* Buton mantığı: aktif → Yola Çıkar; yolda → ödeme seçenekleri */}
+      {!yolda ? (
+        <button onClick={onYolaCikar} className="btn-primary w-full text-sm">
+          <Send size={14} /> Yola Çıkar
+        </button>
+      ) : canPay ? (
+        appOrder ? (
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={onAppPaid} className="btn-primary text-sm">
+              <Smartphone size={14} /> {KAYNAK_LABELS[order.paketKaynak]} Ödendi
+            </button>
+            <button onClick={onManuelPay} className="btn-secondary text-sm">
+              Manuel Ödeme
+            </button>
+          </div>
+        ) : (
+          <button onClick={onManuelPay} className="btn-primary w-full text-sm">
+            Ödemeyi Al (Kurye Döndü)
+          </button>
+        )
+      ) : (
+        <p className="rounded-lg bg-purple-50 py-2 text-center text-xs text-purple-700">
+          Yolda · ödeme yetkisi yok
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ItemList({ items }) {
+  return (
+    <ul className="mb-3 max-h-32 space-y-1 overflow-y-auto text-sm">
+      {(items || []).map((it, idx) => (
+        <li key={idx} className="flex justify-between text-slate-700">
+          <span>
+            <strong>{formatAdet(it.adet)}×</strong> {it.ad}
+            {it.notlar && <em className="ml-1 text-xs text-slate-400">({it.notlar})</em>}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }

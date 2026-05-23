@@ -11,6 +11,7 @@ const YONTEM_LABEL = {
   nakit: 'NAKİT',
   kart: 'KART',
   yemekKarti: 'YEMEK KARTI',
+  uygulama: 'UYGULAMA',
 };
 
 export default function ReceiptPreview({ open, onClose, order, payments, settings, change }) {
