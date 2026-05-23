@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -96,10 +96,9 @@ export default function Payment() {
   const remaining = Math.max(0, effectiveTotal - totalPaid);
   const isFullyPaid = totalPaid >= effectiveTotal - 0.005;
 
-  const applicableCampaigns = useMemo(
-    () => campaigns.filter((c) => isCampaignActive(c, subtotal)),
-    [campaigns, subtotal],
-  );
+  // Inline (useMemo değil) — koşullu erken return'lerden sonra hook çağırmak
+  // React hooks kuralını ihlal eder ve beyaz ekrana yol açar.
+  const applicableCampaigns = campaigns.filter((c) => isCampaignActive(c, subtotal));
 
   const applyCouponCode = () => {
     if (!couponInput.trim()) return;
