@@ -14,6 +14,10 @@ import Users from './pages/admin/Users';
 import Printers from './pages/admin/Printers';
 import AdminTables from './pages/admin/Tables';
 import AdminReservations from './pages/admin/Reservations';
+import AdminSettings from './pages/admin/Settings';
+import AdminOrders from './pages/admin/Orders';
+import AdminArchive from './pages/admin/Archive';
+import AdminNotifications from './pages/admin/Notifications';
 import AdminPlaceholder from './pages/admin/Placeholder';
 
 import PosLogin from './pages/pos/Login';
@@ -58,18 +62,18 @@ export default function App() {
         <Route path="products" element={<Products />} />
         <Route path="printers" element={<Printers />} />
         <Route path="users" element={<Users />} />
-        <Route path="orders" element={<AdminPlaceholder title="Sipariş Yönetimi" phase="Faz 5" />} />
-        <Route path="archive" element={<AdminPlaceholder title="Arşivlenen Siparişler" phase="Faz 5" />} />
+        <Route path="orders" element={<AdminOrders />} />
+        <Route path="archive" element={<AdminArchive />} />
         <Route path="tables" element={<AdminTables />} />
         <Route path="reservations" element={<AdminReservations />} />
         <Route path="stock" element={<AdminPlaceholder title="Stok Yönetimi" phase="Faz 10 detay, Faz 1 basit" />} />
         <Route path="campaigns" element={<AdminPlaceholder title="Kampanyalar" phase="Faz 7" />} />
         <Route path="coupons" element={<AdminPlaceholder title="Kupon Kodları" phase="Faz 7" />} />
         <Route path="packages" element={<AdminPlaceholder title="Paket Servis" phase="Faz 8" />} />
-        <Route path="notifications" element={<AdminPlaceholder title="Bildirimler" phase="Faz 5" />} />
+        <Route path="notifications" element={<AdminNotifications />} />
         <Route path="reports" element={<AdminPlaceholder title="Raporlar" phase="Faz 6" />} />
         <Route path="finance" element={<AdminPlaceholder title="Finans & Kasa" phase="Faz 11" />} />
-        <Route path="settings" element={<AdminPlaceholder title="Ayarlar" phase="Faz 5" />} />
+        <Route path="settings" element={<AdminSettings />} />
       </Route>
 
       <Route path="/pos/login" element={<PosLogin />} />

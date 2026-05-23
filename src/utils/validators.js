@@ -50,6 +50,31 @@ export const reservationSchema = z.object({
   notlar: z.string().max(200).optional(),
 });
 
+export const settingsSchema = z.object({
+  restoranAd: z.string().min(1, 'Restoran adı zorunlu').max(100),
+  restoranAdres: z.string().max(200).optional().or(z.literal('')),
+  restoranTel: z.string().max(30).optional().or(z.literal('')),
+  vergiNo: z.string().max(30).optional().or(z.literal('')),
+  paraBirimi: z.string().min(1).max(10),
+  vergiOrani: z.coerce.number().min(0, 'Vergi oranı 0 veya pozitif').max(100, 'En fazla %100'),
+  kdvDahilFiyat: z.boolean(),
+  kasaAcilis: z.string().regex(/^\d{2}:\d{2}$/, 'Saat HH:MM formatında olmalı'),
+  kasaKapanis: z.string().regex(/^\d{2}:\d{2}$/, 'Saat HH:MM formatında olmalı'),
+  gecikmeEsigiDk: z.coerce.number().int().min(1, 'En az 1 dk').max(180),
+  dusukStokEsigi: z.coerce.number().int().min(0, '0 veya pozitif').max(1000),
+  fisBasligi: z.string().max(50).optional().or(z.literal('')),
+  fisAltMesaji: z.string().max(200).optional().or(z.literal('')),
+  otomatikFisBas: z.boolean(),
+  bildirimAyarlari: z.object({
+    gecikme: z.boolean(),
+    dusukStok: z.boolean(),
+    yeniPaket: z.boolean(),
+    callerID: z.boolean(),
+    rezervasyon: z.boolean(),
+    sesliUyari: z.boolean(),
+  }),
+});
+
 export const printerSchema = z.object({
   ad: z.string().min(1).max(50),
   ip: z
