@@ -7,9 +7,7 @@ import {
   User,
   Search,
   Clock,
-  ChefHat,
   Package as PackageIcon,
-  CheckCircle2,
   AlertTriangle,
   Trash2,
 } from 'lucide-react';
@@ -22,9 +20,8 @@ import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL, formatDate, minutesSince, formatAdet } from '../../utils/format';
 
 const TABS = [
-  { id: 'aktif', label: 'Yeni', icon: Clock, color: 'text-amber-700 bg-amber-50' },
-  { id: 'hazirlandi', label: 'Hazırlandı', icon: ChefHat, color: 'text-blue-700 bg-blue-50' },
-  { id: 'masayaGitti', label: 'Yolda', icon: Truck, color: 'text-purple-700 bg-purple-50' },
+  { id: 'yeni', label: 'Yeni', icon: Clock, color: 'text-amber-700 bg-amber-50', durumlar: ['aktif', 'hazirlandi'] },
+  { id: 'masayaGitti', label: 'Yolda', icon: Truck, color: 'text-purple-700 bg-purple-50', durumlar: ['masayaGitti'] },
 ];
 
 const KAYNAK_LABELS = {
@@ -47,7 +44,7 @@ const KAYNAK_COLORS = {
 
 export default function AdminPackages() {
   const [orders, setOrders] = useState([]);
-  const [tab, setTab] = useState('aktif');
+  const [tab, setTab] = useState('yeni');
   const [search, setSearch] = useState('');
   const [filterKaynak, setFilterKaynak] = useState('all');
   const [detail, setDetail] = useState(null);
@@ -68,13 +65,13 @@ export default function AdminPackages() {
   const packets = useMemo(() => orders.filter((o) => o.paketMi === true), [orders]);
 
   const counts = {
-    aktif: packets.filter((o) => o.durum === 'aktif').length,
-    hazirlandi: packets.filter((o) => o.durum === 'hazirlandi').length,
+    yeni: packets.filter((o) => ['aktif', 'hazirlandi'].includes(o.durum)).length,
     masayaGitti: packets.filter((o) => o.durum === 'masayaGitti').length,
   };
 
   const visible = useMemo(() => {
-    let list = packets.filter((o) => o.durum === tab);
+    const activeTab = TABS.find((t) => t.id === tab);
+    let list = packets.filter((o) => activeTab?.durumlar?.includes(o.durum));
     if (filterKaynak !== 'all') list = list.filter((o) => o.paketKaynak === filterKaynak);
     if (search) {
       const q = search.toLowerCase();
@@ -96,7 +93,7 @@ export default function AdminPackages() {
   const handleStatusChange = async (order, newStatus) => {
     try {
       await updateOrderStatus(order.id, newStatus);
-      const labels = { hazirlandi: 'Hazırlandı', masayaGitti: 'Yola çıktı' };
+      const labels = { masayaGitti: 'Yola çıktı' };
       toast.success(labels[newStatus] || 'Durum güncellendi');
     } catch (err) {
       console.error(err);
@@ -235,16 +232,7 @@ export default function AdminPackages() {
                     {formatTL(o.toplam)}
                   </div>
                   <div className="col-span-1 flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                    {o.durum === 'aktif' && (
-                      <button
-                        onClick={() => handleStatusChange(o, 'hazirlandi')}
-                        className="rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-200"
-                        title="Hazırlandı"
-                      >
-                        <ChefHat size={12} />
-                      </button>
-                    )}
-                    {o.durum === 'hazirlandi' && (
+                    {['aktif', 'hazirlandi'].includes(o.durum) && (
                       <button
                         onClick={() => handleStatusChange(o, 'masayaGitti')}
                         className="rounded bg-purple-100 px-2 py-1 text-xs font-medium text-purple-700 hover:bg-purple-200"
@@ -295,12 +283,7 @@ function PackageDetail({ open, order, onClose, onCancel, onStatusChange }) {
           <button onClick={onClose} className="btn-secondary">
             Kapat
           </button>
-          {order.durum === 'aktif' && (
-            <button onClick={() => onStatusChange('hazirlandi')} className="btn-primary">
-              <ChefHat size={14} /> Hazırlandı
-            </button>
-          )}
-          {order.durum === 'hazirlandi' && (
+          {['aktif', 'hazirlandi'].includes(order.durum) && (
             <button onClick={() => onStatusChange('masayaGitti')} className="btn-primary">
               <Truck size={14} /> Yola Çıkar
             </button>

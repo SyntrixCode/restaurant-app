@@ -3,11 +3,8 @@ import toast from 'react-hot-toast';
 import {
   ShoppingCart,
   Clock,
-  ChefHat,
-  Truck,
   AlertTriangle,
   Search,
-  X,
   Users as UsersIcon,
   Trash2,
 } from 'lucide-react';
@@ -18,15 +15,8 @@ import { watchCollection, where, orderBy, removeDoc } from '../../firebase/fires
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL, formatDate, minutesSince, formatAdet } from '../../utils/format';
 
-const TABS = [
-  { id: 'aktif', label: 'Aktif', icon: Clock, color: 'text-amber-700 bg-amber-50' },
-  { id: 'hazirlandi', label: 'Hazırlandı', icon: ChefHat, color: 'text-blue-700 bg-blue-50' },
-  { id: 'masayaGitti', label: 'Masaya Gitti', icon: Truck, color: 'text-emerald-700 bg-emerald-50' },
-];
-
 export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
-  const [tab, setTab] = useState('aktif');
   const [search, setSearch] = useState('');
   const [filterGarson, setFilterGarson] = useState('all');
   const [detail, setDetail] = useState(null);
@@ -44,20 +34,17 @@ export default function AdminOrders() {
     [],
   );
 
-  const counts = {
-    aktif: orders.filter((o) => o.durum === 'aktif').length,
-    hazirlandi: orders.filter((o) => o.durum === 'hazirlandi').length,
-    masayaGitti: orders.filter((o) => o.durum === 'masayaGitti').length,
-  };
+  // Sadece masa siparişleri (paketler ayrı /admin/packages sayfasında)
+  const masaOrders = useMemo(() => orders.filter((o) => !o.paketMi), [orders]);
 
   const garsonlar = useMemo(() => {
     const set = new Set();
-    orders.forEach((o) => o.garsonAd && set.add(o.garsonAd));
+    masaOrders.forEach((o) => o.garsonAd && set.add(o.garsonAd));
     return [...set];
-  }, [orders]);
+  }, [masaOrders]);
 
   const visible = useMemo(() => {
-    let list = orders.filter((o) => o.durum === tab);
+    let list = masaOrders;
     if (filterGarson !== 'all') {
       list = list.filter((o) => o.garsonAd === filterGarson);
     }
@@ -71,11 +58,11 @@ export default function AdminOrders() {
       );
     }
     return list;
-  }, [orders, tab, filterGarson, search]);
+  }, [masaOrders, filterGarson, search]);
 
-  const totalActive = orders.reduce((s, o) => s + (o.toplam || 0), 0);
-  const lateCount = orders.filter(
-    (o) => o.durum !== 'masayaGitti' && minutesSince(o.olusturmaZamani) > gecikmeEsigi,
+  const totalActive = masaOrders.reduce((s, o) => s + (o.toplam || 0), 0);
+  const lateCount = masaOrders.filter(
+    (o) => minutesSince(o.olusturmaZamani) > gecikmeEsigi,
   ).length;
 
   const handleCancel = async (order) => {
@@ -97,12 +84,11 @@ export default function AdminOrders() {
 
   return (
     <div className="p-8">
-      <PageHeader title="Sipariş Yönetimi" subtitle="Aktif siparişler ve durum takibi" />
+      <PageHeader title="Açık Siparişler" subtitle="Henüz ödenmemiş masa siparişleri" />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
-        <StatCard label="Aktif Tutar" value={formatTL(totalActive)} color="blue" />
-        <StatCard label="Bekleyen" value={counts.aktif} color="amber" icon={Clock} />
-        <StatCard label="Hazırlandı" value={counts.hazirlandi} color="blue" icon={ChefHat} />
+      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <StatCard label="Açık Sipariş" value={masaOrders.length} color="blue" icon={ShoppingCart} />
+        <StatCard label="Açık Tutar" value={formatTL(totalActive)} color="green" />
         <StatCard
           label="Gecikmeli"
           value={lateCount}
@@ -112,24 +98,6 @@ export default function AdminOrders() {
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="flex gap-1">
-          {TABS.map((t) => {
-            const Icon = t.icon;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
-                  tab === t.id ? 'bg-blue-100 font-medium text-blue-700' : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <Icon size={14} />
-                <span>{t.label}</span>
-                <span className="rounded-full bg-slate-200 px-1.5 text-xs">{counts[t.id]}</span>
-              </button>
-            );
-          })}
-        </div>
         <div className="ml-auto flex items-center gap-2">
           <select
             value={filterGarson}
@@ -165,7 +133,7 @@ export default function AdminOrders() {
           <ul className="divide-y divide-slate-100">
             {visible.map((o) => {
               const mins = minutesSince(o.olusturmaZamani);
-              const late = mins > gecikmeEsigi && o.durum !== 'masayaGitti';
+              const late = mins > gecikmeEsigi;
               return (
                 <li
                   key={o.id}
@@ -196,17 +164,8 @@ export default function AdminOrders() {
                     </p>
                     <p className="text-xs text-slate-400">{formatDate(o.olusturmaZamani, 'HH:mm')}</p>
                   </div>
-                  <div className="col-span-2 text-right text-sm font-bold text-slate-900">
+                  <div className="col-span-3 text-right text-sm font-bold text-slate-900">
                     {formatTL(o.toplam)}
-                  </div>
-                  <div className="col-span-1 text-right">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                        TABS.find((t) => t.id === o.durum)?.color
-                      }`}
-                    >
-                      {TABS.find((t) => t.id === o.durum)?.label}
-                    </span>
                   </div>
                 </li>
               );
@@ -247,11 +206,10 @@ function OrderDetailModal({ open, order, onClose, onCancel }) {
       }
     >
       <div className="space-y-4">
-        <div className="grid grid-cols-4 gap-3 text-sm">
+        <div className="grid grid-cols-3 gap-3 text-sm">
           <Info label="Garson" value={order.garsonAd} />
           <Info label="Kişi" value={order.kisiSayisi != null ? order.kisiSayisi : '—'} />
           <Info label="Süre" value={`${mins} dk`} />
-          <Info label="Durum" value={order.durum} />
         </div>
 
         <div className="rounded-lg border border-slate-200">
@@ -288,12 +246,6 @@ function OrderDetailModal({ open, order, onClose, onCancel }) {
         <div className="text-xs text-slate-500">
           <p>Sipariş No: #{order.id.slice(0, 8).toUpperCase()}</p>
           <p>Açılış: {formatDate(order.olusturmaZamani)}</p>
-          {order.hazirlandiZamani && (
-            <p>Hazırlandı: {formatDate(order.hazirlandiZamani)}</p>
-          )}
-          {order.masayaGittiZamani && (
-            <p>Masaya Gitti: {formatDate(order.masayaGittiZamani)}</p>
-          )}
         </div>
       </div>
     </Modal>

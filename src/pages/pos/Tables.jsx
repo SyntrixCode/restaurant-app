@@ -1018,7 +1018,7 @@ function FullTableModal({ open, onClose, table, rol, navigate, onDissolve }) {
         <p className="py-8 text-center text-slate-500">Bu masada aktif sipariş bulunamadı.</p>
       ) : (
         <div className="space-y-4">
-          <div className="grid grid-cols-4 gap-3 text-sm">
+          <div className="grid grid-cols-3 gap-3 text-sm">
             <div>
               <p className="text-slate-500">Garson</p>
               <p className="font-semibold text-slate-900">{order.garsonAd}</p>
@@ -1034,10 +1034,6 @@ function FullTableModal({ open, onClose, table, rol, navigate, onDissolve }) {
               <p className="font-semibold text-slate-900">
                 {minutesSince(order.olusturmaZamani)} dk
               </p>
-            </div>
-            <div>
-              <p className="text-slate-500">Durum</p>
-              <p className="font-semibold text-slate-900">{order.durum}</p>
             </div>
           </div>
 
