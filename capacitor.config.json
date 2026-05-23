@@ -1,6 +1,6 @@
 {
   "appId": "com.alazligida.pos",
-  "appName": "Restoran POS",
+  "appName": "SyntrixPos",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"

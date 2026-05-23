@@ -38,6 +38,7 @@
   },
   "devDependencies": {
     "@capacitor/android": "^8.3.4",
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.3.4",
     "@capacitor/core": "^8.3.4",
     "@types/react": "^18.3.10",
@@ -47,6 +48,7 @@
     "firebase-admin": "^12.4.0",
     "firebase-tools": "^13.20.0",
     "postcss": "^8.4.47",
+    "sharp": "^0.34.5",
     "tailwindcss": "^3.4.13",
     "vite": "^5.4.8"
   }
