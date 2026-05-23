@@ -24,6 +24,7 @@ export async function recordPayment({
   const orderRef = doc(db, 'orders', orderId);
 
   return runTransaction(db, async (txn) => {
+    // === READS (Firestore kuralı: tüm read'ler tüm write'lardan önce) ===
     const orderSnap = await txn.get(orderRef);
     if (!orderSnap.exists()) throw new Error('Sipariş bulunamadı');
     const order = orderSnap.data();
@@ -38,6 +39,25 @@ export async function recordPayment({
       );
     }
 
+    // Grup kontrolü için masa + grup oku (write'lardan ÖNCE)
+    let groupId = null;
+    let groupMemberIds = null;
+    if (finalize && order.masaId) {
+      const tableRef = doc(db, 'tables', order.masaId);
+      const tableSnap = await txn.get(tableRef);
+      if (tableSnap.exists() && tableSnap.data().grupId) {
+        groupId = tableSnap.data().grupId;
+        const groupRef = doc(db, 'tableGroups', groupId);
+        const groupSnap = await txn.get(groupRef);
+        if (groupSnap.exists()) {
+          groupMemberIds = groupSnap.data().memberIds || [];
+        } else {
+          groupId = null; // grup dokümanı yok, dağıtma
+        }
+      }
+    }
+
+    // === WRITES (artık tek bir read kalmamış olmalı) ===
     const gun = gunString();
     const paymentIds = [];
 
@@ -74,27 +94,17 @@ export async function recordPayment({
         odemeYontemleri: payments.map((p) => p.yontem),
       });
 
-      let groupToDissolve = null;
       if (order.masaId) {
         const tableRef = doc(db, 'tables', order.masaId);
-        const tableSnap = await txn.get(tableRef);
-        if (tableSnap.exists() && tableSnap.data().grupId) {
-          groupToDissolve = tableSnap.data().grupId;
-        }
         txn.update(tableRef, { durum: 'bos' });
       }
 
-      // Auto-dissolve group: ödeme alındığında birleştirme otomatik kaldırılır
-      if (groupToDissolve) {
-        const groupRef = doc(db, 'tableGroups', groupToDissolve);
-        const groupSnap = await txn.get(groupRef);
-        if (groupSnap.exists()) {
-          const memberIds = groupSnap.data().memberIds || [];
-          for (const mid of memberIds) {
-            txn.update(doc(db, 'tables', mid), { grupId: null });
-          }
-          txn.delete(groupRef);
+      // Auto-dissolve group: önceden okunmuş bilgilere göre yaz
+      if (groupId && groupMemberIds) {
+        for (const mid of groupMemberIds) {
+          txn.update(doc(db, 'tables', mid), { grupId: null });
         }
+        txn.delete(doc(db, 'tableGroups', groupId));
       }
     }
 
