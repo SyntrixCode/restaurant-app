@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Clock, ChefHat, Truck, AlertTriangle } from 'lucide-react';
+import { Clock, ChefHat, Truck, AlertTriangle, Users as UsersIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { watchCollection, where, orderBy } from '../../firebase/firestore';
 import { useAuthStore } from '../../store/authStore';
@@ -102,8 +102,14 @@ export default function ActiveOrders() {
                       <h3 className="text-lg font-bold text-slate-900">
                         {o.masaAd || 'Paket'}
                       </h3>
-                      <p className="text-xs text-slate-500">
-                        {o.garsonAd} · #{o.id.slice(0, 6)}
+                      <p className="flex items-center gap-2 text-xs text-slate-500">
+                        <span>{o.garsonAd}</span>
+                        {o.kisiSayisi != null && (
+                          <span className="inline-flex items-center gap-0.5 rounded-full bg-blue-50 px-1.5 py-0.5 text-blue-700">
+                            <UsersIcon size={10} /> {o.kisiSayisi}
+                          </span>
+                        )}
+                        <span>· #{o.id.slice(0, 6)}</span>
                       </p>
                     </div>
                     <div className="text-right">

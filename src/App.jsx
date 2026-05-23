@@ -12,6 +12,8 @@ import Categories from './pages/admin/Categories';
 import Products from './pages/admin/Products';
 import Users from './pages/admin/Users';
 import Printers from './pages/admin/Printers';
+import AdminTables from './pages/admin/Tables';
+import AdminReservations from './pages/admin/Reservations';
 import AdminPlaceholder from './pages/admin/Placeholder';
 
 import PosLogin from './pages/pos/Login';
@@ -58,7 +60,8 @@ export default function App() {
         <Route path="users" element={<Users />} />
         <Route path="orders" element={<AdminPlaceholder title="Sipariş Yönetimi" phase="Faz 5" />} />
         <Route path="archive" element={<AdminPlaceholder title="Arşivlenen Siparişler" phase="Faz 5" />} />
-        <Route path="tables" element={<AdminPlaceholder title="Masa Yönetimi" phase="Faz 3" />} />
+        <Route path="tables" element={<AdminTables />} />
+        <Route path="reservations" element={<AdminReservations />} />
         <Route path="stock" element={<AdminPlaceholder title="Stok Yönetimi" phase="Faz 10 detay, Faz 1 basit" />} />
         <Route path="campaigns" element={<AdminPlaceholder title="Kampanyalar" phase="Faz 7" />} />
         <Route path="coupons" element={<AdminPlaceholder title="Kupon Kodları" phase="Faz 7" />} />

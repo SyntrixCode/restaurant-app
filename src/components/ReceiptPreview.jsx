@@ -52,6 +52,12 @@ export default function ReceiptPreview({ open, onClose, order, payments, setting
               <span>Masa:</span>
               <span>{order.masaAd || 'Paket'}</span>
             </div>
+            {order.kisiSayisi != null && (
+              <div className="flex justify-between">
+                <span>Kişi:</span>
+                <span>{order.kisiSayisi}</span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span>Garson:</span>
               <span>{order.garsonAd}</span>

@@ -14,6 +14,7 @@ export default function NewOrder() {
   const [params] = useSearchParams();
   const masaId = params.get('masaId');
   const orderId = params.get('orderId');
+  const kisi = Number(params.get('kisi')) || null;
   const { user, profile, rol } = useAuthStore();
   const { masaAd, items, start, addItem, changeQuantity, removeItem, setNote, clear, total } =
     useCartStore();
@@ -30,13 +31,31 @@ export default function NewOrder() {
       navigate('/pos/tables', { replace: true });
       return;
     }
-    fetchOne('tables', masaId).then((t) => {
-      if (t) start(masaId, t.ad);
-      else {
+    // Yeni sipariş açılışında kişi sayısı zorunlu
+    if (!orderId && !kisi) {
+      toast.error('Önce kişi sayısını girin');
+      navigate('/pos/tables', { replace: true });
+      return;
+    }
+    (async () => {
+      const t = await fetchOne('tables', masaId);
+      if (!t) {
         toast.error('Masa bulunamadı');
         navigate('/pos/tables', { replace: true });
+        return;
       }
-    });
+      if (t.grupId) {
+        const group = await fetchOne('tableGroups', t.grupId);
+        if (group && group.mainTableId !== masaId) {
+          navigate(`/pos/order/new?masaId=${group.mainTableId}`, { replace: true });
+          return;
+        }
+        const combined = group?.memberAdlari?.join(' + ') || t.ad;
+        start(masaId, combined);
+        return;
+      }
+      start(masaId, t.ad);
+    })();
     return () => clear();
   }, [masaId]);
 
@@ -81,6 +100,7 @@ export default function NewOrder() {
         const result = await createOrder({
           masaId,
           masaAd,
+          kisiSayisi: kisi,
           garsonId: user.uid,
           garsonAd: profile?.ad || 'Garson',
           items: items.map((it) => ({
@@ -162,10 +182,19 @@ export default function NewOrder() {
       {/* Sağ: Sepet */}
       <aside className="flex w-96 flex-col border-l border-slate-200 bg-white">
         <div className="border-b border-slate-200 px-4 py-3">
-          <h2 className="text-xl font-bold text-blue-700">{masaAd || '...'}</h2>
-          <p className="text-xs text-slate-500">
-            Garson: {profile?.ad} {orderId && '· Mevcut siparişe ekleme'}
-          </p>
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-blue-700">{masaAd || '...'}</h2>
+              <p className="text-xs text-slate-500">
+                Garson: {profile?.ad} {orderId && '· Mevcut siparişe ekleme'}
+              </p>
+            </div>
+            {kisi && !orderId && (
+              <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+                {kisi} kişi
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-3">

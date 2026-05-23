@@ -31,6 +31,25 @@ export const productSchema = z.object({
   aktif: z.boolean(),
 });
 
+export const tableSchema = z.object({
+  ad: z.string().min(1, 'Masa adı zorunlu').max(50),
+  zone: z.string().min(1, 'Bölge seçin').max(50),
+  kapasite: z.coerce.number().int().min(1).max(20),
+});
+
+export const reservationSchema = z.object({
+  musteriAd: z.string().min(2, 'Ad en az 2 karakter').max(100),
+  musteriTel: z
+    .string()
+    .min(7, 'Geçerli bir telefon girin')
+    .max(20)
+    .regex(/^[0-9\s+()-]+$/, 'Sadece rakam ve telefon karakterleri'),
+  tarih: z.string().min(1, 'Tarih zorunlu'),
+  saat: z.string().regex(/^\d{2}:\d{2}$/, 'Saat HH:MM formatında olmalı'),
+  kisiSayisi: z.coerce.number().int().min(1, 'En az 1 kişi').max(50),
+  notlar: z.string().max(200).optional(),
+});
+
 export const printerSchema = z.object({
   ad: z.string().min(1).max(50),
   ip: z

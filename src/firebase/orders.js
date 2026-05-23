@@ -10,6 +10,7 @@ import { db } from './config';
 export async function createOrder({
   masaId,
   masaAd,
+  kisiSayisi,
   garsonId,
   garsonAd,
   items,
@@ -19,6 +20,9 @@ export async function createOrder({
   musteriTel = null,
   musteriAdres = null,
 }) {
+  if (!paketMi && (!kisiSayisi || kisiSayisi < 1)) {
+    throw new Error('Kişi sayısı zorunlu');
+  }
   if (!items || items.length === 0) throw new Error('Sipariş boş olamaz');
 
   const orderRef = doc(collection(db, 'orders'));
@@ -67,6 +71,7 @@ export async function createOrder({
     txn.set(orderRef, {
       masaId: masaId || null,
       masaAd: masaAd || tableData?.ad || null,
+      kisiSayisi: kisiSayisi || null,
       garsonId,
       garsonAd,
       durum: 'aktif',
