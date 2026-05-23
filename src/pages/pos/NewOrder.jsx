@@ -159,35 +159,35 @@ export default function NewOrder() {
     <div className="flex h-full bg-slate-100">
       {/* Sol: Kategoriler + Ürünler */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="border-b border-slate-200 bg-white p-2">
+        <div className="border-b border-slate-200 bg-white p-3">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Ürün ara..."
-                className="input pl-9"
+                className="input py-3 pl-11 text-base"
               />
               {search && (
                 <button
                   onClick={() => setSearch('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 hover:bg-slate-100"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1.5 hover:bg-slate-100"
                 >
-                  <X size={14} />
+                  <X size={18} />
                 </button>
               )}
             </div>
           </div>
           {!search && (
-            <div className="mt-2 flex gap-1 overflow-x-auto">
+            <div className="mt-3 flex gap-1.5 overflow-x-auto">
               {activeCats.map((c) => (
                 <button
                   key={c.id}
                   onClick={() => setActiveCategory(c.id)}
-                  className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition ${
+                  className={`whitespace-nowrap rounded-lg px-5 py-3 text-base font-semibold transition ${
                     activeCategory === c.id
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-blue-600 text-white shadow'
                       : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
@@ -200,9 +200,9 @@ export default function NewOrder() {
 
         <div className="flex-1 overflow-y-auto p-4">
           {visibleProducts.length === 0 ? (
-            <p className="py-12 text-center text-slate-500">Ürün bulunamadı.</p>
+            <p className="py-12 text-center text-base text-slate-500">Ürün bulunamadı.</p>
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
               {visibleProducts.map((p) => (
                 <ProductCard key={p.id} product={p} onAdd={() => addItem(p)} />
               ))}
@@ -212,17 +212,18 @@ export default function NewOrder() {
       </div>
 
       {/* Sağ: Sepet */}
-      <aside className="flex w-96 flex-col border-l border-slate-200 bg-white">
-        <div className="border-b border-slate-200 px-4 py-3">
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-blue-700">{masaAd || '...'}</h2>
-              <p className="text-xs text-slate-500">
-                Garson: {profile?.ad} {orderId && '· Mevcut siparişe ekleme'}
+      <aside className="flex w-[440px] flex-col border-l border-slate-200 bg-white">
+        <div className="border-b border-slate-200 px-5 py-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h2 className="truncate text-2xl font-bold text-blue-700">{masaAd || '...'}</h2>
+              <p className="text-sm text-slate-500">
+                Garson: <strong>{profile?.ad}</strong>
+                {orderId && ' · Mevcut siparişe ekleme'}
               </p>
             </div>
             {kisi && !orderId && (
-              <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+              <span className="shrink-0 rounded-full bg-blue-100 px-3 py-1.5 text-sm font-bold text-blue-700">
                 {kisi} kişi
               </span>
             )}
@@ -231,57 +232,74 @@ export default function NewOrder() {
 
         <div className="flex-1 overflow-y-auto p-3">
           {items.length === 0 ? (
-            <p className="py-12 text-center text-sm text-slate-400">Sepet boş</p>
+            <p className="py-16 text-center text-base text-slate-400">Sepet boş</p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="space-y-2.5">
               {items.map((it) => (
-                <li key={it.productId} className="rounded-lg border border-slate-200 p-2">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="font-medium text-slate-900">{it.ad}</p>
-                      <p className="text-xs text-slate-500">{formatTL(it.fiyat)} / adet</p>
+                <li
+                  key={it.productId}
+                  className="rounded-xl border-2 border-slate-200 bg-white p-3 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-base font-bold leading-tight text-slate-900">
+                        {it.ad}
+                      </p>
+                      <p className="mt-0.5 text-sm text-slate-500">
+                        {formatTL(it.fiyat)} / adet
+                      </p>
                       {it.notlar && (
-                        <p className="mt-1 text-xs italic text-blue-600">{it.notlar}</p>
+                        <p className="mt-1 rounded bg-blue-50 px-2 py-0.5 text-sm italic text-blue-700">
+                          {it.notlar}
+                        </p>
                       )}
                     </div>
-                    <span className="font-bold text-slate-900">{formatTL(it.fiyat * it.adet)}</span>
+                    <span className="shrink-0 text-lg font-bold text-slate-900">
+                      {formatTL(it.fiyat * it.adet)}
+                    </span>
                   </div>
-                  <div className="mt-2 flex items-center gap-1">
+                  <div className="mt-3 flex items-center gap-2">
                     <button
                       onClick={() => changeQuantity(it.productId, -1)}
-                      className="rounded bg-slate-100 p-1.5 hover:bg-slate-200"
+                      className="rounded-lg bg-slate-100 p-2.5 hover:bg-slate-200 active:scale-95"
+                      aria-label="Azalt"
                     >
-                      <Minus size={14} />
+                      <Minus size={20} />
                     </button>
-                    <span className="w-10 text-center font-semibold">{formatAdet(it.adet)}</span>
+                    <span className="w-12 text-center text-2xl font-bold tabular-nums">
+                      {formatAdet(it.adet)}
+                    </span>
                     <button
                       onClick={() => changeQuantity(it.productId, 1)}
-                      className="rounded bg-slate-100 p-1.5 hover:bg-slate-200"
+                      className="rounded-lg bg-slate-100 p-2.5 hover:bg-slate-200 active:scale-95"
+                      aria-label="Arttır"
                     >
-                      <Plus size={14} />
+                      <Plus size={20} />
                     </button>
                     <button
                       onClick={() => toggleHalf(it.productId)}
                       title="Yarım porsiyon (½)"
-                      className={`rounded px-1.5 py-1 text-xs font-bold transition ${
+                      className={`rounded-lg px-3 py-2 text-lg font-bold transition active:scale-95 ${
                         it.adet % 1 !== 0
-                          ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-400 hover:bg-blue-200'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                       }`}
                     >
                       ½
                     </button>
                     <button
                       onClick={() => setNoteFor(it)}
-                      className="ml-auto rounded p-1.5 text-slate-500 hover:bg-slate-100"
+                      className="ml-auto rounded-lg p-2.5 text-slate-500 hover:bg-slate-100 active:scale-95"
+                      aria-label="Not ekle"
                     >
-                      <MessageSquare size={14} />
+                      <MessageSquare size={18} />
                     </button>
                     <button
                       onClick={() => removeItem(it.productId)}
-                      className="rounded p-1.5 text-red-500 hover:bg-red-50"
+                      className="rounded-lg p-2.5 text-red-500 hover:bg-red-50 active:scale-95"
+                      aria-label="Sil"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={18} />
                     </button>
                   </div>
                 </li>
@@ -290,27 +308,27 @@ export default function NewOrder() {
           )}
         </div>
 
-        <div className="border-t border-slate-200 p-3">
+        <div className="border-t-2 border-slate-200 p-4">
           <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm text-slate-500">Toplam</span>
-            <span className="text-2xl font-bold text-slate-900">{formatTL(subtotal)}</span>
+            <span className="text-base font-medium text-slate-600">Toplam</span>
+            <span className="text-3xl font-bold text-slate-900">{formatTL(subtotal)}</span>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => {
                 clear();
                 navigate('/pos/tables');
               }}
-              className="btn-secondary"
+              className="btn-secondary py-3 text-base"
             >
               İptal
             </button>
             <button
               onClick={handleSubmit}
               disabled={items.length === 0 || submitting}
-              className="btn-primary disabled:opacity-50"
+              className="btn-primary py-3 text-base disabled:opacity-50"
             >
-              {submitting ? 'Gönderiliyor...' : orderId ? 'Ekle' : 'Onayla'}
+              {submitting ? 'Gönderiliyor…' : orderId ? 'Ekle' : 'Onayla'}
             </button>
           </div>
         </div>
@@ -343,24 +361,26 @@ function ProductCard({ product, onAdd }) {
     <button
       onClick={onAdd}
       disabled={outOfStock}
-      className={`flex flex-col rounded-xl border-2 bg-white p-2 text-left shadow-sm transition active:scale-95 ${
+      className={`flex flex-col rounded-xl border-2 bg-white p-3 text-left shadow-sm transition active:scale-95 ${
         outOfStock
           ? 'cursor-not-allowed border-slate-200 opacity-40'
-          : 'border-slate-200 hover:border-blue-400 hover:shadow-md'
+          : 'border-slate-200 hover:border-blue-500 hover:shadow-md'
       }`}
     >
-      <div className="mb-2 flex aspect-square w-full items-center justify-center overflow-hidden rounded-lg bg-slate-100">
+      <div className="mb-2.5 flex aspect-square w-full items-center justify-center overflow-hidden rounded-lg bg-slate-100">
         {product.gorsel ? (
           <img src={product.gorsel} alt={product.ad} className="h-full w-full object-cover" />
         ) : (
-          <ImageIcon size={32} className="text-slate-300" />
+          <ImageIcon size={40} className="text-slate-300" />
         )}
       </div>
-      <p className="line-clamp-2 text-sm font-medium text-slate-900">{product.ad}</p>
-      <div className="mt-1 flex items-center justify-between">
-        <span className="text-base font-bold text-blue-700">{formatTL(product.fiyat)}</span>
+      <p className="line-clamp-2 min-h-[3rem] text-base font-semibold leading-tight text-slate-900">
+        {product.ad}
+      </p>
+      <div className="mt-2 flex items-center justify-between">
+        <span className="text-xl font-bold text-blue-700">{formatTL(product.fiyat)}</span>
         <span
-          className={`rounded-full px-1.5 py-0.5 text-xs ${
+          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
             outOfStock
               ? 'bg-red-100 text-red-700'
               : product.stok <= 5
