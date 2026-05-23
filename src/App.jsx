@@ -22,6 +22,7 @@ import AdminReports from './pages/admin/Reports';
 import AdminCampaigns from './pages/admin/Campaigns';
 import AdminCoupons from './pages/admin/Coupons';
 import AdminQrCodes from './pages/admin/QrCodes';
+import AdminPackages from './pages/admin/Packages';
 import AdminPlaceholder from './pages/admin/Placeholder';
 
 import PosLogin from './pages/pos/Login';
@@ -29,7 +30,10 @@ import PosTables from './pages/pos/Tables';
 import NewOrder from './pages/pos/NewOrder';
 import ActiveOrders from './pages/pos/ActiveOrders';
 import Payment from './pages/pos/Payment';
+import PosPackages from './pages/pos/Packages';
 import PosPlaceholder from './pages/pos/Placeholder';
+
+import CallerIdPopup from './components/CallerIdPopup';
 
 import Menu from './pages/menu/Menu';
 
@@ -47,6 +51,8 @@ export default function App() {
   }, [initAuth, initSettings]);
 
   return (
+    <>
+    <CallerIdPopup />
     <Routes>
       <Route path="/" element={<Navigate to="/admin/login" replace />} />
 
@@ -74,7 +80,7 @@ export default function App() {
         <Route path="stock" element={<AdminPlaceholder title="Stok Yönetimi" phase="Faz 10 detay, Faz 1 basit" />} />
         <Route path="campaigns" element={<AdminCampaigns />} />
         <Route path="coupons" element={<AdminCoupons />} />
-        <Route path="packages" element={<AdminPlaceholder title="Paket Servis" phase="Faz 8" />} />
+        <Route path="packages" element={<AdminPackages />} />
         <Route path="notifications" element={<AdminNotifications />} />
         <Route path="reports" element={<AdminReports />} />
         <Route path="finance" element={<AdminPlaceholder title="Finans & Kasa" phase="Faz 11" />} />
@@ -96,12 +102,13 @@ export default function App() {
         <Route path="order/new" element={<NewOrder />} />
         <Route path="orders/active" element={<ActiveOrders />} />
         <Route path="payment" element={<Payment />} />
-        <Route path="packages" element={<PosPlaceholder title="Paket Servis (POS)" phase="Faz 8" />} />
+        <Route path="packages" element={<PosPackages />} />
       </Route>
 
       <Route path="/menu/:masaId" element={<Menu />} />
 
       <Route path="*" element={<Navigate to="/admin/login" replace />} />
     </Routes>
+    </>
   );
 }

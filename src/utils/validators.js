@@ -75,6 +75,18 @@ export const settingsSchema = z.object({
   }),
 });
 
+export const paketSchema = z.object({
+  musteriAd: z.string().min(2, 'Ad en az 2 karakter').max(100),
+  musteriTel: z
+    .string()
+    .min(7, 'Telefon en az 7 karakter')
+    .max(20)
+    .regex(/^[0-9\s+()-]+$/, 'Sadece rakam ve telefon karakterleri'),
+  musteriAdres: z.string().min(5, 'Adres en az 5 karakter').max(500),
+  paketKaynak: z.enum(['manuel', 'telefon', 'yemeksepeti', 'getir', 'trendyol', 'diger']),
+  paketNotlar: z.string().max(300).optional().or(z.literal('')),
+});
+
 export const campaignSchema = z.object({
   ad: z.string().min(1, 'Kampanya adı zorunlu').max(100),
   aciklama: z.string().max(300).optional().or(z.literal('')),
