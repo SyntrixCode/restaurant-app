@@ -18,6 +18,7 @@ import AdminSettings from './pages/admin/Settings';
 import AdminOrders from './pages/admin/Orders';
 import AdminArchive from './pages/admin/Archive';
 import AdminNotifications from './pages/admin/Notifications';
+import AdminReports from './pages/admin/Reports';
 import AdminPlaceholder from './pages/admin/Placeholder';
 
 import PosLogin from './pages/pos/Login';
@@ -71,7 +72,7 @@ export default function App() {
         <Route path="coupons" element={<AdminPlaceholder title="Kupon Kodları" phase="Faz 7" />} />
         <Route path="packages" element={<AdminPlaceholder title="Paket Servis" phase="Faz 8" />} />
         <Route path="notifications" element={<AdminNotifications />} />
-        <Route path="reports" element={<AdminPlaceholder title="Raporlar" phase="Faz 6" />} />
+        <Route path="reports" element={<AdminReports />} />
         <Route path="finance" element={<AdminPlaceholder title="Finans & Kasa" phase="Faz 11" />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>
