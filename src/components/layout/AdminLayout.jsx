@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
+import PoweredBy from '../PoweredBy';
 
 const NAV = [
   { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -97,6 +98,9 @@ export default function AdminLayout() {
             <LogOut size={16} />
             <span>Çıkış</span>
           </button>
+          <div className="mt-3 border-t border-slate-100 pt-3 text-center">
+            <PoweredBy />
+          </div>
         </div>
       </aside>
       <main className="flex-1 overflow-y-auto">

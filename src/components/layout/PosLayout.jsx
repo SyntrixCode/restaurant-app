@@ -2,6 +2,7 @@ import { Outlet, useNavigate, NavLink } from 'react-router-dom';
 import { LogOut, ShoppingCart, Truck, Grid3x3, ClipboardList } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
+import PoweredBy from '../PoweredBy';
 
 export default function PosLayout() {
   const navigate = useNavigate();
@@ -39,6 +40,9 @@ export default function PosLayout() {
       <main className="flex-1 overflow-hidden">
         <Outlet />
       </main>
+      <footer className="border-t border-slate-200 bg-white px-4 py-1.5 text-center">
+        <PoweredBy />
+      </footer>
     </div>
   );
 }

@@ -149,6 +149,9 @@ export default function KitchenTicket({
               #{shortId}
             </div>
           )}
+          <p className="mt-3 text-center text-[10px] text-slate-400">
+            powered by {'{'}S{'}'}  syntrixCode
+          </p>
         </div>
       </div>
 

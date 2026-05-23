@@ -202,6 +202,9 @@ export default function ReceiptPreview({ open, onClose, order, payments, setting
 
           <div className="mt-4 text-center text-xs">
             <p>{settings?.fisAltMesaji || 'Teşekkür ederiz'}</p>
+            <p className="mt-2 text-[10px] text-slate-400">
+              powered by {'{'}S{'}'}  syntrixCode
+            </p>
           </div>
         </div>
       </div>

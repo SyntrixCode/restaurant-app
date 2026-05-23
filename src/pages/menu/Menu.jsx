@@ -4,6 +4,7 @@ import { ImageIcon } from 'lucide-react';
 import { watchCollection, fetchOne, orderBy } from '../../firebase/firestore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL } from '../../utils/format';
+import PoweredBy from '../../components/PoweredBy';
 
 export default function Menu() {
   const { masaId } = useParams();
@@ -115,6 +116,9 @@ export default function Menu() {
       <footer className="border-t border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500">
         {settings.restoranAdres && <p>{settings.restoranAdres}</p>}
         {settings.restoranTel && <p>Tel: {settings.restoranTel}</p>}
+        <div className="mt-3">
+          <PoweredBy />
+        </div>
       </footer>
     </div>
   );

@@ -110,6 +110,12 @@ export function buildKitchenTicketLines({ order, items, isAddendum = false }) {
       size: 22,
     });
   }
+  lines.push({
+    type: 'text',
+    text: 'powered by {S} syntrixCode',
+    align: 'center',
+    size: 18,
+  });
   return lines;
 }
 
@@ -187,6 +193,12 @@ export function buildCustomerReceiptLines({ order, payments = [], settings = {},
   lines.push({ type: 'feed', lines: 1 });
   const altMesaj = settings.fisAltMesaji || 'Teşekkür ederiz';
   lines.push({ type: 'text', text: altMesaj, align: 'center', size: 24 });
+  lines.push({
+    type: 'text',
+    text: 'powered by {S} syntrixCode',
+    align: 'center',
+    size: 18,
+  });
 
   return lines;
 }
