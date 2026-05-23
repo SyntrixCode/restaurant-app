@@ -1,8 +1,8 @@
 name: Build Android APK
 
+# Manuel tetiklemeye geçildi — kullanıcı "APK al" dediğinde GitHub Actions →
+# Build Android APK → "Run workflow" butonuyla çalıştırılır.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       build_type:
