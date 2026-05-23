@@ -1,12 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Wallet, CreditCard, UtensilsCrossed, Plus, Trash2, ArrowLeft, Printer } from 'lucide-react';
-import { watchDoc } from '../../firebase/firestore';
+import {
+  Wallet,
+  CreditCard,
+  UtensilsCrossed,
+  Plus,
+  Trash2,
+  ArrowLeft,
+  Printer,
+  Megaphone,
+  Tag,
+  X,
+  Check,
+} from 'lucide-react';
+import { watchDoc, watchCollection } from '../../firebase/firestore';
 import { formatTL, minutesSince, formatAdet } from '../../utils/format';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { recordPayment } from '../../firebase/payments';
+import { pickBestDiscount, isCouponValid, isCampaignActive } from '../../utils/discount';
 import Modal from '../../components/ui/Modal';
 import Toggle from '../../components/ui/Toggle';
 import ReceiptPreview from '../../components/ReceiptPreview';
@@ -20,11 +33,15 @@ export default function Payment() {
   const { user, profile, rol } = useAuthStore();
   const { settings } = useSettingsStore();
   const [order, setOrder] = useState(null);
+  const [campaigns, setCampaigns] = useState([]);
+  const [coupons, setCoupons] = useState([]);
   const [payments, setPayments] = useState([]); // [{yontem, tutar, kartTipi?}]
   const [fisBas, setFisBas] = useState(settings.otomatikFisBas !== false);
   const [submitting, setSubmitting] = useState(false);
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [change, setChange] = useState(0);
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
 
   const [cashModal, setCashModal] = useState(false);
   const [cardModal, setCardModal] = useState(false);
@@ -45,6 +62,9 @@ export default function Payment() {
     });
   }, [orderId]);
 
+  useEffect(() => watchCollection('campaigns', setCampaigns), []);
+  useEffect(() => watchCollection('coupons', setCoupons), []);
+
   if (!['kasiyer', 'admin'].includes(rol)) {
     return (
       <div className="flex h-full items-center justify-center text-slate-500">
@@ -61,9 +81,66 @@ export default function Payment() {
     );
   }
 
+  const subtotal = Number(order.araToplam || order.toplam || 0);
+
+  // En büyük indirim hesabı (kampanya auto + manual kupon — kümülatif değil)
+  const bestDiscount = pickBestDiscount({
+    subtotal,
+    campaigns,
+    coupon: appliedCoupon,
+  });
+
+  const effectiveTotal = Math.max(0, subtotal - bestDiscount.amount);
+
   const totalPaid = payments.reduce((s, p) => s + Number(p.tutar || 0), 0);
-  const remaining = Math.max(0, order.toplam - totalPaid);
-  const isFullyPaid = totalPaid >= order.toplam - 0.005;
+  const remaining = Math.max(0, effectiveTotal - totalPaid);
+  const isFullyPaid = totalPaid >= effectiveTotal - 0.005;
+
+  const applicableCampaigns = useMemo(
+    () => campaigns.filter((c) => isCampaignActive(c, subtotal)),
+    [campaigns, subtotal],
+  );
+
+  const applyCouponCode = () => {
+    if (!couponInput.trim()) return;
+    const kod = couponInput.trim().toUpperCase();
+    const found = coupons.find((c) => c.kod === kod);
+    if (!found) {
+      toast.error('Kupon bulunamadı');
+      return;
+    }
+    if (!isCouponValid(found, subtotal)) {
+      if (found.sonGecerlilik) {
+        const today = new Date().toISOString().slice(0, 10);
+        if (today > found.sonGecerlilik) {
+          toast.error('Kupon süresi dolmuş');
+          return;
+        }
+      }
+      if (found.maxKullanim > 0 && (found.kullanilan || 0) >= found.maxKullanim) {
+        toast.error('Kupon kullanım limiti dolmuş');
+        return;
+      }
+      if (found.minTutar > 0 && subtotal < found.minTutar) {
+        toast.error(`Min sepet tutarı: ${formatTL(found.minTutar)}`);
+        return;
+      }
+      if (!found.aktif) {
+        toast.error('Kupon aktif değil');
+        return;
+      }
+      toast.error('Kupon kullanılamıyor');
+      return;
+    }
+    setAppliedCoupon(found);
+    toast.success(`Kupon eklendi: ${found.kod}`);
+    setCouponInput('');
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponInput('');
+  };
 
   const addPayment = (entry) => {
     setPayments((arr) => [...arr, entry]);
@@ -84,6 +161,25 @@ export default function Payment() {
     }
     setSubmitting(true);
     try {
+      let discountPayload = null;
+      if (bestDiscount.amount > 0 && bestDiscount.source) {
+        if (bestDiscount.type === 'kampanya') {
+          discountPayload = {
+            type: 'kampanya',
+            kampanyaId: bestDiscount.source.id,
+            kampanyaAd: bestDiscount.source.ad,
+            amount: bestDiscount.amount,
+          };
+        } else {
+          discountPayload = {
+            type: 'kupon',
+            kuponId: bestDiscount.source.id,
+            kuponKod: bestDiscount.source.kod,
+            amount: bestDiscount.amount,
+          };
+        }
+      }
+
       const result = await recordPayment({
         orderId: order.id,
         kasiyerId: user.uid,
@@ -94,6 +190,7 @@ export default function Payment() {
           kartTipi: p.kartTipi || null,
         })),
         fisBasildi: fisBas,
+        discount: discountPayload,
       });
       setChange(result.change);
       toast.success('Ödeme tamamlandı');
@@ -147,20 +244,75 @@ export default function Payment() {
           </ul>
         </div>
 
+        {/* İndirim paneli */}
+        <div className="mb-4 rounded-lg border border-slate-200 p-3">
+          <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-slate-500">
+            <Megaphone size={12} />
+            <span>Kampanya / Kupon</span>
+          </div>
+
+          {applicableCampaigns.length > 0 && bestDiscount.type === 'kampanya' && (
+            <div className="mb-2 flex items-center gap-2 rounded-md bg-emerald-50 px-2 py-1.5 text-xs text-emerald-800">
+              <Check size={12} />
+              <span>
+                <strong>{bestDiscount.label}</strong> otomatik uygulandı (
+                {formatTL(bestDiscount.amount)})
+              </span>
+            </div>
+          )}
+
+          {appliedCoupon ? (
+            <div className="flex items-center justify-between rounded-md bg-blue-50 px-2 py-1.5 text-xs text-blue-800">
+              <span className="flex items-center gap-1">
+                <Tag size={12} />
+                <code className="font-mono font-bold">{appliedCoupon.kod}</code>
+                {bestDiscount.type === 'kupon' && (
+                  <span>· {formatTL(bestDiscount.amount)} uygulanıyor</span>
+                )}
+                {bestDiscount.type === 'kampanya' && (
+                  <span className="text-slate-500">· kampanya daha avantajlı</span>
+                )}
+              </span>
+              <button onClick={removeCoupon} className="rounded p-0.5 hover:bg-blue-100">
+                <X size={12} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                value={couponInput}
+                onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === 'Enter' && applyCouponCode()}
+                placeholder="KUPON KODU"
+                className="input flex-1 font-mono uppercase tracking-wider"
+              />
+              <button onClick={applyCouponCode} className="btn-secondary text-sm">
+                Uygula
+              </button>
+            </div>
+          )}
+
+          {applicableCampaigns.length > 0 && !appliedCoupon && bestDiscount.type !== 'kampanya' && (
+            <p className="mt-1 text-xs text-slate-500">
+              Geçerli kampanya: {applicableCampaigns.map((c) => c.ad).join(', ')}
+            </p>
+          )}
+        </div>
+
         <div className="space-y-1 rounded-lg bg-slate-50 p-4">
           <div className="flex justify-between text-sm text-slate-600">
             <span>Ara Toplam</span>
-            <span className="tabular-nums">{formatTL(order.araToplam)}</span>
+            <span className="tabular-nums">{formatTL(subtotal)}</span>
           </div>
-          {order.indirim > 0 && (
-            <div className="flex justify-between text-sm text-slate-600">
-              <span>İndirim</span>
-              <span className="tabular-nums">- {formatTL(order.indirim)}</span>
+          {bestDiscount.amount > 0 && (
+            <div className="flex justify-between text-sm text-emerald-700">
+              <span>İndirim ({bestDiscount.label})</span>
+              <span className="tabular-nums">- {formatTL(bestDiscount.amount)}</span>
             </div>
           )}
           <div className="flex justify-between border-t border-slate-200 pt-2 text-2xl font-bold text-slate-900">
             <span>TOPLAM</span>
-            <span className="tabular-nums">{formatTL(order.toplam)}</span>
+            <span className="tabular-nums">{formatTL(effectiveTotal)}</span>
           </div>
         </div>
 
@@ -200,11 +352,11 @@ export default function Payment() {
                   <span className="font-semibold tabular-nums">{formatTL(remaining)}</span>
                 </div>
               )}
-              {totalPaid > order.toplam && (
+              {totalPaid > effectiveTotal && (
                 <div className="flex justify-between text-emerald-600">
                   <span>Para Üstü:</span>
                   <span className="font-semibold tabular-nums">
-                    {formatTL(totalPaid - order.toplam)}
+                    {formatTL(totalPaid - effectiveTotal)}
                   </span>
                 </div>
               )}

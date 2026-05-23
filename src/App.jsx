@@ -19,6 +19,8 @@ import AdminOrders from './pages/admin/Orders';
 import AdminArchive from './pages/admin/Archive';
 import AdminNotifications from './pages/admin/Notifications';
 import AdminReports from './pages/admin/Reports';
+import AdminCampaigns from './pages/admin/Campaigns';
+import AdminCoupons from './pages/admin/Coupons';
 import AdminPlaceholder from './pages/admin/Placeholder';
 
 import PosLogin from './pages/pos/Login';
@@ -68,8 +70,8 @@ export default function App() {
         <Route path="tables" element={<AdminTables />} />
         <Route path="reservations" element={<AdminReservations />} />
         <Route path="stock" element={<AdminPlaceholder title="Stok Yönetimi" phase="Faz 10 detay, Faz 1 basit" />} />
-        <Route path="campaigns" element={<AdminPlaceholder title="Kampanyalar" phase="Faz 7" />} />
-        <Route path="coupons" element={<AdminPlaceholder title="Kupon Kodları" phase="Faz 7" />} />
+        <Route path="campaigns" element={<AdminCampaigns />} />
+        <Route path="coupons" element={<AdminCoupons />} />
         <Route path="packages" element={<AdminPlaceholder title="Paket Servis" phase="Faz 8" />} />
         <Route path="notifications" element={<AdminNotifications />} />
         <Route path="reports" element={<AdminReports />} />

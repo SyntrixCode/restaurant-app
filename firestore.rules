@@ -89,7 +89,11 @@ service cloud.firestore {
 
     match /coupons/{id} {
       allow read: if isStaff();
-      allow write: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+                    || (isStaff()
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['kullanilan', 'updatedAt']));
     }
 
     match /notifications/{id} {

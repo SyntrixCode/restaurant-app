@@ -10,6 +10,18 @@ function gunString(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
+/**
+ * Ödemeyi kaydeder. Opsiyonel discount uygulanır (kümülatif değil — en büyük 1 indirim).
+ *
+ * @param {Object} params
+ * @param {string} params.orderId
+ * @param {string} params.kasiyerId
+ * @param {string} params.kasiyerAd
+ * @param {Array} params.payments - [{ yontem, tutar, kartTipi }]
+ * @param {boolean} params.fisBasildi
+ * @param {boolean} params.finalize
+ * @param {Object|null} params.discount - { type:'kampanya'|'kupon', kampanyaId?, kampanyaAd?, kuponId?, kuponKod?, amount }
+ */
 export async function recordPayment({
   orderId,
   kasiyerId,
@@ -17,6 +29,7 @@ export async function recordPayment({
   payments,
   fisBasildi = true,
   finalize = true,
+  discount = null,
 }) {
   if (!orderId) throw new Error('orderId zorunlu');
   if (!payments || payments.length === 0) throw new Error('En az 1 ödeme satırı gerekli');
@@ -24,7 +37,7 @@ export async function recordPayment({
   const orderRef = doc(db, 'orders', orderId);
 
   return runTransaction(db, async (txn) => {
-    // === READS (Firestore kuralı: tüm read'ler tüm write'lardan önce) ===
+    // === READS ===
     const orderSnap = await txn.get(orderRef);
     if (!orderSnap.exists()) throw new Error('Sipariş bulunamadı');
     const order = orderSnap.data();
@@ -32,11 +45,25 @@ export async function recordPayment({
       throw new Error('Bu sipariş zaten ödendi');
     }
 
+    // İndirim hesabı: subtotal = araToplam (orijinal)
+    const subtotal = Number(order.araToplam || order.toplam || 0);
+    const indirimAmount = discount && discount.amount > 0 ? Number(discount.amount) : 0;
+    const effectiveTotal = Math.max(0, subtotal - indirimAmount);
+
     const totalPaid = payments.reduce((sum, p) => sum + Number(p.tutar || 0), 0);
-    if (totalPaid + 0.005 < order.toplam) {
+    if (totalPaid + 0.005 < effectiveTotal) {
       throw new Error(
-        `Eksik ödeme: ${totalPaid.toFixed(2)} TL ödendi, gereken ${order.toplam.toFixed(2)} TL`,
+        `Eksik ödeme: ${totalPaid.toFixed(2)} TL ödendi, gereken ${effectiveTotal.toFixed(2)} TL`,
       );
+    }
+
+    // Kupon ise sayacı artırmak için oku
+    let couponRef = null;
+    let couponData = null;
+    if (discount && discount.type === 'kupon' && discount.kuponId) {
+      couponRef = doc(db, 'coupons', discount.kuponId);
+      const couponSnap = await txn.get(couponRef);
+      if (couponSnap.exists()) couponData = couponSnap.data();
     }
 
     // Grup kontrolü için masa + grup oku (write'lardan ÖNCE)
@@ -52,12 +79,12 @@ export async function recordPayment({
         if (groupSnap.exists()) {
           groupMemberIds = groupSnap.data().memberIds || [];
         } else {
-          groupId = null; // grup dokümanı yok, dağıtma
+          groupId = null;
         }
       }
     }
 
-    // === WRITES (artık tek bir read kalmamış olmalı) ===
+    // === WRITES ===
     const gun = gunString();
     const paymentIds = [];
 
@@ -78,36 +105,64 @@ export async function recordPayment({
       paymentIds.push(payRef.id);
     }
 
-    if (finalize) {
-      txn.update(orderRef, {
-        durum: 'tamamlandi',
-        tamamlandiZamani: serverTimestamp(),
-      });
+    // İndirim bilgisini order doc'a yaz
+    const orderPatch = {};
+    if (indirimAmount > 0) {
+      orderPatch.indirim = indirimAmount;
+      orderPatch.toplam = effectiveTotal;
+      if (discount.type === 'kampanya') {
+        orderPatch.kampanyaId = discount.kampanyaId || null;
+        orderPatch.kampanyaAd = discount.kampanyaAd || null;
+        orderPatch.kuponKodu = null;
+      } else if (discount.type === 'kupon') {
+        orderPatch.kuponKodu = discount.kuponKod || null;
+        orderPatch.kuponId = discount.kuponId || null;
+        orderPatch.kampanyaId = null;
+      }
+    }
 
-      const archiveRef = doc(db, 'archivedOrders', orderId);
-      txn.set(archiveRef, {
+    if (finalize) {
+      orderPatch.durum = 'tamamlandi';
+      orderPatch.tamamlandiZamani = serverTimestamp();
+    }
+
+    if (Object.keys(orderPatch).length > 0) {
+      txn.update(orderRef, orderPatch);
+    }
+
+    if (finalize) {
+      const archived = {
         ...order,
-        durum: 'tamamlandi',
-        tamamlandiZamani: serverTimestamp(),
+        ...orderPatch,
         arsivZamani: serverTimestamp(),
         gun,
         odemeYontemleri: payments.map((p) => p.yontem),
-      });
+      };
+      const archiveRef = doc(db, 'archivedOrders', orderId);
+      txn.set(archiveRef, archived);
 
       if (order.masaId) {
         const tableRef = doc(db, 'tables', order.masaId);
         txn.update(tableRef, { durum: 'bos' });
       }
 
-      // Auto-dissolve group: önceden okunmuş bilgilere göre yaz
+      // Auto-dissolve group
       if (groupId && groupMemberIds) {
         for (const mid of groupMemberIds) {
           txn.update(doc(db, 'tables', mid), { grupId: null });
         }
         txn.delete(doc(db, 'tableGroups', groupId));
       }
+
+      // Kupon kullanım sayacı
+      if (couponRef && couponData) {
+        txn.update(couponRef, {
+          kullanilan: (couponData.kullanilan || 0) + 1,
+          updatedAt: serverTimestamp(),
+        });
+      }
     }
 
-    return { paymentIds, totalPaid, change: totalPaid - order.toplam };
+    return { paymentIds, totalPaid, change: totalPaid - effectiveTotal, effectiveTotal };
   });
 }

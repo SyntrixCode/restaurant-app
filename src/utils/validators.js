@@ -75,6 +75,31 @@ export const settingsSchema = z.object({
   }),
 });
 
+export const campaignSchema = z.object({
+  ad: z.string().min(1, 'Kampanya adı zorunlu').max(100),
+  aciklama: z.string().max(300).optional().or(z.literal('')),
+  indirimTipi: z.enum(['yuzde', 'sabit']),
+  indirimDeger: z.coerce.number().positive('İndirim 0\'dan büyük olmalı'),
+  minTutar: z.coerce.number().nonnegative().default(0),
+  aktif: z.boolean(),
+  baslangicTarih: z.string().optional().or(z.literal('')),
+  bitisTarih: z.string().optional().or(z.literal('')),
+  gunler: z.array(z.number().int().min(0).max(6)).default([]),
+  baslangicSaat: z.string().regex(/^\d{2}:\d{2}$/).optional().or(z.literal('')),
+  bitisSaat: z.string().regex(/^\d{2}:\d{2}$/).optional().or(z.literal('')),
+});
+
+export const couponSchema = z.object({
+  kod: z.string().min(2, 'Kod en az 2 karakter').max(30).regex(/^[A-Z0-9_-]+$/, 'Sadece büyük harf, rakam, _ veya -'),
+  aciklama: z.string().max(200).optional().or(z.literal('')),
+  indirimTipi: z.enum(['yuzde', 'sabit']),
+  indirimDeger: z.coerce.number().positive('İndirim 0\'dan büyük olmalı'),
+  minTutar: z.coerce.number().nonnegative().default(0),
+  maxKullanim: z.coerce.number().int().nonnegative().default(0),
+  sonGecerlilik: z.string().optional().or(z.literal('')),
+  aktif: z.boolean(),
+});
+
 export const printerSchema = z.object({
   ad: z.string().min(1).max(50),
   ip: z
