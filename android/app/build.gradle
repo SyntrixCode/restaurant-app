@@ -40,6 +40,9 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+
+    // iMin POS hardware SDK — termal yazıcı (IminPrintUtils)
+    implementation 'com.github.iminsoftware:IminDeviceLibrary:3.0.0'
 }
 
 apply from: 'capacitor.build.gradle'

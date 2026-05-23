@@ -1,6 +1,11 @@
-import { useEffect } from 'react';
-import { Printer, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Printer, X, Check } from 'lucide-react';
 import { formatTL, formatDate, formatAdet } from '../utils/format';
+import {
+  printReceipt,
+  buildCustomerReceiptLines,
+  isIminPrinterAvailable,
+} from '../plugins/iminPrinter';
 
 const YONTEM_LABEL = {
   nakit: 'NAKİT',
@@ -9,6 +14,10 @@ const YONTEM_LABEL = {
 };
 
 export default function ReceiptPreview({ open, onClose, order, payments, settings, change }) {
+  const [nativeAvailable, setNativeAvailable] = useState(false);
+  const [printed, setPrinted] = useState(false);
+  const [printing, setPrinting] = useState(false);
+
   useEffect(() => {
     const handleEsc = (e) => {
       if (e.key === 'Escape') onClose();
@@ -17,18 +26,83 @@ export default function ReceiptPreview({ open, onClose, order, payments, setting
     return () => document.removeEventListener('keydown', handleEsc);
   }, [open, onClose]);
 
+  // Modal açılır açılmaz iMin yazıcı varsa otomatik bas
+  useEffect(() => {
+    if (!open || !order || printed) return;
+    let cancelled = false;
+    (async () => {
+      const available = await isIminPrinterAvailable();
+      if (cancelled) return;
+      setNativeAvailable(available);
+      if (available) {
+        setPrinting(true);
+        try {
+          const lines = buildCustomerReceiptLines({
+            order,
+            payments: payments || [],
+            settings: settings || {},
+            change: change || 0,
+          });
+          await printReceipt({ lines, cut: true, feedLines: 4 });
+          if (!cancelled) setPrinted(true);
+        } catch (err) {
+          console.warn('iMin receipt print failed:', err);
+        } finally {
+          if (!cancelled) setPrinting(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, order, payments, settings, change, printed]);
+
   if (!open || !order) return null;
 
-  const print = () => window.print();
+  const print = async () => {
+    setPrinting(true);
+    try {
+      const lines = buildCustomerReceiptLines({
+        order,
+        payments: payments || [],
+        settings: settings || {},
+        change: change || 0,
+      });
+      await printReceipt({
+        lines,
+        cut: true,
+        feedLines: 4,
+        fallbackPrintFn: () => window.print(),
+      });
+      setPrinted(true);
+    } catch (err) {
+      console.error(err);
+      window.print();
+    } finally {
+      setPrinting(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4 print:bg-white print:p-0">
       <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white shadow-2xl print:max-h-none print:shadow-none">
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2 print:hidden">
-          <h3 className="font-semibold">Fiş Önizleme</h3>
+          <h3 className="font-semibold">
+            Fiş Önizleme
+            {nativeAvailable && (
+              <span className="ml-2 text-xs font-normal text-emerald-600">
+                {printed ? '✓ basıldı' : printing ? 'Basılıyor…' : 'iMin yazıcı'}
+              </span>
+            )}
+          </h3>
           <div className="flex gap-2">
-            <button onClick={print} className="btn-primary text-sm">
-              <Printer size={14} /> Yazdır
+            <button
+              onClick={print}
+              disabled={printing}
+              className="btn-primary text-sm disabled:opacity-50"
+            >
+              {printed ? <Check size={14} /> : <Printer size={14} />}
+              {printed ? 'Yeniden Bas' : 'Yazdır'}
             </button>
             <button onClick={onClose} className="btn-ghost text-sm">
               <X size={14} /> Kapat

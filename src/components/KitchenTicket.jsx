@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
-import { Printer, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Printer, X, Check } from 'lucide-react';
 import { formatAdet, formatDate } from '../utils/format';
+import { printReceipt, buildKitchenTicketLines, isIminPrinterAvailable } from '../plugins/iminPrinter';
 
 export default function KitchenTicket({
   open,
@@ -9,6 +10,10 @@ export default function KitchenTicket({
   items,
   isAddendum = false,
 }) {
+  const [nativeAvailable, setNativeAvailable] = useState(false);
+  const [printed, setPrinted] = useState(false);
+  const [printing, setPrinting] = useState(false);
+
   useEffect(() => {
     const handleEsc = (e) => {
       if (e.key === 'Escape') onClose();
@@ -17,9 +22,56 @@ export default function KitchenTicket({
     return () => document.removeEventListener('keydown', handleEsc);
   }, [open, onClose]);
 
+  // Modal açılınca native yazıcı varsa OTOMATİK bas (garson tek tıkla işini bitirsin)
+  useEffect(() => {
+    if (!open || !order || !items || printed) return;
+    let cancelled = false;
+    (async () => {
+      const available = await isIminPrinterAvailable();
+      if (cancelled) return;
+      setNativeAvailable(available);
+      if (available) {
+        setPrinting(true);
+        try {
+          const lines = buildKitchenTicketLines({ order, items, isAddendum });
+          await printReceipt({ lines, cut: true, feedLines: 3 });
+          if (!cancelled) {
+            setPrinted(true);
+            // Otomatik kapat — garson işine devam etsin
+            setTimeout(() => !cancelled && onClose(), 800);
+          }
+        } catch (err) {
+          console.warn('iMin print failed:', err);
+        } finally {
+          if (!cancelled) setPrinting(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, order, items, isAddendum, printed, onClose]);
+
   if (!open || !order || !items) return null;
 
-  const print = () => window.print();
+  const print = async () => {
+    setPrinting(true);
+    try {
+      const lines = buildKitchenTicketLines({ order, items, isAddendum });
+      await printReceipt({
+        lines,
+        cut: true,
+        feedLines: 3,
+        fallbackPrintFn: () => window.print(),
+      });
+      setPrinted(true);
+    } catch (err) {
+      console.error(err);
+      window.print();
+    } finally {
+      setPrinting(false);
+    }
+  };
   const heading = isAddendum ? 'EK SİPARİŞ' : 'MUTFAK ADİSYONU';
   const shortId =
     typeof order.id === 'string' ? order.id.slice(0, 8).toUpperCase() : '';
@@ -30,10 +82,20 @@ export default function KitchenTicket({
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2 print:hidden">
           <h3 className="font-semibold">
             {isAddendum ? 'Ek Sipariş Fişi' : 'Mutfak Fişi'}
+            {nativeAvailable && (
+              <span className="ml-2 text-xs font-normal text-emerald-600">
+                {printed ? '✓ basıldı' : printing ? 'Basılıyor…' : 'iMin yazıcı'}
+              </span>
+            )}
           </h3>
           <div className="flex gap-2">
-            <button onClick={print} className="btn-primary text-sm">
-              <Printer size={14} /> Yazdır
+            <button
+              onClick={print}
+              disabled={printing}
+              className="btn-primary text-sm disabled:opacity-50"
+            >
+              {printed ? <Check size={14} /> : <Printer size={14} />}
+              {printed ? 'Yeniden Bas' : 'Yazdır'}
             </button>
             <button onClick={onClose} className="btn-ghost text-sm">
               <X size={14} /> Kapat
