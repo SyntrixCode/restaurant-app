@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -101,6 +101,32 @@ export default function PosTables() {
   const [dragState, setDragState] = useState(null); // { tableId, x, y, draggingNow }
   const [pendingMerge, setPendingMerge] = useState(null); // { dragged, target }
   const [submitting, setSubmitting] = useState(false);
+  const [scale, setScale] = useState(1);
+  const canvasWrapperRef = useRef(null);
+
+  // Viewport'a göre canvas'ı küçült (iMin Swan 1 Pro 1280x800 gibi tablette taşmasın)
+  useEffect(() => {
+    function updateScale() {
+      if (!canvasWrapperRef.current) return;
+      const rect = canvasWrapperRef.current.getBoundingClientRect();
+      const availableW = rect.width - 16; // küçük marj
+      const availableH = rect.height - 16;
+      if (availableW <= 0 || availableH <= 0) return;
+      const sW = availableW / CANVAS_W;
+      const sH = availableH / CANVAS_H;
+      setScale(Math.min(1, sW, sH));
+    }
+    updateScale();
+    window.addEventListener('resize', updateScale);
+    // İlk render'da layout otursun
+    const t1 = setTimeout(updateScale, 50);
+    const t2 = setTimeout(updateScale, 250);
+    return () => {
+      window.removeEventListener('resize', updateScale);
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, []);
 
   useEffect(() => watchCollection('tables', setTables, orderBy('siraNo', 'asc')), []);
   useEffect(() => watchCollection('tableGroups', setGroups), []);
@@ -238,10 +264,11 @@ export default function PosTables() {
     const tableW = table.w || sizeFor(table.kapasite).w;
     const tableH = table.h || sizeFor(table.kapasite).h;
     let dragged = false;
+    const currentScale = scale || 1; // canvas scaled, mouse delta'yı geri çevir
 
     function onMove(ev) {
-      const dx = ev.clientX - startX;
-      const dy = ev.clientY - startY;
+      const dx = (ev.clientX - startX) / currentScale;
+      const dy = (ev.clientY - startY) / currentScale;
       if (!dragged && Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
       dragged = true;
       const newX = clamp(Math.round(origX + dx), 0, CANVAS_W - tableW);
@@ -386,7 +413,7 @@ export default function PosTables() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-slate-100 p-4">
+      <div ref={canvasWrapperRef} className="flex flex-1 items-start justify-center overflow-hidden bg-slate-100 p-2">
         {tablesInZone.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-400">
             <AlertCircle size={40} />
@@ -394,8 +421,19 @@ export default function PosTables() {
           </div>
         ) : (
           <div
-            className="relative mx-auto rounded-xl border border-slate-200 bg-white shadow-inner"
-            style={{ width: CANVAS_W, height: CANVAS_H }}
+            style={{
+              width: CANVAS_W * scale,
+              height: CANVAS_H * scale,
+            }}
+          >
+          <div
+            className="relative rounded-xl border border-slate-200 bg-white shadow-inner"
+            style={{
+              width: CANVAS_W,
+              height: CANVAS_H,
+              transform: `scale(${scale})`,
+              transformOrigin: 'top left',
+            }}
           >
             {/* Decorations — read-only, rendered first (behind everything) */}
             {decorsInZone.map((d) => (
@@ -474,6 +512,7 @@ export default function PosTables() {
                 />
               );
             })}
+          </div>
           </div>
         )}
       </div>

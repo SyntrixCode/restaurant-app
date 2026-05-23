@@ -132,6 +132,8 @@ function sizeFor(kapasite) {
 }
 
 export default function AdminTables() {
+  const [scale, setScale] = useState(1);
+  const canvasWrapperRef = useRef(null);
   const [tables, setTables] = useState([]);
   const [decorations, setDecorations] = useState([]);
   const [activeOrders, setActiveOrders] = useState([]);
@@ -142,6 +144,28 @@ export default function AdminTables() {
   const [modal, setModal] = useState(null);
   const [editing, setEditing] = useState(null);
   const canvasRef = useRef(null);
+
+  useEffect(() => {
+    function updateScale() {
+      if (!canvasWrapperRef.current) return;
+      const rect = canvasWrapperRef.current.getBoundingClientRect();
+      const availableW = rect.width - 16;
+      const availableH = rect.height - 16;
+      if (availableW <= 0 || availableH <= 0) return;
+      const sW = availableW / CANVAS_W;
+      const sH = availableH / CANVAS_H;
+      setScale(Math.min(1, sW, sH));
+    }
+    updateScale();
+    window.addEventListener('resize', updateScale);
+    const t1 = setTimeout(updateScale, 50);
+    const t2 = setTimeout(updateScale, 250);
+    return () => {
+      window.removeEventListener('resize', updateScale);
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, []);
 
   useEffect(() => watchCollection('tables', setTables, orderBy('siraNo', 'asc')), []);
   useEffect(() => watchCollection('decorations', setDecorations), []);
@@ -196,10 +220,11 @@ export default function AdminTables() {
     const origY = localTablePos[table.id]?.y ?? table.y ?? 0;
     const tableW = table.w || sizeFor(table.kapasite).w;
     const tableH = table.h || sizeFor(table.kapasite).h;
+    const currentScale = scale || 1;
 
     function onMove(ev) {
-      const dx = ev.clientX - startX;
-      const dy = ev.clientY - startY;
+      const dx = (ev.clientX - startX) / currentScale;
+      const dy = (ev.clientY - startY) / currentScale;
       const newX = clamp(Math.round(origX + dx), 0, CANVAS_W - tableW);
       const newY = clamp(Math.round(origY + dy), 0, CANVAS_H - tableH);
       setLocalTablePos((prev) => ({ ...prev, [table.id]: { x: newX, y: newY } }));
@@ -223,10 +248,11 @@ export default function AdminTables() {
     const origY = localDecorPos[decor.id]?.y ?? decor.y ?? 0;
     const decW = decor.w || 100;
     const decH = decor.h || 60;
+    const currentScale = scale || 1;
 
     function onMove(ev) {
-      const dx = ev.clientX - startX;
-      const dy = ev.clientY - startY;
+      const dx = (ev.clientX - startX) / currentScale;
+      const dy = (ev.clientY - startY) / currentScale;
       const newX = clamp(Math.round(origX + dx), 0, CANVAS_W - decW);
       const newY = clamp(Math.round(origY + dy), 0, CANVAS_H - decH);
       setLocalDecorPos((prev) => ({ ...prev, [decor.id]: { x: newX, y: newY } }));
@@ -398,11 +424,25 @@ export default function AdminTables() {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1 overflow-auto bg-slate-100 p-6">
+        <div
+          ref={canvasWrapperRef}
+          className="flex flex-1 items-start justify-center overflow-hidden bg-slate-100 p-2"
+        >
+          <div
+            style={{
+              width: CANVAS_W * scale,
+              height: CANVAS_H * scale,
+            }}
+          >
           <div
             ref={canvasRef}
             className="relative rounded-xl border-2 border-dashed border-slate-300 bg-white shadow-inner"
-            style={{ width: CANVAS_W, height: CANVAS_H }}
+            style={{
+              width: CANVAS_W,
+              height: CANVAS_H,
+              transform: `scale(${scale})`,
+              transformOrigin: 'top left',
+            }}
             onClick={(e) => {
               if (e.target === e.currentTarget) setSelected(null);
             }}
@@ -452,6 +492,7 @@ export default function AdminTables() {
                 })}
               </>
             )}
+          </div>
           </div>
         </div>
 
