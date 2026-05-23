@@ -7,8 +7,6 @@ import {
   AlertCircle,
   Link2,
   Link2Off,
-  Check,
-  X,
   Wine,
   ChefHat,
   DoorOpen,
@@ -100,8 +98,8 @@ export default function PosTables() {
   const [reservePrompt, setReservePrompt] = useState(null); // { masaId, masaAd, defaultKisi }
   const [reserveDetail, setReserveDetail] = useState(null); // {table, reservation}
   const [reservations, setReservations] = useState([]);
-  const [mergeMode, setMergeMode] = useState(false);
-  const [selectedForMerge, setSelectedForMerge] = useState([]);
+  const [dragState, setDragState] = useState(null); // { tableId, x, y, draggingNow }
+  const [pendingMerge, setPendingMerge] = useState(null); // { dragged, target }
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => watchCollection('tables', setTables, orderBy('siraNo', 'asc')), []);
@@ -157,55 +155,139 @@ export default function PosTables() {
   const tablesInZone = tables.filter((t) => (t.zone || 'ic') === zone);
   const decorsInZone = decorations.filter((d) => (d.zone || 'ic') === zone);
 
+  function effectivePosition(t) {
+    if (dragState?.tableId === t.id) {
+      return { x: dragState.x, y: dragState.y };
+    }
+    if (t.grupId) {
+      const g = groupsById[t.grupId];
+      if (g?.positions?.[t.id]) {
+        return { x: g.positions[t.id].x, y: g.positions[t.id].y };
+      }
+    }
+    return { x: t.x ?? 0, y: t.y ?? 0 };
+  }
+
   const counts = {
     bos: tables.filter((t) => t.durum === 'bos').length,
     dolu: tables.filter((t) => t.durum === 'dolu').length,
     rezerve: tables.filter((t) => t.durum === 'rezerve').length,
   };
 
-  const cancelMergeMode = () => {
-    setMergeMode(false);
-    setSelectedForMerge([]);
-  };
+  function rectFor(t, posOverride) {
+    const w = t.w || sizeFor(t.kapasite).w;
+    const h = t.h || sizeFor(t.kapasite).h;
+    const x = posOverride?.x ?? t.x ?? 0;
+    const y = posOverride?.y ?? t.y ?? 0;
+    return { x, y, w, h };
+  }
 
-  const startMergeMode = () => {
-    setSelectedTable(null);
-    setMergeMode(true);
-    setSelectedForMerge([]);
-  };
+  function overlapsRect(a, b) {
+    return !(a.x + a.w < b.x || b.x + b.w < a.x || a.y + a.h < b.y || b.y + b.h < a.y);
+  }
 
-  const toggleMergeSelection = (table) => {
-    if (table.durum !== 'bos') {
-      toast.error(`${table.ad} boş değil, birleştirilemez`);
+  function findMergeTarget(draggedTable, currentPos) {
+    const draggedRect = rectFor(draggedTable, currentPos);
+    let best = null;
+    let bestOverlap = 0;
+    for (const other of tablesInZone) {
+      if (other.id === draggedTable.id) continue;
+      if (other.durum !== 'bos') continue;
+      if (other.grupId) continue;
+      const otherRect = rectFor(other);
+      if (!overlapsRect(draggedRect, otherRect)) continue;
+      // Compute overlap area as proxy for "best target"
+      const ox =
+        Math.min(draggedRect.x + draggedRect.w, otherRect.x + otherRect.w) -
+        Math.max(draggedRect.x, otherRect.x);
+      const oy =
+        Math.min(draggedRect.y + draggedRect.h, otherRect.y + otherRect.h) -
+        Math.max(draggedRect.y, otherRect.y);
+      const area = Math.max(0, ox) * Math.max(0, oy);
+      if (area > bestOverlap) {
+        bestOverlap = area;
+        best = other;
+      }
+    }
+    return best;
+  }
+
+  function computeSnapPosition(target, dragged) {
+    const t = rectFor(target);
+    const dW = dragged.w || sizeFor(dragged.kapasite).w;
+    const dH = dragged.h || sizeFor(dragged.kapasite).h;
+    // Default: place to the right of target
+    return { x: t.x + t.w + 4, y: t.y };
+  }
+
+  function handleTablePointerDown(e, table) {
+    // Sadece boş ve gruplanmamış masalar sürüklenebilir
+    const canDrag = table.durum === 'bos' && !table.grupId;
+    if (!canDrag) {
+      // Drag yok, click davranışı
+      handleTableClick(table);
       return;
     }
-    if (table.grupId) {
-      toast.error(`${table.ad} zaten bir grupta`);
-      return;
-    }
-    setSelectedForMerge((prev) =>
-      prev.find((t) => t.id === table.id)
-        ? prev.filter((t) => t.id !== table.id)
-        : [...prev, table],
-    );
-  };
+    e.preventDefault();
+    e.stopPropagation();
 
-  const confirmMerge = async () => {
-    if (selectedForMerge.length < 2) {
-      toast.error('En az 2 masa seçin');
-      return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const origX = table.x ?? 0;
+    const origY = table.y ?? 0;
+    const tableW = table.w || sizeFor(table.kapasite).w;
+    const tableH = table.h || sizeFor(table.kapasite).h;
+    let dragged = false;
+
+    function onMove(ev) {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      if (!dragged && Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+      dragged = true;
+      const newX = clamp(Math.round(origX + dx), 0, CANVAS_W - tableW);
+      const newY = clamp(Math.round(origY + dy), 0, CANVAS_H - tableH);
+      setDragState({ tableId: table.id, x: newX, y: newY });
     }
+    function onUp() {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      const finalState = dragState;
+      if (!dragged) {
+        setDragState(null);
+        handleTableClick(table);
+        return;
+      }
+      // Check drop position for merge target
+      // We need to read latest dragState — use setDragState callback to get current
+      setDragState((latest) => {
+        if (!latest) return null;
+        const target = findMergeTarget(table, { x: latest.x, y: latest.y });
+        if (target) {
+          setPendingMerge({ dragged: table, target });
+        }
+        return null; // konum kalıcı değil — masa eski yerine snap'lenir
+      });
+    }
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  }
+
+  const confirmPendingMerge = async () => {
+    if (!pendingMerge) return;
+    const { dragged, target } = pendingMerge;
     setSubmitting(true);
     try {
+      const snapPos = computeSnapPosition(target, dragged);
       await createTableGroup({
-        memberTables: selectedForMerge,
-        mainTableId: selectedForMerge[0].id,
+        memberTables: [target, dragged],
+        mainTableId: target.id,
+        positions: { [dragged.id]: snapPos },
       });
-      toast.success(`${selectedForMerge.length} masa birleştirildi`);
-      cancelMergeMode();
+      toast.success(`${target.ad} + ${dragged.ad} birleştirildi`);
+      setPendingMerge(null);
     } catch (err) {
       console.error(err);
-      toast.error(err.message || 'Birleştirme hatası');
+      toast.error(err.message || 'Birleştirme başarısız');
     } finally {
       setSubmitting(false);
     }
@@ -228,10 +310,6 @@ export default function PosTables() {
   };
 
   const handleTableClick = (table) => {
-    if (mergeMode) {
-      toggleMergeSelection(table);
-      return;
-    }
     // Grouped: redirect to main
     if (table.grupId) {
       const group = groupsById[table.grupId];
@@ -267,8 +345,6 @@ export default function PosTables() {
     navigate(`/pos/order/new?masaId=${masaId}&kisi=${kisi}`);
   };
 
-  const mergeKapasite = selectedForMerge.reduce((s, t) => s + (t.kapasite || 0), 0);
-
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2">
@@ -292,11 +368,9 @@ export default function PosTables() {
           })}
         </div>
         <div className="flex shrink-0 items-center gap-3 text-sm">
-          {!mergeMode ? (
-            <button onClick={startMergeMode} className="btn-secondary">
-              <Link2 size={16} /> Birleştir
-            </button>
-          ) : null}
+          <span className="hidden items-center gap-1.5 text-xs text-slate-500 sm:inline-flex">
+            <Link2 size={12} /> Birleştirmek için sürükleyip başkasının üstüne bırak
+          </span>
           <span className="hidden items-center gap-1.5 sm:inline-flex">
             <span className="h-3 w-3 rounded-full bg-emerald-500"></span>
             <strong>{counts.bos}</strong>
@@ -311,39 +385,6 @@ export default function PosTables() {
           </span>
         </div>
       </div>
-
-      {mergeMode && (
-        <div className="flex items-center justify-between gap-3 border-b border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-900">
-          <div>
-            <strong>Birleştirme Modu:</strong> Boş masalara dokunarak seçin.
-            {selectedForMerge.length > 0 && (
-              <span className="ml-2">
-                <strong>{selectedForMerge.length}</strong> masa,{' '}
-                <strong>{mergeKapasite}</strong> kişilik
-                <span className="ml-2 text-xs opacity-80">
-                  ({selectedForMerge.map((t) => t.ad).join(' + ')})
-                </span>
-              </span>
-            )}
-          </div>
-          <div className="flex shrink-0 gap-2">
-            <button
-              onClick={cancelMergeMode}
-              disabled={submitting}
-              className="btn-secondary"
-            >
-              <X size={14} /> İptal
-            </button>
-            <button
-              onClick={confirmMerge}
-              disabled={submitting || selectedForMerge.length < 2}
-              className="btn-primary disabled:opacity-50"
-            >
-              <Check size={14} /> Birleştir ({selectedForMerge.length})
-            </button>
-          </div>
-        </div>
-      )}
 
       <div className="flex-1 overflow-auto bg-slate-100 p-4">
         {tablesInZone.length === 0 ? (
@@ -372,22 +413,15 @@ export default function PosTables() {
                 );
                 if (members.length === 0) return null;
                 const pad = 8;
-                const minX =
-                  Math.min(...members.map((t) => t.x ?? 0)) - pad;
-                const minY =
-                  Math.min(...members.map((t) => t.y ?? 0)) - pad;
-                const maxX =
-                  Math.max(
-                    ...members.map(
-                      (t) => (t.x ?? 0) + (t.w || sizeFor(t.kapasite).w),
-                    ),
-                  ) + pad;
-                const maxY =
-                  Math.max(
-                    ...members.map(
-                      (t) => (t.y ?? 0) + (t.h || sizeFor(t.kapasite).h),
-                    ),
-                  ) + pad;
+                const positions = members.map((t) => ({
+                  ...effectivePosition(t),
+                  w: t.w || sizeFor(t.kapasite).w,
+                  h: t.h || sizeFor(t.kapasite).h,
+                }));
+                const minX = Math.min(...positions.map((p) => p.x)) - pad;
+                const minY = Math.min(...positions.map((p) => p.y)) - pad;
+                const maxX = Math.max(...positions.map((p) => p.x + p.w)) + pad;
+                const maxY = Math.max(...positions.map((p) => p.y + p.h)) + pad;
                 const hasOrder = !!ordersByTable[g.mainTableId];
                 return (
                   <div
@@ -423,17 +457,20 @@ export default function PosTables() {
               const isMain = group && group.mainTableId === t.id;
               const mainOrder = group ? ordersByTable[group.mainTableId] : null;
               const reservation = reservationsByTable[t.id];
+              const pos = effectivePosition(t);
+              const isDragging = dragState?.tableId === t.id;
               return (
                 <CanvasTable
                   key={t.id}
                   table={t}
+                  x={pos.x}
+                  y={pos.y}
                   order={ordersByTable[t.id] || (group ? mainOrder : null)}
                   group={group}
                   isMain={isMain}
                   reservation={reservation}
-                  selectedForMerge={!!selectedForMerge.find((s) => s.id === t.id)}
-                  mergeMode={mergeMode}
-                  onClick={() => handleTableClick(t)}
+                  isDragging={isDragging}
+                  onPointerDown={(e) => handleTablePointerDown(e, t)}
                 />
               );
             })}
@@ -481,6 +518,15 @@ export default function PosTables() {
         }}
       />
 
+      <ConfirmMergeModal
+        open={!!pendingMerge}
+        dragged={pendingMerge?.dragged}
+        target={pendingMerge?.target}
+        submitting={submitting}
+        onCancel={() => setPendingMerge(null)}
+        onConfirm={confirmPendingMerge}
+      />
+
       <ReserveDetailModal
         open={!!reserveDetail}
         table={reserveDetail?.table}
@@ -520,18 +566,17 @@ export default function PosTables() {
 
 function CanvasTable({
   table,
+  x,
+  y,
   order,
   group,
   isMain,
   reservation,
-  selectedForMerge,
-  mergeMode,
-  onClick,
+  isDragging,
+  onPointerDown,
 }) {
   const w = table.w || sizeFor(table.kapasite).w;
   const h = table.h || sizeFor(table.kapasite).h;
-  const x = table.x ?? 0;
-  const y = table.y ?? 0;
   // effective status for grouped tables: mirror group state
   const effectiveDurum = group ? (order ? 'dolu' : 'bos') : table.durum;
   const colors = {
@@ -540,15 +585,16 @@ function CanvasTable({
     rezerve: 'bg-amber-500 hover:bg-amber-600 border-amber-700',
   };
   const mins = order?.olusturmaZamani ? minutesSince(order.olusturmaZamani) : null;
-  const isMergeCandidate = mergeMode && effectiveDurum === 'bos' && !table.grupId;
+  // Only boş + non-grouped tables can be dragged
+  const canDrag = effectiveDurum === 'bos' && !table.grupId;
 
   return (
-    <button
-      onClick={onClick}
+    <div
+      onPointerDown={onPointerDown}
       className={`absolute flex flex-col items-center justify-between rounded-xl border-2 p-2 text-white shadow-md transition active:scale-95 ${colors[effectiveDurum] || colors.bos} ${
-        selectedForMerge ? 'ring-4 ring-blue-400 ring-offset-2' : ''
-      } ${mergeMode && !isMergeCandidate ? 'opacity-50' : ''}`}
-      style={{ left: x, top: y, width: w, height: h }}
+        isDragging ? 'z-30 cursor-grabbing shadow-2xl ring-4 ring-blue-400 ring-offset-2' : canDrag ? 'cursor-grab' : 'cursor-pointer'
+      } select-none`}
+      style={{ left: x, top: y, width: w, height: h, touchAction: 'none' }}
     >
       <div className="flex w-full justify-between text-[10px]">
         <span className="flex items-center gap-0.5">
@@ -569,17 +615,49 @@ function CanvasTable({
         )}
       </div>
       <span className="w-full truncate text-[10px] opacity-90">
-        {selectedForMerge
-          ? '✓ Seçildi'
-          : order
-            ? order.garsonAd
-            : effectiveDurum === 'rezerve'
-              ? reservation
-                ? `${reservation.musteriAd.split(' ')[0]} · ${reservation.saat}`
-                : 'Rezerve'
-              : 'Boş'}
+        {order
+          ? order.garsonAd
+          : effectiveDurum === 'rezerve'
+            ? reservation
+              ? `${reservation.musteriAd.split(' ')[0]} · ${reservation.saat}`
+              : 'Rezerve'
+            : 'Boş'}
       </span>
-    </button>
+    </div>
+  );
+}
+
+function ConfirmMergeModal({ open, dragged, target, submitting, onCancel, onConfirm }) {
+  if (!open || !dragged || !target) return null;
+  const totalKapasite = (dragged.kapasite || 0) + (target.kapasite || 0);
+  return (
+    <Modal
+      open={open}
+      onClose={onCancel}
+      title="Masaları Birleştir"
+      size="sm"
+      footer={
+        <>
+          <button onClick={onCancel} className="btn-secondary" disabled={submitting}>
+            İptal
+          </button>
+          <button onClick={onConfirm} className="btn-primary" disabled={submitting}>
+            <Link2 size={14} /> Birleştir
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3 text-sm">
+        <p className="text-slate-700">
+          <strong>{target.ad}</strong> ile <strong>{dragged.ad}</strong> birleştirilsin mi?
+        </p>
+        <div className="rounded-lg bg-blue-50 p-3 text-xs text-blue-900">
+          <p>• Yeni kapasite: <strong>{totalKapasite} kişilik</strong></p>
+          <p>• Ana masa: <strong>{target.ad}</strong> (sipariş bu masaya açılır)</p>
+          <p>• <strong>Ödeme alındığında</strong> birleştirme otomatik kalkar ve masalar eski yerlerine döner.</p>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

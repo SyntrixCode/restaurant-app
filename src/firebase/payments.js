@@ -74,9 +74,27 @@ export async function recordPayment({
         odemeYontemleri: payments.map((p) => p.yontem),
       });
 
+      let groupToDissolve = null;
       if (order.masaId) {
         const tableRef = doc(db, 'tables', order.masaId);
+        const tableSnap = await txn.get(tableRef);
+        if (tableSnap.exists() && tableSnap.data().grupId) {
+          groupToDissolve = tableSnap.data().grupId;
+        }
         txn.update(tableRef, { durum: 'bos' });
+      }
+
+      // Auto-dissolve group: ödeme alındığında birleştirme otomatik kaldırılır
+      if (groupToDissolve) {
+        const groupRef = doc(db, 'tableGroups', groupToDissolve);
+        const groupSnap = await txn.get(groupRef);
+        if (groupSnap.exists()) {
+          const memberIds = groupSnap.data().memberIds || [];
+          for (const mid of memberIds) {
+            txn.update(doc(db, 'tables', mid), { grupId: null });
+          }
+          txn.delete(groupRef);
+        }
       }
     }
 

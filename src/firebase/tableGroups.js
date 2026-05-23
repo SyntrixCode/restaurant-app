@@ -6,7 +6,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './config';
 
-export async function createTableGroup({ memberTables, mainTableId }) {
+export async function createTableGroup({ memberTables, mainTableId, positions = null }) {
   if (!memberTables || memberTables.length < 2) {
     throw new Error('Birleştirmek için en az 2 masa seçin');
   }
@@ -33,6 +33,7 @@ export async function createTableGroup({ memberTables, mainTableId }) {
       mainTableAd: main.ad,
       kapasite: totalKapasite,
       memberAdlari: memberTables.map((t) => t.ad),
+      positions: positions || null,
       createdAt: serverTimestamp(),
     });
 
@@ -44,7 +45,7 @@ export async function createTableGroup({ memberTables, mainTableId }) {
   });
 }
 
-export async function dissolveTableGroup({ groupId }) {
+export async function dissolveTableGroup({ groupId, force = false }) {
   const groupRef = doc(db, 'tableGroups', groupId);
 
   return runTransaction(db, async (txn) => {
@@ -57,12 +58,14 @@ export async function dissolveTableGroup({ groupId }) {
     const tableSnaps = await Promise.all(tableRefs.map((r) => txn.get(r)));
 
     const mainTableId = group.mainTableId;
-    for (let i = 0; i < tableSnaps.length; i++) {
-      const s = tableSnaps[i];
-      if (!s.exists()) continue;
-      const data = s.data();
-      if (s.id === mainTableId && data.durum === 'dolu') {
-        throw new Error('Ana masada aktif sipariş var, önce ödemeyi al');
+    if (!force) {
+      for (let i = 0; i < tableSnaps.length; i++) {
+        const s = tableSnaps[i];
+        if (!s.exists()) continue;
+        const data = s.data();
+        if (s.id === mainTableId && data.durum === 'dolu') {
+          throw new Error('Ana masada aktif sipariş var, önce ödemeyi al');
+        }
       }
     }
 
