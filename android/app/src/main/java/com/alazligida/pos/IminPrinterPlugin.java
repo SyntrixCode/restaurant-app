@@ -9,45 +9,57 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
-import com.imin.printerlib.IminPrintUtils;
+import com.imin.printer.PrinterHelper;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
- * iMin termal yazıcı için Capacitor plugin.
+ * iMin termal yazıcı (PrinterHelper, com.imin.printer.*) için Capacitor plugin.
  *
- * JS tarafından çağrılan API:
- *   IminPrinter.isAvailable() — yazıcı başlatıldı mı
- *   IminPrinter.printReceipt({ lines, cut, feedLines }) — fiş bas
+ * iMin cihazlarında (Swan 1/Pro, M2, Falcon) OS seviyesinde bir PrinterService
+ * vardır. PrinterHelper bu service'e bind olur, başarısız olursa initialized=false.
+ *
+ * JS API:
+ *   IminPrinter.isAvailable()
+ *   IminPrinter.printReceipt({ lines, cut, feedLines })
  *
  * `lines` formatı:
- *   { type: 'text', text: '...', align?: 'left'|'center'|'right', size?: 28, bold?: false, italic?: false }
- *   { type: 'divider', char?: '-' }   // 32 karakter genişlikte ayırıcı
- *   { type: 'feed', lines?: 1 }       // boş satır
- *   { type: 'qr', data: '...', align?: 'center' }
- *
- * Cihazda iMin SDK yoksa (örn. tarayıcı/normal Android) plugin available=false döner,
- * JS tarafı `window.print()` fallback'ine düşer.
+ *   { type: 'text', text, align?, size?, bold?, italic? }
+ *   { type: 'divider', char? }
+ *   { type: 'feed', lines? }
+ *   { type: 'qr', data, align? }
  */
 @CapacitorPlugin(name = "IminPrinter")
 public class IminPrinterPlugin extends Plugin {
 
-    private IminPrintUtils printer;
+    private static final int LINE_WIDTH = 32;
+    private PrinterHelper helper;
     private boolean initialized = false;
     private String initError = null;
 
     @Override
     public void load() {
         try {
-            Context context = getContext();
-            printer = IminPrintUtils.getInstance(context);
-            // SPI = Swan 1 / Swan 1 Pro built-in printer
-            printer.initPrinter(IminPrintUtils.PrintConnectType.SPI);
-            initialized = true;
+            Context appCtx = getContext().getApplicationContext();
+            helper = PrinterHelper.getInstance();
+            boolean ok = helper.initPrinterService(appCtx);
+            initialized = ok;
+            if (!ok) initError = "initPrinterService returned false (cihazda iMin servisi yok?)";
         } catch (Throwable t) {
             initialized = false;
             initError = t.getClass().getSimpleName() + ": " + t.getMessage();
+        }
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        try {
+            if (initialized && helper != null) {
+                helper.deInitPrinterService(getContext().getApplicationContext());
+            }
+        } catch (Throwable ignored) {
+            // ignore
         }
     }
 
@@ -62,7 +74,7 @@ public class IminPrinterPlugin extends Plugin {
     @PluginMethod
     public void printReceipt(PluginCall call) {
         if (!initialized) {
-            call.reject("Yazıcı başlatılamadı: " + (initError != null ? initError : "bilinmeyen"));
+            call.reject("Yazıcı kullanılamıyor: " + (initError != null ? initError : "bilinmeyen"));
             return;
         }
         JSArray lines = call.getArray("lines");
@@ -74,80 +86,91 @@ public class IminPrinterPlugin extends Plugin {
         Integer feedLines = call.getInt("feedLines", 3);
 
         try {
+            // Buffer mode — komutları biriktir, sonunda tek seferde flush
+            helper.enterPrinterBuffer(true);
+
             for (int i = 0; i < lines.length(); i++) {
                 JSONObject line = lines.getJSONObject(i);
-                String type = line.optString("type", "text");
-                renderLine(type, line);
+                renderLine(line);
             }
 
-            // Sondaki boşluk (kağıt kesilirken metnin görünür kalması için)
-            StringBuilder pad = new StringBuilder();
-            for (int j = 0; j < feedLines; j++) pad.append("\n");
-            printer.printText(pad.toString());
+            // Son boşluk satırları (kağıt kesilince yazı görünür kalsın)
+            for (int j = 0; j < feedLines; j++) {
+                helper.printAndLineFeed();
+            }
 
             // Kağıdı kes (donanım desteklemiyorsa sessizce yutulur)
             if (Boolean.TRUE.equals(cut)) {
                 try {
-                    printer.partialCut();
-                } catch (Throwable ignored) {
-                    // Bazı modeller cutter'sız; problem değil
-                }
+                    helper.partialCut();
+                } catch (Throwable ignored) {}
             }
 
+            // Buffer'ı flush et + çıkış
+            helper.commitPrinterBuffer();
+            helper.exitPrinterBuffer(true);
+
             call.resolve();
-        } catch (JSONException e) {
-            call.reject("Fiş içeriği hatalı: " + e.getMessage());
         } catch (Throwable t) {
+            try {
+                helper.exitPrinterBuffer(false);
+            } catch (Throwable ignored) {}
             call.reject("Yazdırma hatası: " + t.getMessage());
         }
     }
 
-    private void renderLine(String type, JSONObject line) throws JSONException {
+    private void renderLine(JSONObject line) throws JSONException {
+        String type = line.optString("type", "text");
         switch (type) {
             case "text": {
-                printer.setAlignment(parseAlign(line.optString("align", "left")));
-                printer.setTextSize(line.optInt("size", 28));
-                int style = 0;
-                if (line.optBoolean("bold", false)) style += 1;
-                if (line.optBoolean("italic", false)) style += 2;
-                printer.setTextStyle(style);
+                int align = parseAlign(line.optString("align", "left"));
+                int size = line.optInt("size", 28);
+                boolean bold = line.optBoolean("bold", false);
+                boolean italic = line.optBoolean("italic", false);
                 String text = line.optString("text", "");
-                printer.printText(text + "\n");
+                if (!text.endsWith("\n")) text = text + "\n";
+
+                // Bitmap text — Türkçe karakter ve özel font desteği için
+                helper.setTextBitmapSize(size);
+                helper.setTextBitmapStyle(boldItalicStyle(bold, italic));
+                helper.printTextBitmapWithAli(text, align, null);
                 break;
             }
             case "divider": {
                 String ch = line.optString("char", "-");
-                printer.setAlignment(1);
-                printer.setTextSize(28);
-                printer.setTextStyle(0);
                 StringBuilder sb = new StringBuilder();
-                for (int i = 0; i < 32; i++) sb.append(ch);
-                printer.printText(sb.toString() + "\n");
+                for (int i = 0; i < LINE_WIDTH; i++) sb.append(ch);
+                sb.append("\n");
+                helper.setTextBitmapSize(28);
+                helper.setTextBitmapStyle(0);
+                helper.printTextBitmapWithAli(sb.toString(), 1, null);
                 break;
             }
             case "feed": {
                 int n = line.optInt("lines", 1);
-                StringBuilder sb = new StringBuilder();
-                for (int j = 0; j < n; j++) sb.append("\n");
-                printer.printText(sb.toString());
+                for (int j = 0; j < n; j++) helper.printAndLineFeed();
                 break;
             }
             case "qr": {
                 String data = line.optString("data", "");
                 if (data.isEmpty()) return;
-                try {
-                    printer.setAlignment(parseAlign(line.optString("align", "center")));
-                    // SDK'da imza: printQrCode(String) ya da (String, int alignment)
-                    printer.printQrCode(data);
-                } catch (Throwable t) {
-                    // QR desteklenmezse geç
-                }
+                int align = parseAlign(line.optString("align", "center"));
+                int qrSize = line.optInt("size", 6); // 1-10, default 6
+                helper.setQrCodeSize(qrSize);
+                helper.printQrCodeWithAlign(data, align, null);
                 break;
             }
             default:
-                // Bilinmeyen tipi yoksay
+                // Bilinmeyen tip — yoksay
                 break;
         }
+    }
+
+    private int boldItalicStyle(boolean bold, boolean italic) {
+        if (bold && italic) return 3;
+        if (bold) return 1;
+        if (italic) return 2;
+        return 0;
     }
 
     private int parseAlign(String s) {
