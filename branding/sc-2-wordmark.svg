@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 240">
+  <!-- transparent bg, sade wordmark -->
+
+  <g transform="translate(0, 165)">
+    <!-- syntrix (dark) -->
+    <text
+      x="0" y="0"
+      font-family="'Inter', 'SF Pro', system-ui, sans-serif"
+      font-weight="800"
+      font-size="170"
+      fill="#0f172a"
+      letter-spacing="-4">syntrix</text>
+
+    <!-- <Code/> tag (cyan accent) -->
+    <text
+      x="535" y="0"
+      font-family="'JetBrains Mono', 'Fira Code', 'Courier New', monospace"
+      font-weight="700"
+      font-size="160"
+      fill="#06b6d4">&lt;Code/&gt;</text>
+  </g>
+
+  <!-- Slogan altta -->
+  <text
+    x="450" y="225"
+    text-anchor="middle"
+    font-family="'Inter', 'SF Pro', system-ui, sans-serif"
+    font-weight="500"
+    font-size="32"
+    fill="#64748b"
+    letter-spacing="6">SOFTWARE STUDIO</text>
+</svg>

@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <title>SyntrixCode + SyntrixPos — Branding</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        background: #f1f5f9;
+        color: #0f172a;
+        padding: 40px 20px;
+        min-height: 100vh;
+      }
+      .container { max-width: 1400px; margin: 0 auto; }
+      h1 {
+        font-size: 32px;
+        font-weight: 800;
+        margin-bottom: 8px;
+      }
+      h2 {
+        font-size: 22px;
+        font-weight: 700;
+        margin-top: 60px;
+        margin-bottom: 8px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #e2e8f0;
+      }
+      .subtitle {
+        color: #64748b;
+        margin-bottom: 24px;
+      }
+      .grid-pos {
+        display: grid;
+        grid-template-columns: minmax(280px, 320px);
+        gap: 24px;
+      }
+      .grid-sc {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 32px;
+      }
+      .card {
+        background: white;
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+        border: 2px solid transparent;
+      }
+      .card.selected {
+        border-color: #10b981;
+      }
+      .card.selected::before {
+        content: '✓ SEÇİLDİ';
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        background: #10b981;
+        color: white;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 1px;
+      }
+      .card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+      }
+      .label {
+        font-size: 11px;
+        font-weight: 600;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+      .title {
+        font-size: 22px;
+        font-weight: 700;
+      }
+      .desc {
+        font-size: 13px;
+        color: #64748b;
+        line-height: 1.5;
+        margin-top: 6px;
+      }
+      .logo-display {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .display-frame {
+        padding: 40px 24px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 140px;
+      }
+      .display-frame img {
+        max-width: 100%;
+        max-height: 80px;
+        height: auto;
+      }
+      .display-light {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+      }
+      .display-dark {
+        background: #0f172a;
+      }
+      .display-label {
+        font-size: 10px;
+        color: #94a3b8;
+        margin-top: 6px;
+        text-align: center;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      .small-sizes {
+        display: flex;
+        gap: 12px;
+        align-items: end;
+        padding-top: 16px;
+        border-top: 1px solid #e2e8f0;
+        margin-top: 12px;
+      }
+      .small-sizes img { background: white; padding: 6px; border-radius: 4px; border: 1px solid #e2e8f0; }
+      .pos-icon-display {
+        background: white;
+        padding: 0;
+        overflow: hidden;
+      }
+      .pos-icon-display img {
+        display: block;
+        width: 100%;
+        aspect-ratio: 1;
+        border-radius: 21%;
+      }
+
+      .instructions {
+        margin-top: 40px;
+        padding: 20px;
+        background: #fef3c7;
+        border-left: 4px solid #f59e0b;
+        border-radius: 8px;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+      .instructions strong { color: #92400e; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>SyntrixCode &amp; SyntrixPos — Branding</h1>
+      <p class="subtitle">Firma logosu + Ürün logosu — iki ayrı kimlik</p>
+
+      <!-- ═══════════════════ SyntrixPos (PRODUCT) ═══════════════════ -->
+      <h2>📱 SyntrixPos (Ürün) — ✓ Seçildi</h2>
+      <p class="subtitle">Restoranın tabletteki uygulama ikonu olarak görünür.</p>
+
+      <div class="grid-pos">
+        <div class="card selected" style="position:relative;">
+          <div class="pos-icon-display">
+            <img src="v5-kirmizi.svg" alt="SyntrixPos" />
+          </div>
+          <div class="card-header" style="margin-top:16px;">
+            <div>
+              <p class="label">SyntrixPos</p>
+              <h3 class="title">Kırmızı (Crimson)</h3>
+            </div>
+          </div>
+          <div class="small-sizes">
+            <div><img src="v5-kirmizi.svg" width="48" height="48" /><div class="display-label">48px</div></div>
+            <div><img src="v5-kirmizi.svg" width="24" height="24" /><div class="display-label">24px</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════ SyntrixCode (COMPANY) ═══════════════════ -->
+      <h2>💻 SyntrixCode (Firma) — 3 alternatif (free-form, çerçevesiz)</h2>
+      <p class="subtitle">
+        Firma logosu — beyaz/koyu zeminde nasıl göründüğünü gör.
+        Beğendiğine karar verince: <strong>"sc-1 seç"</strong> de.
+      </p>
+
+      <div class="grid-sc">
+
+        <!-- SC-1 -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <p class="label">sc-1</p>
+              <h3 class="title">{S} + syntrixCode</h3>
+              <p class="desc">Süslü parantez monogram + wordmark. Tech feel + okunabilir kombo. Hem kompakt hem kurumsal.</p>
+            </div>
+          </div>
+          <div class="logo-display">
+            <div>
+              <div class="display-frame display-light">
+                <img src="sc-1-bracket.svg" alt="sc-1 light" />
+              </div>
+              <div class="display-label">Beyaz Zemin</div>
+            </div>
+            <div>
+              <div class="display-frame display-dark">
+                <img src="sc-1-bracket.svg" alt="sc-1 dark" />
+              </div>
+              <div class="display-label">Koyu Zemin</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SC-2 -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <p class="label">sc-2</p>
+              <h3 class="title">syntrix&lt;Code/&gt; Wordmark</h3>
+              <p class="desc">Pür wordmark — sade ve şık. "&lt;Code/&gt;" tag aksesuarı + "SOFTWARE STUDIO" slogan altta. Web header / fatura için en iyisi.</p>
+            </div>
+          </div>
+          <div class="logo-display">
+            <div>
+              <div class="display-frame display-light">
+                <img src="sc-2-wordmark.svg" alt="sc-2 light" />
+              </div>
+              <div class="display-label">Beyaz Zemin</div>
+            </div>
+            <div>
+              <div class="display-frame display-dark">
+                <img src="sc-2-wordmark.svg" alt="sc-2 dark" />
+              </div>
+              <div class="display-label">Koyu Zemin (Karanlık)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SC-3 -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <p class="label">sc-3</p>
+              <h3 class="title">S/&gt; Terminal Mark</h3>
+              <p class="desc">"S/&gt;" mark + cursor + syntrixCode wordmark + "software · solutions" mono slogan. Yazılımcı/dev kimliği güçlü.</p>
+            </div>
+          </div>
+          <div class="logo-display">
+            <div>
+              <div class="display-frame display-light">
+                <img src="sc-3-cursor.svg" alt="sc-3 light" />
+              </div>
+              <div class="display-label">Beyaz Zemin</div>
+            </div>
+            <div>
+              <div class="display-frame display-dark">
+                <img src="sc-3-cursor.svg" alt="sc-3 dark" />
+              </div>
+              <div class="display-label">Koyu Zemin</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="instructions">
+        <strong>📋 Önemli:</strong> Koyu zeminde logoların görünmüyor olabilir
+        çünkü tasarımdaki harf rengi koyu (#0f172a). Eğer koyu zemin kullanımı
+        önceliklisinse "<strong>renkleri koyu zemine de çalışacak şekilde ayarla</strong>"
+        de — beyaz/açık renklere çeviririm.<br /><br />
+
+        <strong>Beğendiğine karar verince:</strong><br />
+        <strong>"sc-1 seç"</strong> / <strong>"sc-2 seç"</strong> / <strong>"sc-3 seç"</strong>
+      </div>
+    </div>
+  </body>
+</html>

@@ -19,9 +19,11 @@ export default function PosLayout() {
     <div className="flex h-full flex-col bg-slate-100">
       <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
         <div className="flex items-center gap-4">
-          <h1 className="text-lg font-bold text-slate-900">
-            {settings.restoranAd || 'Restoran POS'}
-          </h1>
+          <img
+            src="/branding/alazli-logo.svg"
+            alt={settings.restoranAd || 'Alazlı Konya Mutfağı'}
+            className="h-[3.75rem] w-auto"
+          />
           <span className="text-sm text-slate-500">
             {profile?.ad} <span className="font-medium text-blue-600">({rol})</span>
           </span>

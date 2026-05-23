@@ -65,11 +65,14 @@ export default function AdminLogin() {
     <div className="flex h-full items-center justify-center bg-slate-100 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
         <div className="mb-6 flex flex-col items-center">
-          <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-blue-100">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100">
             <ShieldCheck className="text-blue-600" size={28} />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Admin Girişi</h1>
-          <p className="text-sm text-slate-500">Yönetim panelinize hoş geldiniz</p>
+          <h1 className="mt-4 text-3xl font-extrabold tracking-wide text-slate-900">
+            SyntrixPos
+          </h1>
+          <h2 className="mt-4 text-2xl font-bold text-slate-900">Admin Girişi</h2>
+          <p className="mt-1 text-sm text-slate-500">Yönetim panelinize hoş geldiniz</p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

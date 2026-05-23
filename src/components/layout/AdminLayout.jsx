@@ -67,9 +67,11 @@ export default function AdminLayout() {
       <aside className="flex w-64 flex-col border-r border-slate-200 bg-white">
         <div className="border-b border-slate-200 px-5 py-4">
           <p className="text-xs uppercase tracking-wide text-slate-400">Yönetim Paneli</p>
-          <h1 className="truncate text-lg font-bold text-slate-900">
-            {settings.restoranAd || 'Restoran POS'}
-          </h1>
+          <img
+            src="/branding/alazli-logo.svg"
+            alt={settings.restoranAd || 'Alazlı Konya Mutfağı'}
+            className="mt-1 h-[4.5rem] w-auto"
+          />
         </div>
         <nav className="flex-1 overflow-y-auto p-3">
           {NAV.map(({ to, label, icon: Icon }) => (

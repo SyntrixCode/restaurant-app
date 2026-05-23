@@ -71,9 +71,11 @@ export default function PosLogin() {
 
   return (
     <div className="flex h-full flex-col items-center justify-center bg-slate-900 p-4 text-white">
-      <div className="mb-6 text-center">
-        <h1 className="text-3xl font-bold">Restoran POS</h1>
-        <p className="mt-1 text-slate-400">Kodunuzu Girin</p>
+      <div className="mb-6 flex flex-col items-center text-center">
+        <h1 className="text-5xl font-extrabold tracking-wide text-slate-100">
+          SyntrixPos
+        </h1>
+        <p className="mt-2 text-slate-400">Kodunuzu Girin</p>
       </div>
 
       <div className={`mb-6 flex gap-3 ${shake ? 'animate-pulse' : ''}`}>

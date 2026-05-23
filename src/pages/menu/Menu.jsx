@@ -41,9 +41,13 @@ export default function Menu() {
   return (
     <div className="min-h-full bg-slate-50">
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <div className="mx-auto max-w-2xl">
-          <h1 className="text-xl font-bold text-slate-900">{settings.restoranAd || 'Restoran'}</h1>
-          {masa && <p className="text-sm text-slate-500">{masa.ad}</p>}
+        <div className="mx-auto flex max-w-2xl items-center gap-3">
+          <img
+            src="/branding/alazli-logo.svg"
+            alt={settings.restoranAd || 'Alazlı Konya Mutfağı'}
+            className="h-[3.75rem] w-auto"
+          />
+          {masa && <p className="ml-auto text-sm text-slate-500">{masa.ad}</p>}
         </div>
       </header>
 

@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 260">
+  <!-- transparent bg, free-form S/> mark + wordmark -->
+
+  <g transform="translate(20, 190)">
+    <!-- S (büyük, koyu) -->
+    <text
+      x="0" y="0"
+      font-family="'JetBrains Mono', 'Fira Code', 'Courier New', monospace"
+      font-weight="800"
+      font-size="240"
+      fill="#0f172a">S</text>
+
+    <!-- /> closing tag (cyan) -->
+    <text
+      x="170" y="0"
+      font-family="'JetBrains Mono', 'Fira Code', 'Courier New', monospace"
+      font-weight="800"
+      font-size="200"
+      fill="#06b6d4">/&gt;</text>
+
+    <!-- Blink cursor accent -->
+    <rect x="380" y="-145" width="10" height="160" fill="#06b6d4" opacity="0.9"/>
+  </g>
+
+  <!-- "syntrixCode" wordmark sağ tarafta -->
+  <text
+    x="450" y="130"
+    font-family="'Inter', 'SF Pro', system-ui, sans-serif"
+    font-weight="800"
+    font-size="76"
+    fill="#0f172a"
+    letter-spacing="-2">syntrixCode</text>
+
+  <!-- Slogan -->
+  <text
+    x="450" y="190"
+    font-family="'JetBrains Mono', 'Fira Code', monospace"
+    font-weight="500"
+    font-size="30"
+    fill="#64748b"
+    letter-spacing="2">software · solutions</text>
+</svg>

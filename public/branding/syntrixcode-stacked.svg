@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" role="img" aria-label="{S} syntrixCode">
+  <text
+    x="160"
+    y="130"
+    text-anchor="middle"
+    font-family="'JetBrains Mono','Fira Code','Consolas',monospace"
+    font-size="130"
+    font-weight="700"
+  >
+    <tspan fill="#06b6d4">{</tspan><tspan fill="#e2e8f0" dx="6">S</tspan><tspan fill="#06b6d4" dx="6">}</tspan>
+  </text>
+  <text
+    x="160"
+    y="200"
+    text-anchor="middle"
+    font-family="'Inter','Segoe UI',Arial,sans-serif"
+    font-size="44"
+    font-weight="600"
+    letter-spacing="2"
+  >
+    <tspan fill="#e2e8f0">syntrix</tspan><tspan fill="#06b6d4" font-family="'JetBrains Mono','Consolas',monospace" font-weight="700">Code</tspan>
+  </text>
+</svg>
