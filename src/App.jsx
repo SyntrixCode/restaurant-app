@@ -26,6 +26,9 @@ import AdminPackages from './pages/admin/Packages';
 import AdminStock from './pages/admin/Stock';
 import AdminSuppliers from './pages/admin/Suppliers';
 import AdminFinance from './pages/admin/Finance';
+import AdminInventory from './pages/admin/Inventory';
+import AdminIngredients from './pages/admin/Ingredients';
+import AdminRecipes from './pages/admin/Recipes';
 import AdminPlaceholder from './pages/admin/Placeholder';
 
 import PosLogin from './pages/pos/Login';
@@ -83,6 +86,9 @@ export default function App() {
         <Route path="stock" element={<AdminStock />} />
         <Route path="suppliers" element={<AdminSuppliers />} />
         <Route path="finance" element={<AdminFinance />} />
+        <Route path="inventory" element={<AdminInventory />} />
+        <Route path="ingredients" element={<AdminIngredients />} />
+        <Route path="recipes" element={<AdminRecipes />} />
         <Route path="campaigns" element={<AdminCampaigns />} />
         <Route path="coupons" element={<AdminCoupons />} />
         <Route path="packages" element={<AdminPackages />} />

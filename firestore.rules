@@ -131,5 +131,24 @@ service cloud.firestore {
       allow read: if isAdmin() || isKasiyer();
       allow write: if isAdmin();
     }
+
+    match /ingredients/{id} {
+      allow read: if isStaff();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+                    || (isStaff()
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['stok', 'updatedAt']));
+    }
+
+    match /recipes/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    match /inventoryCounts/{id} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
   }
 }

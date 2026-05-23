@@ -33,6 +33,44 @@ export async function createOrder({
       items.map((it) => txn.get(doc(db, 'products', it.productId))),
     );
 
+    // Reçete kontrolü: ürünlerin reçetesi varsa malzeme stoğunu da hesapla
+    const recipeSnapshots = await Promise.all(
+      items.map((it) => txn.get(doc(db, 'recipes', it.productId))),
+    );
+    const ingredientIds = new Set();
+    recipeSnapshots.forEach((rs) => {
+      if (rs.exists()) {
+        (rs.data().items || []).forEach((r) => r.ingredientId && ingredientIds.add(r.ingredientId));
+      }
+    });
+    const ingredientRefs = [...ingredientIds].map((id) => doc(db, 'ingredients', id));
+    const ingredientSnapshots = await Promise.all(ingredientRefs.map((r) => txn.get(r)));
+    const ingredientById = {};
+    ingredientSnapshots.forEach((s, idx) => {
+      if (s.exists()) ingredientById[ingredientRefs[idx].id] = { ref: s.ref, data: s.data() };
+    });
+
+    // Reçeteden gerekli toplam malzeme miktarlarını topla
+    const ingredientDeductions = {}; // { ingredientId: toplamMiktar }
+    items.forEach((it, idx) => {
+      const rs = recipeSnapshots[idx];
+      if (!rs.exists()) return;
+      (rs.data().items || []).forEach((r) => {
+        const total = (r.miktar || 0) * (it.adet || 0);
+        ingredientDeductions[r.ingredientId] = (ingredientDeductions[r.ingredientId] || 0) + total;
+      });
+    });
+
+    // Malzeme stok yeterli mi
+    for (const [id, total] of Object.entries(ingredientDeductions)) {
+      const info = ingredientById[id];
+      if (!info) continue; // silinmiş malzeme — sessizce geç
+      const stok = Number(info.data.stok || 0);
+      if (stok < total) {
+        throw new Error(`Malzeme yetersiz: ${info.data.ad} (gereken ${total}, mevcut ${stok})`);
+      }
+    }
+
     const stockUpdates = [];
     const enrichedItems = items.map((it, idx) => {
       const snap = productSnapshots[idx];
@@ -109,6 +147,15 @@ export async function createOrder({
         zaman: serverTimestamp(),
         aciklama: `Sipariş #${orderRef.id.slice(0, 6)}`,
       });
+    }
+
+    // Reçeteli ürünler için malzeme stok düşümü
+    for (const [id, total] of Object.entries(ingredientDeductions)) {
+      const info = ingredientById[id];
+      if (!info) continue;
+      const oncekiStok = Number(info.data.stok || 0);
+      const yeniStok = oncekiStok - total;
+      txn.update(info.ref, { stok: yeniStok, updatedAt: serverTimestamp() });
     }
 
     if (tableRef) {
@@ -190,6 +237,76 @@ export async function addItemsToOrder({ orderId, garsonId, newItems }) {
     }
 
     return { orderId, added: enrichedNew.length };
+  });
+}
+
+/**
+ * Sayım sessiyonunu kapatır. Her bir ürün için fiziksel stok ile sistem stoğu
+ * arasındaki farkı products.stok'a uygular + stockMovements'a "sayim" kaynaklı
+ * audit kaydı yazar. Tek transaction içinde.
+ */
+export async function finalizeInventoryCount({ countId, items, kullaniciId, kullaniciAd }) {
+  if (!countId) throw new Error('countId zorunlu');
+  if (!items || items.length === 0) throw new Error('Sayım kayıtları boş');
+
+  const countRef = doc(db, 'inventoryCounts', countId);
+
+  return runTransaction(db, async (txn) => {
+    const countSnap = await txn.get(countRef);
+    if (!countSnap.exists()) throw new Error('Sayım bulunamadı');
+    if (countSnap.data().durum !== 'aktif') {
+      throw new Error('Sayım zaten kapatılmış');
+    }
+
+    // Tüm ürünleri tek tek oku (write'lardan önce)
+    const productData = {};
+    for (const it of items) {
+      if (it.fizikselStok == null) continue; // doldurulmamış satırı atla
+      const ref = doc(db, 'products', it.productId);
+      const snap = await txn.get(ref);
+      if (!snap.exists()) continue;
+      productData[it.productId] = { ref, data: snap.data() };
+    }
+
+    // Writes
+    const dusumler = []; // audit için
+    for (const it of items) {
+      if (it.fizikselStok == null) continue;
+      const info = productData[it.productId];
+      if (!info) continue;
+      const oncekiStok = Number(info.data.stok || 0);
+      const yeniStok = Number(it.fizikselStok);
+      const fark = yeniStok - oncekiStok;
+      if (fark === 0) continue; // değişiklik yok
+
+      txn.update(info.ref, { stok: yeniStok, updatedAt: serverTimestamp() });
+      const movRef = doc(collection(db, 'stockMovements'));
+      txn.set(movRef, {
+        productId: it.productId,
+        productAd: info.data.ad,
+        tip: fark > 0 ? 'giris' : 'cikis',
+        miktar: Math.abs(fark),
+        oncekiStok,
+        yeniStok,
+        kaynak: 'sayim',
+        ilgiliId: countId,
+        kullaniciId: kullaniciId || null,
+        kullaniciAd: kullaniciAd || null,
+        zaman: serverTimestamp(),
+        aciklama: `Sayım düzeltmesi #${countId.slice(0, 6)}`,
+      });
+      dusumler.push({ productId: it.productId, fark });
+    }
+
+    txn.update(countRef, {
+      durum: 'tamamlandi',
+      bitisZamani: serverTimestamp(),
+      kapatanId: kullaniciId || null,
+      kapatanAd: kullaniciAd || null,
+      duzeltilenSayisi: dusumler.length,
+    });
+
+    return { countId, duzeltilenSayisi: dusumler.length };
   });
 }
 

@@ -19,6 +19,9 @@ import {
   CalendarClock,
   QrCode,
   Truck as TruckIcon,
+  ClipboardList,
+  Wheat,
+  ChefHat,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -33,6 +36,9 @@ const NAV = [
   { to: '/admin/reservations', label: 'Rezervasyonlar', icon: CalendarClock },
   { to: '/admin/qr-codes', label: 'QR Kodları', icon: QrCode },
   { to: '/admin/stock', label: 'Stok', icon: Boxes },
+  { to: '/admin/inventory', label: 'Sayım', icon: ClipboardList },
+  { to: '/admin/ingredients', label: 'Malzemeler', icon: Wheat },
+  { to: '/admin/recipes', label: 'Reçeteler', icon: ChefHat },
   { to: '/admin/suppliers', label: 'Tedarikçiler', icon: TruckIcon },
   { to: '/admin/campaigns', label: 'Kampanyalar', icon: Megaphone },
   { to: '/admin/coupons', label: 'Kupon Kodları', icon: Megaphone },

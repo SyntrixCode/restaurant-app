@@ -75,6 +75,29 @@ export const settingsSchema = z.object({
   }),
 });
 
+export const ingredientSchema = z.object({
+  ad: z.string().min(1, 'Malzeme adı zorunlu').max(100),
+  birim: z.enum(['adet', 'kg', 'gram', 'lt', 'ml', 'paket']),
+  stok: z.coerce.number().nonnegative('Stok 0 veya pozitif').default(0),
+  dusukStokEsigi: z.coerce.number().nonnegative().optional().nullable(),
+  birimMaliyet: z.coerce.number().nonnegative().optional().nullable(),
+  tedarikciId: z.string().optional().or(z.literal('')),
+  kategori: z.string().max(50).optional().or(z.literal('')),
+  aktif: z.boolean(),
+});
+
+export const recipeSchema = z.object({
+  productId: z.string().min(1),
+  items: z
+    .array(
+      z.object({
+        ingredientId: z.string().min(1),
+        miktar: z.coerce.number().positive(),
+      }),
+    )
+    .min(1, 'Reçetede en az 1 malzeme olmalı'),
+});
+
 export const supplierSchema = z.object({
   ad: z.string().min(1, 'Tedarikçi adı zorunlu').max(100),
   iletisimAd: z.string().max(100).optional().or(z.literal('')),
