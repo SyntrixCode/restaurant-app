@@ -21,6 +21,7 @@ import AdminNotifications from './pages/admin/Notifications';
 import AdminReports from './pages/admin/Reports';
 import AdminCampaigns from './pages/admin/Campaigns';
 import AdminCoupons from './pages/admin/Coupons';
+import AdminQrCodes from './pages/admin/QrCodes';
 import AdminPlaceholder from './pages/admin/Placeholder';
 
 import PosLogin from './pages/pos/Login';
@@ -69,6 +70,7 @@ export default function App() {
         <Route path="archive" element={<AdminArchive />} />
         <Route path="tables" element={<AdminTables />} />
         <Route path="reservations" element={<AdminReservations />} />
+        <Route path="qr-codes" element={<AdminQrCodes />} />
         <Route path="stock" element={<AdminPlaceholder title="Stok Yönetimi" phase="Faz 10 detay, Faz 1 basit" />} />
         <Route path="campaigns" element={<AdminCampaigns />} />
         <Route path="coupons" element={<AdminCoupons />} />

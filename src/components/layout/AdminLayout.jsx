@@ -17,6 +17,7 @@ import {
   Printer,
   LogOut,
   CalendarClock,
+  QrCode,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -29,6 +30,7 @@ const NAV = [
   { to: '/admin/products', label: 'Ürünler', icon: Package },
   { to: '/admin/tables', label: 'Masalar', icon: Grid3x3 },
   { to: '/admin/reservations', label: 'Rezervasyonlar', icon: CalendarClock },
+  { to: '/admin/qr-codes', label: 'QR Kodları', icon: QrCode },
   { to: '/admin/stock', label: 'Stok', icon: Boxes },
   { to: '/admin/campaigns', label: 'Kampanyalar', icon: Megaphone },
   { to: '/admin/coupons', label: 'Kupon Kodları', icon: Megaphone },
