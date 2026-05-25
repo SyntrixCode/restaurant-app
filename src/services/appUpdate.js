@@ -12,41 +12,48 @@
 
 import { APP_VERSION, APP_REPO } from '../version';
 
-const LATEST_RELEASE_URL = `https://api.github.com/repos/${APP_REPO}/releases/latest`;
+// /releases endpoint'i pre-release dahil tüm release'leri döner.
+// /releases/latest yalnızca stable yayınları gösterir — biz pre-release de istiyoruz.
+const RELEASES_URL = `https://api.github.com/repos/${APP_REPO}/releases?per_page=10`;
 
 /**
- * GitHub'daki son release'i çeker.
- * @returns {Promise<{ version:string, tag:string, name:string, body:string, apkUrl:string, publishedAt:string } | null>}
+ * GitHub'daki en yeni release'i (pre-release dahil) çeker.
+ * @returns {Promise<{ version:string, tag:string, name:string, body:string, apkUrl:string, publishedAt:string, prerelease:boolean } | null>}
  */
 export async function fetchLatestRelease() {
   try {
-    const res = await fetch(LATEST_RELEASE_URL, {
+    const res = await fetch(RELEASES_URL, {
       headers: { Accept: 'application/vnd.github+json' },
     });
     if (!res.ok) {
-      if (res.status === 404) return null; // hiç release yok henüz
+      if (res.status === 404) return null;
       throw new Error(`GitHub API: ${res.status}`);
     }
-    const data = await res.json();
-    const apkAsset = (data.assets || []).find((a) =>
+    const list = await res.json();
+    if (!Array.isArray(list) || list.length === 0) return null;
+
+    // APK içeren en yeni release'i seç (liste zaten created_at desc sıralı)
+    const apkRelease = list.find((r) =>
+      (r.assets || []).some((a) => a.name.toLowerCase().endsWith('.apk')),
+    );
+    if (!apkRelease) return null;
+
+    const apkAsset = apkRelease.assets.find((a) =>
       a.name.toLowerCase().endsWith('.apk'),
     );
-    if (!apkAsset) return null;
-
-    // tag formatı: build-<sha7>
-    const version = data.tag_name.replace(/^build-/, '');
 
     return {
-      version,
-      tag: data.tag_name,
-      name: data.name,
-      body: data.body || '',
+      version: apkRelease.tag_name.replace(/^build-/, ''),
+      tag: apkRelease.tag_name,
+      name: apkRelease.name,
+      body: apkRelease.body || '',
       apkUrl: apkAsset.browser_download_url,
       apkSize: apkAsset.size,
-      publishedAt: data.published_at,
+      publishedAt: apkRelease.published_at,
+      prerelease: apkRelease.prerelease,
     };
   } catch (err) {
-    console.warn('appUpdate: latest release alınamadı', err);
+    console.warn('appUpdate: release alınamadı', err);
     return null;
   }
 }
