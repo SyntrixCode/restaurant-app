@@ -167,6 +167,7 @@ export const couponSchema = z.object({
 
 export const printerSchema = z.object({
   ad: z.string().min(1).max(50),
+  model: z.string().default('SRP-E300'),
   ip: z
     .string()
     .regex(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/, 'Geçerli IP girin (örn. 192.168.1.50)'),

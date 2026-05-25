@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(IminPrinterPlugin.class);
+        registerPlugin(NetworkPrinterPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Printer, X, Check } from 'lucide-react';
 import { formatAdet, formatDate } from '../utils/format';
 import { printReceipt, buildKitchenTicketLines, isIminPrinterAvailable } from '../plugins/iminPrinter';
+import { printNetworkReceipt } from '../plugins/networkPrinter';
+import { watchCollection } from '../firebase/firestore';
 
 export default function KitchenTicket({
   open,
@@ -13,6 +15,7 @@ export default function KitchenTicket({
   const [nativeAvailable, setNativeAvailable] = useState(false);
   const [printed, setPrinted] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const [networkPrinters, setNetworkPrinters] = useState([]);
 
   useEffect(() => {
     const handleEsc = (e) => {
@@ -22,22 +25,51 @@ export default function KitchenTicket({
     return () => document.removeEventListener('keydown', handleEsc);
   }, [open, onClose]);
 
-  // Modal açılınca native yazıcı varsa OTOMATİK bas (garson tek tıkla işini bitirsin)
+  // Aktif ağ yazıcılarını dinle
+  useEffect(() => watchCollection('printers', setNetworkPrinters), []);
+  const kitchenPrinter = networkPrinters.find((p) => p.aktif && p.ip);
+
+  // Modal açılınca yazıcı varsa OTOMATİK bas (garson tek tıkla işini bitirsin)
   useEffect(() => {
     if (!open || !order || !items || printed) return;
     let cancelled = false;
     (async () => {
+      const lines = buildKitchenTicketLines({ order, items, isAddendum });
+
+      // Öncelik: ağdaki Bixolon mutfak yazıcısı (varsa)
+      if (kitchenPrinter) {
+        setNativeAvailable(true);
+        setPrinting(true);
+        try {
+          await printNetworkReceipt({
+            ip: kitchenPrinter.ip,
+            model: kitchenPrinter.model || 'SRP-E300',
+            lines,
+            cut: true,
+            feedLines: 3,
+          });
+          if (!cancelled) {
+            setPrinted(true);
+            setTimeout(() => !cancelled && onClose(), 800);
+          }
+        } catch (err) {
+          console.warn('Bixolon network print failed:', err);
+        } finally {
+          if (!cancelled) setPrinting(false);
+        }
+        return;
+      }
+
+      // Fallback: iMin dahili termal yazıcı
       const available = await isIminPrinterAvailable();
       if (cancelled) return;
       setNativeAvailable(available);
       if (available) {
         setPrinting(true);
         try {
-          const lines = buildKitchenTicketLines({ order, items, isAddendum });
           await printReceipt({ lines, cut: true, feedLines: 3 });
           if (!cancelled) {
             setPrinted(true);
-            // Otomatik kapat — garson işine devam etsin
             setTimeout(() => !cancelled && onClose(), 800);
           }
         } catch (err) {
@@ -50,7 +82,7 @@ export default function KitchenTicket({
     return () => {
       cancelled = true;
     };
-  }, [open, order, items, isAddendum, printed, onClose]);
+  }, [open, order, items, isAddendum, printed, onClose, kitchenPrinter]);
 
   if (!open || !order || !items) return null;
 
@@ -58,12 +90,22 @@ export default function KitchenTicket({
     setPrinting(true);
     try {
       const lines = buildKitchenTicketLines({ order, items, isAddendum });
-      await printReceipt({
-        lines,
-        cut: true,
-        feedLines: 3,
-        fallbackPrintFn: () => window.print(),
-      });
+      if (kitchenPrinter) {
+        await printNetworkReceipt({
+          ip: kitchenPrinter.ip,
+          model: kitchenPrinter.model || 'SRP-E300',
+          lines,
+          cut: true,
+          feedLines: 3,
+        });
+      } else {
+        await printReceipt({
+          lines,
+          cut: true,
+          feedLines: 3,
+          fallbackPrintFn: () => window.print(),
+        });
+      }
       setPrinted(true);
     } catch (err) {
       console.error(err);
@@ -84,7 +126,13 @@ export default function KitchenTicket({
             {isAddendum ? 'Ek Sipariş Fişi' : 'Mutfak Fişi'}
             {nativeAvailable && (
               <span className="ml-2 text-xs font-normal text-emerald-600">
-                {printed ? '✓ basıldı' : printing ? 'Basılıyor…' : 'iMin yazıcı'}
+                {printed
+                  ? '✓ basıldı'
+                  : printing
+                    ? 'Basılıyor…'
+                    : kitchenPrinter
+                      ? `${kitchenPrinter.ad || 'Mutfak'} (${kitchenPrinter.ip})`
+                      : 'iMin yazıcı'}
               </span>
             )}
           </h3>
