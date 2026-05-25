@@ -134,7 +134,7 @@ public class NetworkPrinterPlugin extends Plugin {
                 model,
                 BXLConfigLoader.DEVICE_CATEGORY_POS_PRINTER,
                 productNameFor(model),
-                BXLConfigLoader.DEVICE_BUS_NETWORK,
+                BXLConfigLoader.DEVICE_BUS_ETHERNET,
                 ip
         );
         config.saveFile();
