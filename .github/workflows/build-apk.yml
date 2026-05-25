@@ -54,6 +54,19 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Generate version file
+        run: |
+          SHORT_SHA=${GITHUB_SHA:0:7}
+          BUILD_DATE=$(date +%Y-%m-%d)
+          BUILD_TIME=$(date +%H:%M)
+          cat > src/version.js <<EOF
+          export const APP_VERSION = '$SHORT_SHA';
+          export const APP_BUILD_DATE = '$BUILD_DATE $BUILD_TIME';
+          export const APP_REPO = 'SyntrixCode/restaurant-app';
+          EOF
+          echo "version=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+        id: ver
+
       - name: Create .env from secrets
         run: |
           cat > .env <<EOF
@@ -107,3 +120,19 @@ jobs:
           path: ${{ steps.apk.outputs.apk_path }}
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish GitHub Release (for in-app updates)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ steps.ver.outputs.version }}
+          name: "SyntrixPos build ${{ steps.ver.outputs.version }}"
+          body: |
+            Otomatik build — commit `${{ github.sha }}`
+            Build type: `${{ github.event.inputs.build_type }}`
+
+            Bu APK uygulama içinden "Yazılım Güncelle" butonuyla otomatik indirilebilir.
+          prerelease: ${{ github.event.inputs.build_type != 'release' }}
+          files: ${{ steps.apk.outputs.apk_path }}
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

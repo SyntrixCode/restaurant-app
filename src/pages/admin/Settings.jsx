@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { Save, Store, Receipt, Bell, Settings as SettingsIcon } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import Toggle from '../../components/ui/Toggle';
+import UpdateCard from '../../components/admin/UpdateCard';
 import { useSettingsStore } from '../../store/settingsStore';
 import { settingsSchema } from '../../utils/validators';
 
@@ -220,6 +221,9 @@ export default function AdminSettings() {
               name="bildirimAyarlari.sesliUyari"
             />
           </Section>
+
+          {/* Yazılım Güncelleme — form dışında, kendi state'i */}
+          <UpdateCard />
         </div>
 
         {/* Mobile sticky save */}
