@@ -6,6 +6,8 @@ import {
   buildCustomerReceiptLines,
   isIminPrinterAvailable,
 } from '../plugins/iminPrinter';
+import { printNetworkReceipt } from '../plugins/networkPrinter';
+import { watchCollection } from '../firebase/firestore';
 
 const YONTEM_LABEL = {
   nakit: 'NAKİT',
@@ -18,6 +20,7 @@ export default function ReceiptPreview({ open, onClose, order, payments, setting
   const [nativeAvailable, setNativeAvailable] = useState(false);
   const [printed, setPrinted] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const [networkPrinters, setNetworkPrinters] = useState([]);
 
   useEffect(() => {
     const handleEsc = (e) => {
@@ -27,23 +30,50 @@ export default function ReceiptPreview({ open, onClose, order, payments, setting
     return () => document.removeEventListener('keydown', handleEsc);
   }, [open, onClose]);
 
-  // Modal açılır açılmaz iMin yazıcı varsa otomatik bas
+  // Aktif ağ yazıcılarını dinle
+  useEffect(() => watchCollection('printers', setNetworkPrinters), []);
+  const activePrinter = networkPrinters.find((p) => p.aktif && p.ip);
+
+  // Modal açılır açılmaz yazıcı varsa otomatik bas
   useEffect(() => {
     if (!open || !order || printed) return;
     let cancelled = false;
     (async () => {
+      const lines = buildCustomerReceiptLines({
+        order,
+        payments: payments || [],
+        settings: settings || {},
+        change: change || 0,
+      });
+
+      // Öncelik: ağ yazıcısı (Bixolon vb)
+      if (activePrinter) {
+        setNativeAvailable(true);
+        setPrinting(true);
+        try {
+          await printNetworkReceipt({
+            ip: activePrinter.ip,
+            model: activePrinter.model || 'SRP-E300',
+            lines,
+            cut: true,
+            feedLines: 4,
+          });
+          if (!cancelled) setPrinted(true);
+        } catch (err) {
+          console.warn('Bixolon network receipt failed:', err);
+        } finally {
+          if (!cancelled) setPrinting(false);
+        }
+        return;
+      }
+
+      // Fallback: iMin dahili termal yazıcı
       const available = await isIminPrinterAvailable();
       if (cancelled) return;
       setNativeAvailable(available);
       if (available) {
         setPrinting(true);
         try {
-          const lines = buildCustomerReceiptLines({
-            order,
-            payments: payments || [],
-            settings: settings || {},
-            change: change || 0,
-          });
           await printReceipt({ lines, cut: true, feedLines: 4 });
           if (!cancelled) setPrinted(true);
         } catch (err) {
@@ -56,7 +86,7 @@ export default function ReceiptPreview({ open, onClose, order, payments, setting
     return () => {
       cancelled = true;
     };
-  }, [open, order, payments, settings, change, printed]);
+  }, [open, order, payments, settings, change, printed, activePrinter]);
 
   if (!open || !order) return null;
 
@@ -69,12 +99,22 @@ export default function ReceiptPreview({ open, onClose, order, payments, setting
         settings: settings || {},
         change: change || 0,
       });
-      await printReceipt({
-        lines,
-        cut: true,
-        feedLines: 4,
-        fallbackPrintFn: () => window.print(),
-      });
+      if (activePrinter) {
+        await printNetworkReceipt({
+          ip: activePrinter.ip,
+          model: activePrinter.model || 'SRP-E300',
+          lines,
+          cut: true,
+          feedLines: 4,
+        });
+      } else {
+        await printReceipt({
+          lines,
+          cut: true,
+          feedLines: 4,
+          fallbackPrintFn: () => window.print(),
+        });
+      }
       setPrinted(true);
     } catch (err) {
       console.error(err);
@@ -92,7 +132,13 @@ export default function ReceiptPreview({ open, onClose, order, payments, setting
             Fiş Önizleme
             {nativeAvailable && (
               <span className="ml-2 text-xs font-normal text-emerald-600">
-                {printed ? '✓ basıldı' : printing ? 'Basılıyor…' : 'iMin yazıcı'}
+                {printed
+                  ? '✓ basıldı'
+                  : printing
+                    ? 'Basılıyor…'
+                    : activePrinter
+                      ? `${activePrinter.ad || 'Yazıcı'} (${activePrinter.ip})`
+                      : 'iMin yazıcı'}
               </span>
             )}
           </h3>
