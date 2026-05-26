@@ -14,3 +14,6 @@ dist-ssr
 firebase-debug.log
 ui-debug.log
 firestore-debug.log
+
+# Claude Code — kişisel/yerel ayarlar (paylaşılmaz)
+.claude/
