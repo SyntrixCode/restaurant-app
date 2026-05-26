@@ -17,3 +17,6 @@ firestore-debug.log
 
 # Claude Code — kişisel/yerel ayarlar (paylaşılmaz)
 .claude/
+
+# Derleme çıktıları (build artifact) — git'te tutulmaz
+dist-apk/
