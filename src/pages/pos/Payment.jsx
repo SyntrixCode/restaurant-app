@@ -23,6 +23,7 @@ import { pickBestDiscount, isCouponValid, isCampaignActive } from '../../utils/d
 import Modal from '../../components/ui/Modal';
 import Toggle from '../../components/ui/Toggle';
 import ReceiptPreview from '../../components/ReceiptPreview';
+import CardPaymentModal from '../../components/CardPaymentModal';
 
 const YEMEK_KARTI_TIPLERI = ['Multinet', 'Sodexo', 'Ticket', 'Setcard', 'Edenred', 'Metropol', 'Diğer'];
 
@@ -420,12 +421,20 @@ export default function Payment() {
           setCashModal(false);
         }}
       />
-      <CardModal
+      <CardPaymentModal
         open={cardModal}
         onClose={() => setCardModal(false)}
         remaining={remaining}
-        onAdd={(tutar) => {
-          addPayment({ yontem: 'kart', tutar });
+        provider={settings.cardPaymentProvider || 'simulation'}
+        terminalIp={settings.cardTerminalIp}
+        onApproved={(tutar, result) => {
+          addPayment({
+            yontem: 'kart',
+            tutar,
+            kartTipi: result?.cardType,
+            onayKodu: result?.approvalCode,
+            mod: result?.mode,
+          });
           setCardModal(false);
         }}
       />
