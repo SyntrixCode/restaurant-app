@@ -15,6 +15,7 @@ import {
   Phone,
   User,
   Trash2,
+  Ban,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useForm } from 'react-hook-form';
@@ -25,7 +26,9 @@ import { useAuthStore } from '../../store/authStore';
 import Modal from '../../components/ui/Modal';
 import { createTableGroup, dissolveTableGroup } from '../../firebase/tableGroups';
 import { createReservation, cancelReservation } from '../../firebase/reservations';
+import { cancelActiveOrder } from '../../firebase/orders';
 import { reservationSchema } from '../../utils/validators';
+import KitchenTicket from '../../components/KitchenTicket';
 
 const ZONE_LABELS = {
   ic: 'İç Salon',
@@ -1023,10 +1026,36 @@ function CanvasDecoration({ decor }) {
 }
 
 function FullTableModal({ open, onClose, table, rol, navigate, onDissolve }) {
+  const { user, profile } = useAuthStore();
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancellingTicket, setCancellingTicket] = useState(null);
   if (!open || !table) return null;
   const order = table.order;
   const group = table.group;
   const canPay = ['kasiyer', 'admin'].includes(rol);
+  const canCancel = ['kasiyer', 'admin'].includes(rol);
+
+  const handleCancelConfirm = async (sebep) => {
+    try {
+      await cancelActiveOrder({
+        orderId: order.id,
+        sebep,
+        kullaniciId: user?.uid,
+        kullaniciAd: profile?.ad || 'Bilinmiyor',
+      });
+      toast.success('Sipariş iptal edildi');
+      setCancelOpen(false);
+      // Mutfağa iptal fişi bas
+      setCancellingTicket({ order, items: order.items, sebep });
+    } catch (err) {
+      toast.error(err?.message || 'İptal başarısız');
+    }
+  };
+
+  const handleCancelTicketClose = () => {
+    setCancellingTicket(null);
+    onClose();
+  };
 
   return (
     <Modal
@@ -1105,7 +1134,7 @@ function FullTableModal({ open, onClose, table, rol, navigate, onDissolve }) {
               }}
               className="btn-primary"
             >
-              <Plus size={16} /> Sipariş Ekle
+              <Plus size={16} /> Sipariş Ekle / Düzenle
             </button>
             {canPay && (
               <button
@@ -1119,8 +1148,108 @@ function FullTableModal({ open, onClose, table, rol, navigate, onDissolve }) {
               </button>
             )}
           </div>
+
+          {/* Sipariş İptal — yetkili kullanıcılar için, ayrı blokta */}
+          {canCancel && (
+            <button
+              onClick={() => setCancelOpen(true)}
+              className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100"
+            >
+              <Ban size={14} /> Siparişi İptal Et
+            </button>
+          )}
         </div>
       )}
+
+      <CancelOrderModal
+        open={cancelOpen}
+        onClose={() => setCancelOpen(false)}
+        onConfirm={handleCancelConfirm}
+        orderTotal={order?.toplam}
+      />
+
+      {/* İptal fişi mutfağa otomatik basar (modal açılınca KitchenTicket akışı) */}
+      <KitchenTicket
+        open={!!cancellingTicket}
+        onClose={handleCancelTicketClose}
+        order={cancellingTicket?.order}
+        items={cancellingTicket?.items}
+        isCancellation={true}
+        cancellationReason={cancellingTicket?.sebep || ''}
+      />
+    </Modal>
+  );
+}
+
+function CancelOrderModal({ open, onClose, onConfirm, orderTotal }) {
+  const [sebep, setSebep] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setSebep('');
+      setSubmitting(false);
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  const canConfirm = sebep.trim().length >= 3 && !submitting;
+
+  const handleConfirm = async () => {
+    setSubmitting(true);
+    try {
+      await onConfirm(sebep.trim());
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Siparişi İptal Et"
+      footer={
+        <>
+          <button onClick={onClose} disabled={submitting} className="btn-secondary">
+            Vazgeç
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={!canConfirm}
+            className="btn-primary bg-red-600 hover:bg-red-700 disabled:opacity-50"
+          >
+            <Ban size={14} /> İptal Et ({formatTL(orderTotal || 0)})
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+          ⚠️ Bu siparişi iptal etmek:
+          <ul className="ml-4 mt-1 list-disc space-y-0.5">
+            <li>Ürün <strong>stoğunu geri yükler</strong></li>
+            <li>Masayı <strong>boşaltır</strong></li>
+            <li>Mutfağa <strong>iptal fişi basar</strong></li>
+            <li>Raporlamada <strong>iptal</strong> olarak görünür</li>
+          </ul>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            İptal Sebebi <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            value={sebep}
+            onChange={(e) => setSebep(e.target.value)}
+            rows={3}
+            placeholder="Ör: Müşteri vazgeçti, yanlış sipariş, mutfak hatası..."
+            className="input"
+            autoFocus
+          />
+          <p className="mt-1 text-xs text-slate-500">En az 3 karakter, mutfak fişine yazılacak.</p>
+        </div>
+      </div>
     </Modal>
   );
 }

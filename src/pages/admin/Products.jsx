@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2, Package, Image as ImageIcon, Upload } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Image as ImageIcon, Upload, X } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import Modal from '../../components/ui/Modal';
@@ -207,7 +207,7 @@ function ProductModal({ open, onClose, editing, categories }) {
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(productSchema),
-    defaultValues: { ad: '', categoryId: '', fiyat: 0, stok: 0, aciklama: '', aktif: true },
+    defaultValues: { ad: '', categoryId: '', fiyat: 0, stok: 0, aciklama: '', opsiyonlar: [], aktif: true },
   });
 
   useEffect(() => {
@@ -221,6 +221,7 @@ function ProductModal({ open, onClose, editing, categories }) {
               stok: editing.stok,
               dusukStokEsigi: editing.dusukStokEsigi ?? null,
               aciklama: editing.aciklama || '',
+              opsiyonlar: editing.opsiyonlar || [],
               aktif: editing.aktif ?? true,
             }
           : {
@@ -230,6 +231,7 @@ function ProductModal({ open, onClose, editing, categories }) {
               stok: 0,
               dusukStokEsigi: null,
               aciklama: '',
+              opsiyonlar: [],
               aktif: true,
             },
       );
@@ -353,6 +355,20 @@ function ProductModal({ open, onClose, editing, categories }) {
         </div>
 
         <div className="col-span-2">
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Opsiyonlar (sipariş notları)
+          </label>
+          <OptionTagsInput
+            value={watch('opsiyonlar') || []}
+            onChange={(arr) => setValue('opsiyonlar', arr, { shouldDirty: true })}
+            placeholder="acılı, acısız, soğansız ..."
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Garson siparişe eklerken bu seçenekler çıkar. Birden fazla seçilebilir, fiyatı etkilemez.
+          </p>
+        </div>
+
+        <div className="col-span-2">
           <label className="mb-1 block text-sm font-medium text-slate-700">Görsel</label>
           <div className="flex items-center gap-3">
             {imageUrl ? (
@@ -391,5 +407,60 @@ function ProductModal({ open, onClose, editing, categories }) {
         </div>
       </form>
     </Modal>
+  );
+}
+
+function OptionTagsInput({ value, onChange, placeholder }) {
+  const [input, setInput] = useState('');
+  const tags = Array.isArray(value) ? value : [];
+
+  const commit = () => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    // Virgülle birden fazla yapıştırılırsa hepsini ekle
+    const parts = trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+    const unique = [...new Set([...tags, ...parts])];
+    onChange(unique);
+    setInput('');
+  };
+
+  const remove = (idx) => {
+    onChange(tags.filter((_, i) => i !== idx));
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-slate-300 bg-white p-2 focus-within:border-blue-500">
+      {tags.map((t, i) => (
+        <span
+          key={i}
+          className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-800"
+        >
+          {t}
+          <button
+            type="button"
+            onClick={() => remove(i)}
+            className="rounded-full p-0.5 hover:bg-blue-200"
+          >
+            <X size={11} />
+          </button>
+        </span>
+      ))}
+      <input
+        type="text"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            commit();
+          } else if (e.key === 'Backspace' && !input && tags.length > 0) {
+            remove(tags.length - 1);
+          }
+        }}
+        onBlur={commit}
+        placeholder={tags.length === 0 ? placeholder : ''}
+        className="flex-1 min-w-[120px] bg-transparent text-sm outline-none"
+      />
+    </div>
   );
 }

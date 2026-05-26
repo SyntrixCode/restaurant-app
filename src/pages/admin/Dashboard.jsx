@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ShoppingCart, Grid3x3, Clock, CheckCircle2 } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
+import UpdateBanner from '../../components/UpdateBanner';
 import { watchCollection, where } from '../../firebase/firestore';
 import { formatTL } from '../../utils/format';
 
@@ -32,6 +33,7 @@ export default function Dashboard() {
 
   return (
     <div className="p-8">
+      <UpdateBanner />
       <PageHeader title="Dashboard" subtitle="Günlük operasyon özeti" />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Günlük Satış" value={formatTL(dailySales)} color="green" icon={CheckCircle2} />

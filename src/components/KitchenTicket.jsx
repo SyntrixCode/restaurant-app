@@ -11,6 +11,10 @@ export default function KitchenTicket({
   order,
   items,
   isAddendum = false,
+  isCancellation = false,
+  cancellationReason = '',
+  isCorrection = false,
+  correctionDiff = null, // { removed: [], changed: [] }
 }) {
   const [nativeAvailable, setNativeAvailable] = useState(false);
   const [printed, setPrinted] = useState(false);
@@ -34,7 +38,7 @@ export default function KitchenTicket({
     if (!open || !order || !items || printed) return;
     let cancelled = false;
     (async () => {
-      const lines = buildKitchenTicketLines({ order, items, isAddendum });
+      const lines = buildKitchenTicketLines({ order, items, isAddendum, isCancellation, cancellationReason, isCorrection, correctionDiff });
 
       // Öncelik: ağdaki Bixolon mutfak yazıcısı (varsa)
       if (kitchenPrinter) {
@@ -82,14 +86,14 @@ export default function KitchenTicket({
     return () => {
       cancelled = true;
     };
-  }, [open, order, items, isAddendum, printed, onClose, kitchenPrinter]);
+  }, [open, order, items, isAddendum, isCancellation, cancellationReason, printed, onClose, kitchenPrinter]);
 
   if (!open || !order || !items) return null;
 
   const print = async () => {
     setPrinting(true);
     try {
-      const lines = buildKitchenTicketLines({ order, items, isAddendum });
+      const lines = buildKitchenTicketLines({ order, items, isAddendum, isCancellation, cancellationReason, isCorrection, correctionDiff });
       if (kitchenPrinter) {
         await printNetworkReceipt({
           ip: kitchenPrinter.ip,
@@ -114,7 +118,13 @@ export default function KitchenTicket({
       setPrinting(false);
     }
   };
-  const heading = isAddendum ? 'EK SİPARİŞ' : 'MUTFAK ADİSYONU';
+  const heading = isCancellation
+    ? '❌ SİPARİŞ İPTAL'
+    : isCorrection
+      ? '🔄 SİPARİŞ DÜZELTME'
+      : isAddendum
+        ? 'EK SİPARİŞ'
+        : 'MUTFAK ADİSYONU';
   const shortId =
     typeof order.id === 'string' ? order.id.slice(0, 8).toUpperCase() : '';
 
@@ -122,8 +132,14 @@ export default function KitchenTicket({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4 print:bg-white print:p-0">
       <div className="relative max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-xl bg-white shadow-2xl print:max-h-none print:shadow-none">
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2 print:hidden">
-          <h3 className="font-semibold">
-            {isAddendum ? 'Ek Sipariş Fişi' : 'Mutfak Fişi'}
+          <h3 className={`font-semibold ${isCancellation ? 'text-red-700' : isCorrection ? 'text-amber-700' : ''}`}>
+            {isCancellation
+              ? '❌ İptal Fişi'
+              : isCorrection
+                ? '🔄 Düzeltme Fişi'
+                : isAddendum
+                  ? 'Ek Sipariş Fişi'
+                  : 'Mutfak Fişi'}
             {nativeAvailable && (
               <span className="ml-2 text-xs font-normal text-emerald-600">
                 {printed
@@ -152,8 +168,31 @@ export default function KitchenTicket({
         </div>
 
         <div className="p-6 font-mono leading-snug" id="kitchen-ticket">
-          <div className="mb-3 text-center">
-            <h1 className="text-lg font-bold tracking-widest">{heading}</h1>
+          <div
+            className={`mb-3 text-center ${
+              isCancellation
+                ? 'rounded-md bg-red-50 py-2 border-2 border-red-300'
+                : isCorrection
+                  ? 'rounded-md bg-amber-50 py-2 border-2 border-amber-300'
+                  : ''
+            }`}
+          >
+            <h1
+              className={`text-lg font-bold tracking-widest ${
+                isCancellation
+                  ? 'text-red-700'
+                  : isCorrection
+                    ? 'text-amber-700'
+                    : ''
+              }`}
+            >
+              {heading}
+            </h1>
+            {isCancellation && cancellationReason && (
+              <p className="mt-1 text-xs font-semibold uppercase text-red-700">
+                Sebep: {cancellationReason}
+              </p>
+            )}
           </div>
 
           <div className="mb-2 border-t border-dashed border-slate-400 pt-2 text-sm">
@@ -177,11 +216,42 @@ export default function KitchenTicket({
             </div>
           </div>
 
+          {/* Düzeltme fişi: silinen/değişen kalemler ÜSTTE */}
+          {isCorrection && correctionDiff && (
+            <div className="mb-2 border-t-2 border-dashed border-amber-400 pt-2 text-sm">
+              {correctionDiff.removed?.length > 0 && (
+                <div className="mb-1">
+                  <p className="text-xs font-bold uppercase text-red-700">İPTAL EDİLEN</p>
+                  {correctionDiff.removed.map((it, idx) => (
+                    <div key={`r${idx}`} className="text-base font-bold text-red-700 line-through">
+                      − {formatAdet(it.adet)}× {it.ad}
+                      {it.notlar && <em className="ml-1 text-xs">({it.notlar})</em>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {correctionDiff.changed?.length > 0 && (
+                <div className="mb-1">
+                  <p className="text-xs font-bold uppercase text-amber-700">ADET DEĞİŞEN</p>
+                  {correctionDiff.changed.map((it, idx) => (
+                    <div key={`c${idx}`} className="text-base font-bold text-amber-800">
+                      ↻ {it.ad}: {formatAdet(it.fromAdet)}× → {formatAdet(it.toAdet)}×
+                      {it.notlar && <em className="ml-1 text-xs">({it.notlar})</em>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {items?.length > 0 && (
+                <p className="mt-1 text-xs font-bold uppercase text-emerald-700">YENİ EKLENEN</p>
+              )}
+            </div>
+          )}
+
           <div className="mb-2 border-t border-dashed border-slate-400 pt-2">
             {items.map((it, idx) => (
               <div key={idx} className="mb-1.5">
-                <div className="text-base font-bold">
-                  {formatAdet(it.adet)}× {it.ad}
+                <div className={`text-base font-bold ${isCorrection ? 'text-emerald-700' : ''}`}>
+                  {isCorrection ? '+ ' : ''}{formatAdet(it.adet)}× {it.ad}
                 </div>
                 {it.notlar && (
                   <div className="pl-4 text-xs italic text-slate-600">

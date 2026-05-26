@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Minus, Trash2, Search, X, ImageIcon, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { watchCollection, orderBy, fetchOne } from '../../firebase/firestore';
+import { watchCollection, orderBy, fetchOne, watchDoc } from '../../firebase/firestore';
 import { useCartStore } from '../../store/cartStore';
 import { useAuthStore } from '../../store/authStore';
 import { formatTL, formatAdet } from '../../utils/format';
-import { createOrder, addItemsToOrder } from '../../firebase/orders';
+import { createOrder, addItemsToOrder, updateOrderItems } from '../../firebase/orders';
 import Modal from '../../components/ui/Modal';
 import KitchenTicket from '../../components/KitchenTicket';
+import ProductOptionsModal from '../../components/ProductOptionsModal';
 
 export default function NewOrder() {
   const navigate = useNavigate();
@@ -27,6 +28,93 @@ export default function NewOrder() {
   const [search, setSearch] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [noteFor, setNoteFor] = useState(null);
+  const [optionsFor, setOptionsFor] = useState(null);
+  const [existingOrder, setExistingOrder] = useState(null);
+  // Mevcut item'lardaki kullanıcı düzenlemelerini local olarak tut.
+  // Map: itemKey (productId|notlar) → { adet (yeni), original (eski), removed }
+  // Submit'te diff hesaplanır.
+  const [editedExisting, setEditedExisting] = useState({});
+
+  // Mevcut siparişe ekleme yapılıyorsa, siparişi dinle
+  useEffect(() => {
+    if (!orderId) {
+      setExistingOrder(null);
+      setEditedExisting({});
+      return;
+    }
+    return watchDoc('orders', orderId, setExistingOrder);
+  }, [orderId]);
+
+  // Order ilk geldiğinde editedExisting'i original ile hizala
+  useEffect(() => {
+    if (!existingOrder?.items) return;
+    setEditedExisting((prev) => {
+      // Sadece henüz yoksa ekle, kullanıcı düzenlemelerini koru
+      const next = { ...prev };
+      existingOrder.items.forEach((it, idx) => {
+        const key = `${idx}`;
+        if (!(key in next)) {
+          next[key] = {
+            adet: it.adet,
+            originalAdet: it.adet,
+            ad: it.ad,
+            fiyat: it.fiyat,
+            notlar: it.notlar || '',
+            removed: false,
+          };
+        }
+      });
+      return next;
+    });
+  }, [existingOrder?.id]);
+
+  const adjustExistingQty = (idx, delta) => {
+    setEditedExisting((prev) => {
+      const key = `${idx}`;
+      const cur = prev[key];
+      if (!cur || cur.removed) return prev;
+      const newAdet = Math.max(0, Math.round((cur.adet + delta) * 2) / 2); // 0.5 step
+      if (newAdet === 0) {
+        return { ...prev, [key]: { ...cur, adet: 0, removed: true } };
+      }
+      return { ...prev, [key]: { ...cur, adet: newAdet } };
+    });
+  };
+
+  const removeExistingItem = (idx) => {
+    setEditedExisting((prev) => {
+      const key = `${idx}`;
+      const cur = prev[key];
+      if (!cur) return prev;
+      return { ...prev, [key]: { ...cur, removed: true, adet: 0 } };
+    });
+  };
+
+  const undoExistingChange = (idx) => {
+    setEditedExisting((prev) => {
+      const key = `${idx}`;
+      const cur = prev[key];
+      if (!cur) return prev;
+      return { ...prev, [key]: { ...cur, adet: cur.originalAdet, removed: false } };
+    });
+  };
+
+  // Diff hesabı (submit için ve görsel uyarılar için)
+  const hasEdits = Object.values(editedExisting).some(
+    (e) => e.adet !== e.originalAdet || e.removed,
+  );
+
+  // Ürüne tıklayınca: opsiyonu varsa ve sepete ilk kez ekleniyorsa modal,
+  // yoksa veya zaten ekliyse direkt adet arttır.
+  const handleProductClick = (product) => {
+    const hasOptions = (product.opsiyonlar || []).length > 0;
+    const alreadyInCart = items.some((it) => it.productId === product.id);
+    if (hasOptions && !alreadyInCart) {
+      setOptionsFor(product);
+    } else {
+      addItem(product);
+    }
+  };
 
   useEffect(() => {
     if (!masaId) {
@@ -81,8 +169,8 @@ export default function NewOrder() {
   }, [products, search, activeCategory]);
 
   const handleSubmit = async () => {
-    if (items.length === 0) {
-      toast.error('Sepet boş');
+    if (items.length === 0 && !hasEdits) {
+      toast.error('Sepet boş, değişiklik de yok');
       return;
     }
     setSubmitting(true);
@@ -93,26 +181,84 @@ export default function NewOrder() {
         notlar: it.notlar,
       }));
       if (orderId) {
-        const result = await addItemsToOrder({
-          orderId,
-          garsonId: user.uid,
-          newItems: items.map((it) => ({
-            productId: it.productId,
-            adet: it.adet,
-            notlar: it.notlar,
-          })),
-        });
-        toast.success(`${result.added} ürün eklendi`);
-        setKitchenTicket({
-          isAddendum: true,
-          order: {
-            id: orderId,
-            masaAd,
-            kisiSayisi: null,
-            garsonAd: profile?.ad || 'Garson',
-          },
-          items: ticketItems,
-        });
+        // Düzenleme diff'i (varsa)
+        let editDiff = null;
+        if (hasEdits && existingOrder?.items) {
+          // Yeni items array: silinmemiş + adet güncellenmiş
+          const updatedExistingItems = existingOrder.items
+            .map((it, idx) => {
+              const e = editedExisting[`${idx}`];
+              if (!e || e.removed) return null;
+              if (e.adet === e.originalAdet) return it;
+              return { ...it, adet: e.adet };
+            })
+            .filter(Boolean);
+
+          // Diff hesabı (mutfak fişi için)
+          const removedItems = [];
+          const changedItems = [];
+          existingOrder.items.forEach((it, idx) => {
+            const e = editedExisting[`${idx}`];
+            if (!e) return;
+            if (e.removed) {
+              removedItems.push({ ad: it.ad, adet: it.originalAdet, notlar: it.notlar });
+            } else if (e.adet !== e.originalAdet) {
+              changedItems.push({
+                ad: it.ad,
+                fromAdet: e.originalAdet,
+                toAdet: e.adet,
+                notlar: it.notlar,
+              });
+            }
+          });
+
+          await updateOrderItems({
+            orderId,
+            newItems: updatedExistingItems,
+            originalItems: existingOrder.items,
+            kullaniciId: user.uid,
+            kullaniciAd: profile?.ad || 'Garson',
+          });
+          editDiff = { removed: removedItems, changed: changedItems };
+        }
+
+        // Yeni eklenecek ürünler varsa
+        let addedCount = 0;
+        if (items.length > 0) {
+          const result = await addItemsToOrder({
+            orderId,
+            garsonId: user.uid,
+            newItems: items.map((it) => ({
+              productId: it.productId,
+              adet: it.adet,
+              notlar: it.notlar,
+            })),
+          });
+          addedCount = result.added;
+        }
+
+        // Mutfak fişi: diff veya ek sipariş veya her ikisi
+        const isCorrection = !!editDiff && (editDiff.removed.length > 0 || editDiff.changed.length > 0);
+        if (isCorrection || addedCount > 0) {
+          toast.success(
+            isCorrection
+              ? `${addedCount > 0 ? `${addedCount} eklendi, ` : ''}sipariş güncellendi`
+              : `${addedCount} ürün eklendi`,
+          );
+          setKitchenTicket({
+            isAddendum: !isCorrection && addedCount > 0,
+            isCorrection,
+            correctionDiff: editDiff,
+            addedItems: ticketItems,
+            order: {
+              id: orderId,
+              masaAd,
+              kisiSayisi: null,
+              garsonAd: profile?.ad || 'Garson',
+            },
+            items: ticketItems,
+          });
+        }
       } else {
         const result = await createOrder({
           masaId,
@@ -204,7 +350,7 @@ export default function NewOrder() {
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
               {visibleProducts.map((p) => (
-                <ProductCard key={p.id} product={p} onAdd={() => addItem(p)} />
+                <ProductCard key={p.id} product={p} onAdd={() => handleProductClick(p)} />
               ))}
             </div>
           )}
@@ -231,8 +377,119 @@ export default function NewOrder() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-3">
+          {/* Mevcut sipariş — düzenlenebilir */}
+          {existingOrder?.items?.length > 0 && (
+            <div className={`mb-3 rounded-xl border-2 p-3 ${hasEdits ? 'border-amber-300 bg-amber-50/40' : 'border-slate-200 bg-slate-50'}`}>
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-600">
+                  Mevcut Sipariş {hasEdits && <span className="ml-1 text-amber-700">· düzenlendi</span>}
+                </span>
+                <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                  {existingOrder.items.length} kalem · {formatTL(existingOrder.toplam || 0)}
+                </span>
+              </div>
+              <ul className="space-y-1.5">
+                {existingOrder.items.map((it, idx) => {
+                  const e = editedExisting[`${idx}`] || {
+                    adet: it.adet,
+                    originalAdet: it.adet,
+                    removed: false,
+                  };
+                  const changed = e.adet !== e.originalAdet || e.removed;
+                  return (
+                    <li
+                      key={idx}
+                      className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${
+                        e.removed
+                          ? 'bg-red-50 text-slate-400 line-through'
+                          : changed
+                            ? 'bg-amber-50 text-amber-900'
+                            : 'bg-white text-slate-700'
+                      }`}
+                    >
+                      {/* Sol: adet × ad */}
+                      <span className="min-w-0 flex-1 truncate">
+                        <strong className="mr-1 tabular-nums">{formatAdet(e.adet)}×</strong>
+                        {it.ad}
+                        {it.notlar && (
+                          <em className="ml-1 text-xs text-slate-500">({it.notlar})</em>
+                        )}
+                        {changed && !e.removed && (
+                          <span className="ml-1 text-[10px] text-amber-600">
+                            (eski {formatAdet(e.originalAdet)})
+                          </span>
+                        )}
+                      </span>
+
+                      {/* +/- kontrolleri */}
+                      {!e.removed && (
+                        <div className="inline-flex items-center gap-0.5 rounded-md border border-slate-200 bg-white">
+                          <button
+                            onClick={() => adjustExistingQty(idx, -1)}
+                            className="rounded p-1 text-slate-600 hover:bg-slate-100"
+                            aria-label="Azalt"
+                          >
+                            <Minus size={12} />
+                          </button>
+                          <span className="min-w-[20px] text-center text-xs font-bold tabular-nums">
+                            {formatAdet(e.adet)}
+                          </span>
+                          <button
+                            onClick={() => adjustExistingQty(idx, 1)}
+                            className="rounded p-1 text-slate-600 hover:bg-slate-100"
+                            aria-label="Arttır"
+                          >
+                            <Plus size={12} />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Sil / Geri al */}
+                      {!changed ? (
+                        <button
+                          onClick={() => removeExistingItem(idx)}
+                          className="rounded p-1 text-red-500 hover:bg-red-100"
+                          title="Bu kalemi sil"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => undoExistingChange(idx)}
+                          className="rounded p-1 text-slate-500 hover:bg-slate-200"
+                          title="Değişikliği geri al"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+
+                      <span className="w-16 shrink-0 text-right text-xs tabular-nums text-slate-500">
+                        {formatTL(it.fiyat * e.adet)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="mt-2 text-center text-[10px] italic text-slate-500">
+                {hasEdits
+                  ? '⚠️ Değişiklikler mutfağa düzeltme fişi olarak iletilecek'
+                  : 'Aşağıdaki yeni ürünler mevcut siparişe eklenecek'}
+              </p>
+            </div>
+          )}
+
+          {existingOrder?.items?.length > 0 && items.length > 0 && (
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-blue-700">
+              + Yeni Eklenenler
+            </div>
+          )}
+
           {items.length === 0 ? (
-            <p className="py-16 text-center text-base text-slate-400">Sepet boş</p>
+            <p className="py-16 text-center text-base text-slate-400">
+              {existingOrder?.items?.length > 0
+                ? 'Soldan yeni ürün ekleyin'
+                : 'Sepet boş'}
+            </p>
           ) : (
             <ul className="space-y-2.5">
               {items.map((it) => (
@@ -344,12 +601,24 @@ export default function NewOrder() {
         }}
       />
 
+      <ProductOptionsModal
+        open={!!optionsFor}
+        product={optionsFor}
+        onClose={() => setOptionsFor(null)}
+        onConfirm={(joinedNotes) => {
+          if (optionsFor) addItem(optionsFor, joinedNotes);
+          setOptionsFor(null);
+        }}
+      />
+
       <KitchenTicket
         open={!!kitchenTicket}
         onClose={closeKitchenTicket}
         order={kitchenTicket?.order}
         items={kitchenTicket?.items}
         isAddendum={kitchenTicket?.isAddendum}
+        isCorrection={kitchenTicket?.isCorrection}
+        correctionDiff={kitchenTicket?.correctionDiff}
       />
     </div>
   );

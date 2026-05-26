@@ -366,6 +366,89 @@ export async function recordManualStockMovement({
   });
 }
 
+/**
+ * Mevcut bir siparişin items array'ini günceller (düzenleme).
+ * Yeni adet/silme değişikliklerine göre stok geri yüklenir.
+ * araToplam yeniden hesaplanır.
+ *
+ * @param {{ orderId: string, newItems: Array<{productId, ad, fiyat, adet, notlar?}>, originalItems: Array, kullaniciId, kullaniciAd }} opts
+ */
+export async function updateOrderItems({ orderId, newItems, originalItems, kullaniciId, kullaniciAd }) {
+  if (!orderId) throw new Error('orderId gerekli');
+  if (!Array.isArray(newItems)) throw new Error('newItems dizi olmalı');
+
+  const orderRef = doc(db, 'orders', orderId);
+
+  return runTransaction(db, async (txn) => {
+    // === READS ===
+    const orderSnap = await txn.get(orderRef);
+    if (!orderSnap.exists()) throw new Error('Sipariş bulunamadı');
+    const order = orderSnap.data();
+    if (order.durum === 'tamamlandi') throw new Error('Tamamlanmış sipariş düzenlenemez');
+    if (order.durum === 'iptal') throw new Error('İptal edilmiş sipariş düzenlenemez');
+
+    // Stok değişiklik hesabı: orijinal adet - yeni adet → fark
+    // Pozitifse stok geri verilir (silindi/azaldı), negatifse eklenir (arttı, stok düşer)
+    // productId'ye göre net fark
+    const stockDelta = {};
+    const itemMap = {};
+    (originalItems || []).forEach((it, idx) => {
+      stockDelta[it.productId] = (stockDelta[it.productId] || 0) + Number(it.adet || 0);
+      itemMap[`orig-${idx}`] = it;
+    });
+    newItems.forEach((it) => {
+      stockDelta[it.productId] = (stockDelta[it.productId] || 0) - Number(it.adet || 0);
+    });
+
+    // Etkilenen ürünleri oku
+    const productIds = Object.keys(stockDelta).filter((pid) => stockDelta[pid] !== 0);
+    const productRefs = productIds.map((pid) => doc(db, 'products', pid));
+    const productSnaps = await Promise.all(productRefs.map((r) => txn.get(r)));
+
+    // Stok yeterlilik kontrolü (delta negatifse = stok düşecek)
+    for (let i = 0; i < productIds.length; i++) {
+      const snap = productSnaps[i];
+      if (!snap.exists()) continue;
+      const delta = stockDelta[productIds[i]]; // pozitif=iade, negatif=düş
+      if (delta < 0) {
+        const stok = Number(snap.data().stok || 0);
+        const required = -delta;
+        if (stok < required) {
+          throw new Error(`Yetersiz stok: ${snap.data().ad} (gereken ${required}, mevcut ${stok})`);
+        }
+      }
+    }
+
+    // === WRITES ===
+    // Yeni araToplam
+    const yeniAraToplam = newItems.reduce(
+      (sum, it) => sum + Number(it.fiyat || 0) * Number(it.adet || 0),
+      0,
+    );
+
+    txn.update(orderRef, {
+      items: newItems,
+      araToplam: yeniAraToplam,
+      toplam: yeniAraToplam, // indirim varsa Payment ekranında yeniden hesaplanır
+      sonGuncelleme: serverTimestamp(),
+      sonGuncelleyenId: kullaniciId || null,
+      sonGuncelleyenAd: kullaniciAd || null,
+    });
+
+    // Stok güncelle
+    for (let i = 0; i < productIds.length; i++) {
+      const snap = productSnaps[i];
+      if (!snap.exists()) continue;
+      const delta = stockDelta[productIds[i]];
+      if (delta === 0) continue;
+      const stok = Number(snap.data().stok || 0);
+      txn.update(snap.ref, { stok: stok + delta });
+    }
+
+    return { ok: true, yeniAraToplam };
+  });
+}
+
 export async function updateOrderStatus(orderId, newStatus) {
   const orderRef = doc(db, 'orders', orderId);
   const timestampField = {
@@ -376,4 +459,119 @@ export async function updateOrderStatus(orderId, newStatus) {
   const patch = { durum: newStatus };
   if (timestampField) patch[timestampField] = serverTimestamp();
   await updateDoc(orderRef, patch);
+}
+
+/**
+ * Aktif (ödenmemiş) bir siparişi iptal eder.
+ * - Order durumu 'iptal' olur
+ * - Ürün stokları geri yüklenir
+ * - Masa boşaltılır
+ * - archivedOrders'a iptal damgalı kopyalanır (raporlama için)
+ *
+ * @param {{ orderId:string, sebep:string, kullaniciId:string, kullaniciAd:string }} opts
+ */
+export async function cancelActiveOrder({ orderId, sebep, kullaniciId, kullaniciAd }) {
+  if (!orderId) throw new Error('orderId gerekli');
+  if (!sebep || !sebep.trim()) throw new Error('İptal sebebi zorunlu');
+
+  const orderRef = doc(db, 'orders', orderId);
+
+  return runTransaction(db, async (txn) => {
+    // === READS ===
+    const orderSnap = await txn.get(orderRef);
+    if (!orderSnap.exists()) throw new Error('Sipariş bulunamadı');
+    const order = orderSnap.data();
+    if (order.durum === 'tamamlandi') {
+      throw new Error('Tamamlanmış sipariş iptal edilemez (Arşivden iptal et)');
+    }
+    if (order.durum === 'iptal') {
+      throw new Error('Bu sipariş zaten iptal edilmiş');
+    }
+
+    // Stoğu geri yüklemek için ürünleri oku
+    const productRefs = (order.items || []).map((it) => doc(db, 'products', it.productId));
+    const productSnaps = await Promise.all(productRefs.map((r) => txn.get(r)));
+
+    // Masa kontrolü
+    const tableRef = order.masaId ? doc(db, 'tables', order.masaId) : null;
+
+    // === WRITES ===
+    const iptal = {
+      edildi: true,
+      sebep: sebep.trim(),
+      edenId: kullaniciId || null,
+      edenAd: kullaniciAd || 'Bilinmiyor',
+      zaman: serverTimestamp(),
+    };
+
+    // Order: durum = iptal + iptal damgası
+    txn.update(orderRef, {
+      durum: 'iptal',
+      iptal,
+      iptalZamani: serverTimestamp(),
+    });
+
+    // Ürün stoklarını geri yükle
+    productSnaps.forEach((snap, idx) => {
+      if (!snap.exists()) return; // silinmiş ürün, atla
+      const item = order.items[idx];
+      const oncekiStok = Number(snap.data().stok || 0);
+      const yeniStok = oncekiStok + Number(item.adet || 0);
+      txn.update(snap.ref, { stok: yeniStok });
+    });
+
+    // Masayı boşalt
+    if (tableRef) {
+      txn.update(tableRef, { durum: 'bos' });
+    }
+
+    // Arşive iptal damgalı kopya — raporlamada görünsün
+    const gun = (() => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    })();
+    const archiveRef = doc(db, 'archivedOrders', orderId);
+    txn.set(archiveRef, {
+      ...order,
+      durum: 'iptal',
+      iptal,
+      arsivZamani: serverTimestamp(),
+      tamamlandiZamani: serverTimestamp(),
+      gun,
+      odemeYontemleri: [],
+    });
+
+    return { ok: true };
+  });
+}
+
+/**
+ * Arşivlenmiş (ödenmiş) bir siparişi iptal eder. Veri silinmez,
+ * iptal damgası bırakılır. Raporlama bu damgaya bakıp toplamlardan
+ * düşer.
+ *
+ * @param {{ archivedId: string, sebep: string, kullaniciId: string, kullaniciAd: string }} opts
+ */
+export async function cancelArchivedOrder({ archivedId, sebep, kullaniciId, kullaniciAd }) {
+  if (!archivedId) throw new Error('archivedId gerekli');
+  if (!sebep || !sebep.trim()) throw new Error('İptal sebebi zorunlu');
+  const ref = doc(db, 'archivedOrders', archivedId);
+  await updateDoc(ref, {
+    iptal: {
+      edildi: true,
+      sebep: sebep.trim(),
+      edenId: kullaniciId || null,
+      edenAd: kullaniciAd || 'Bilinmiyor',
+      zaman: serverTimestamp(),
+    },
+  });
+}
+
+/**
+ * İptal kararını geri al (yanlışlıkla iptal edilmişse).
+ */
+export async function uncancelArchivedOrder(archivedId) {
+  if (!archivedId) throw new Error('archivedId gerekli');
+  const ref = doc(db, 'archivedOrders', archivedId);
+  await updateDoc(ref, { iptal: null });
 }

@@ -194,9 +194,16 @@ export default function ReceiptPreview({ open, onClose, order, payments, setting
               <div key={idx} className="flex justify-between text-xs">
                 <span className="flex-1">
                   {formatAdet(it.adet)}× {it.ad}
+                  {it.ikram && (
+                    <span className="ml-1 inline-block rounded bg-amber-100 px-1 text-[9px] font-bold uppercase text-amber-800">
+                      İKRAM
+                    </span>
+                  )}
                   {it.notlar && <em className="block pl-4 text-slate-500">({it.notlar})</em>}
                 </span>
-                <span className="ml-2 tabular-nums">{formatTL(it.fiyat * it.adet)}</span>
+                <span className={`ml-2 tabular-nums ${it.ikram ? 'text-slate-400 line-through' : ''}`}>
+                  {formatTL(it.ikram ? 0 : it.fiyat * it.adet)}
+                </span>
               </div>
             ))}
           </div>

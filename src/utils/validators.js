@@ -28,6 +28,9 @@ export const productSchema = z.object({
   stok: z.coerce.number().int().min(0, 'Stok 0 veya pozitif'),
   dusukStokEsigi: z.coerce.number().int().nonnegative().nullable().optional(),
   aciklama: z.string().optional(),
+  // Hızlı not seçimi — ör. ["acılı", "acısız", "soğansız"]. Fiyatı etkilemez,
+  // sipariş kaydında item.notlar alanına "acılı, soğansız" şeklinde yazılır.
+  opsiyonlar: z.array(z.string()).optional().default([]),
   aktif: z.boolean(),
 });
 
