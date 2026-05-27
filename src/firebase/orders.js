@@ -77,16 +77,20 @@ export async function createOrder({
       if (!snap.exists()) throw new Error(`Ürün bulunamadı: ${it.productId}`);
       const data = snap.data();
       if (!data.aktif) throw new Error(`Ürün pasif: ${data.ad}`);
-      if (data.stok < it.adet)
-        throw new Error(`Yetersiz stok: ${data.ad} (mevcut: ${data.stok})`);
-      stockUpdates.push({
-        ref: snap.ref,
-        productId: snap.id,
-        productAd: data.ad,
-        oncekiStok: data.stok,
-        yeniStok: data.stok - it.adet,
-        miktar: it.adet,
-      });
+      // Stok takibi: undefined → eski davranış (true). Açıkça false ise kontrol+güncelleme atlanır.
+      const stokTakipli = data.stokTakipli !== false;
+      if (stokTakipli) {
+        if (data.stok < it.adet)
+          throw new Error(`Yetersiz stok: ${data.ad} (mevcut: ${data.stok})`);
+        stockUpdates.push({
+          ref: snap.ref,
+          productId: snap.id,
+          productAd: data.ad,
+          oncekiStok: data.stok,
+          yeniStok: data.stok - it.adet,
+          miktar: it.adet,
+        });
+      }
       return {
         productId: it.productId,
         ad: data.ad,
@@ -406,15 +410,18 @@ export async function updateOrderItems({ orderId, newItems, originalItems, kulla
     const productSnaps = await Promise.all(productRefs.map((r) => txn.get(r)));
 
     // Stok yeterlilik kontrolü (delta negatifse = stok düşecek)
+    // Stok takipsiz (stokTakipli=false) ürünler için kontrol/güncelleme atlanır
     for (let i = 0; i < productIds.length; i++) {
       const snap = productSnaps[i];
       if (!snap.exists()) continue;
-      const delta = stockDelta[productIds[i]]; // pozitif=iade, negatif=düş
+      const data = snap.data();
+      if (data.stokTakipli === false) continue;
+      const delta = stockDelta[productIds[i]];
       if (delta < 0) {
-        const stok = Number(snap.data().stok || 0);
+        const stok = Number(data.stok || 0);
         const required = -delta;
         if (stok < required) {
-          throw new Error(`Yetersiz stok: ${snap.data().ad} (gereken ${required}, mevcut ${stok})`);
+          throw new Error(`Yetersiz stok: ${data.ad} (gereken ${required}, mevcut ${stok})`);
         }
       }
     }
@@ -435,13 +442,15 @@ export async function updateOrderItems({ orderId, newItems, originalItems, kulla
       sonGuncelleyenAd: kullaniciAd || null,
     });
 
-    // Stok güncelle
+    // Stok güncelle (takipsiz ürünler atlanır)
     for (let i = 0; i < productIds.length; i++) {
       const snap = productSnaps[i];
       if (!snap.exists()) continue;
+      const data = snap.data();
+      if (data.stokTakipli === false) continue;
       const delta = stockDelta[productIds[i]];
       if (delta === 0) continue;
-      const stok = Number(snap.data().stok || 0);
+      const stok = Number(data.stok || 0);
       txn.update(snap.ref, { stok: stok + delta });
     }
 
@@ -511,11 +520,13 @@ export async function cancelActiveOrder({ orderId, sebep, kullaniciId, kullanici
       iptalZamani: serverTimestamp(),
     });
 
-    // Ürün stoklarını geri yükle
+    // Ürün stoklarını geri yükle (sadece stok takipli ürünler için)
     productSnaps.forEach((snap, idx) => {
       if (!snap.exists()) return; // silinmiş ürün, atla
+      const data = snap.data();
+      if (data.stokTakipli === false) return; // takipsiz ürün
       const item = order.items[idx];
-      const oncekiStok = Number(snap.data().stok || 0);
+      const oncekiStok = Number(data.stok || 0);
       const yeniStok = oncekiStok + Number(item.adet || 0);
       txn.update(snap.ref, { stok: yeniStok });
     });

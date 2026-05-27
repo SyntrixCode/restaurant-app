@@ -25,7 +25,12 @@ export const productSchema = z.object({
   ad: z.string().min(1, 'Ürün adı zorunlu').max(200),
   categoryId: z.string().min(1, 'Kategori seçin'),
   fiyat: z.coerce.number().positive('Fiyat 0 dan büyük olmalı'),
-  stok: z.coerce.number().int().min(0, 'Stok 0 veya pozitif'),
+  // Stok takibi yapılan ürünler (kola, su, paketli içecekler vb.) için.
+  // Mutfak ürünlerinde (menemen, pide, kebap) genelde stok takibi yapılmaz.
+  // Default: false (yeni ürünlerde stoksuz). Mevcut ürünler undefined ise
+  // eski davranış (takipli) korunur.
+  stokTakipli: z.boolean().optional().default(false),
+  stok: z.coerce.number().int().min(0, 'Stok 0 veya pozitif').optional().default(0),
   dusukStokEsigi: z.coerce.number().int().nonnegative().nullable().optional(),
   aciklama: z.string().optional(),
   // Hızlı not seçimi — ör. ["acılı", "acısız", "soğansız"]. Fiyatı etkilemez,

@@ -207,7 +207,7 @@ function ProductModal({ open, onClose, editing, categories }) {
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(productSchema),
-    defaultValues: { ad: '', categoryId: '', fiyat: 0, stok: 0, aciklama: '', opsiyonlar: [], aktif: true },
+    defaultValues: { ad: '', categoryId: '', fiyat: 0, stokTakipli: false, stok: 0, aciklama: '', opsiyonlar: [], aktif: true },
   });
 
   useEffect(() => {
@@ -218,6 +218,8 @@ function ProductModal({ open, onClose, editing, categories }) {
               ad: editing.ad,
               categoryId: editing.categoryId,
               fiyat: editing.fiyat,
+              // Mevcut ürünlerde undefined ise eski davranış (takipli) korunur
+              stokTakipli: editing.stokTakipli !== false,
               stok: editing.stok,
               dusukStokEsigi: editing.dusukStokEsigi ?? null,
               aciklama: editing.aciklama || '',
@@ -228,6 +230,7 @@ function ProductModal({ open, onClose, editing, categories }) {
               ad: '',
               categoryId: categories[0]?.id || '',
               fiyat: 0,
+              stokTakipli: false, // Yeni ürünlerde default: stoksuz
               stok: 0,
               dusukStokEsigi: null,
               aciklama: '',
@@ -331,23 +334,43 @@ function ProductModal({ open, onClose, editing, categories }) {
           {errors.fiyat && <p className="mt-1 text-xs text-red-600">{errors.fiyat.message}</p>}
         </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Stok</label>
-          <input type="number" {...register('stok')} className="input" />
-          {errors.stok && <p className="mt-1 text-xs text-red-600">{errors.stok.message}</p>}
+        {/* Stok Takibi toggle — mutfak ürünlerinde kapalı, paketli ürünlerde açık */}
+        <div className="col-span-2">
+          <div className="flex items-start justify-between gap-3 rounded-lg bg-slate-50 p-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-800">Stok Takibi</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Açık: kola, su, paketli ürünler (sınırlı sayı). Kapalı: menemen, pide, kebap (mutfaktan yapılır, stok yok).
+              </p>
+            </div>
+            <Toggle
+              checked={!!watch('stokTakipli')}
+              onChange={(v) => setValue('stokTakipli', v, { shouldDirty: true })}
+            />
+          </div>
         </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Düşük Stok Eşiği (opsiyonel)
-          </label>
-          <input
-            type="number"
-            {...register('dusukStokEsigi')}
-            className="input"
-            placeholder="Boş = global ayar"
-          />
-        </div>
+        {watch('stokTakipli') && (
+          <>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Stok</label>
+              <input type="number" {...register('stok')} className="input" />
+              {errors.stok && <p className="mt-1 text-xs text-red-600">{errors.stok.message}</p>}
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Düşük Stok Eşiği (opsiyonel)
+              </label>
+              <input
+                type="number"
+                {...register('dusukStokEsigi')}
+                className="input"
+                placeholder="Boş = global ayar"
+              />
+            </div>
+          </>
+        )}
 
         <div className="col-span-2">
           <label className="mb-1 block text-sm font-medium text-slate-700">Açıklama</label>
