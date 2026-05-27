@@ -1,14 +1,33 @@
+import { useEffect } from 'react';
 import { Outlet, useNavigate, NavLink } from 'react-router-dom';
 import { LogOut, ShoppingCart, Truck, Grid3x3, ClipboardList } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import PoweredBy from '../PoweredBy';
+import UpdateBanner from '../UpdateBanner';
+import {
+  checkCustomerDisplayAvailable,
+  startCustomerDisplay,
+  pushToCustomerDisplay,
+} from '../../plugins/customerDisplay';
 
 export default function PosLayout() {
   const navigate = useNavigate();
   const { profile, rol, logout } = useAuthStore();
   const { settings } = useSettingsStore();
   const isKasiyer = rol === 'kasiyer' || rol === 'admin';
+
+  // Müşteri ekranını (varsa) başlat — bir kez, POS layout mount olunca
+  useEffect(() => {
+    (async () => {
+      const available = await checkCustomerDisplayAvailable();
+      if (available) {
+        await startCustomerDisplay();
+        // Başlangıçta idle ekranı
+        pushToCustomerDisplay({ mode: 'idle' });
+      }
+    })();
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -39,7 +58,11 @@ export default function PosLayout() {
           </button>
         </nav>
       </header>
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1 overflow-y-auto">
+        {/* POS ekranlarında üstte yeşil "Yeni sürüm hazır" banner'ı */}
+        <div className="px-4 pt-3">
+          <UpdateBanner to="/admin/settings" />
+        </div>
         <Outlet />
       </main>
       <footer className="border-t border-slate-200 bg-white px-4 py-1.5 text-center">

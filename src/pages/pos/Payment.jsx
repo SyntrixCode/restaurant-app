@@ -37,6 +37,7 @@ import ReceiptPreview from '../../components/ReceiptPreview';
 import CardPaymentModal from '../../components/CardPaymentModal';
 import SplitReceiptModal from '../../components/SplitReceiptModal';
 import PaymentSummaryModal from '../../components/PaymentSummaryModal';
+import { pushToCustomerDisplay } from '../../plugins/customerDisplay';
 
 const YEMEK_KARTI_TIPLERI = ['Multinet', 'Sodexo', 'Ticket', 'Setcard', 'Edenred', 'Metropol', 'Diğer'];
 
@@ -226,6 +227,42 @@ export default function Payment() {
 
   useEffect(() => watchCollection('campaigns', setCampaigns), []);
   useEffect(() => watchCollection('coupons', setCoupons), []);
+
+  // Müşteri ekranına canlı sipariş + tutar gönder
+  useEffect(() => {
+    if (!order) return;
+    const remainingTL = order.items
+      ? itemStates.reduce((sum, s, i) => {
+          const it = order.items[i];
+          if (!it || !s) return sum;
+          const total = Number(it.adet) || 0;
+          const consumed = (s.paidQty || 0) + (s.ikramQty || 0);
+          const remaining = total - consumed;
+          if (remaining <= 0) return sum;
+          return sum + (Number(it.fiyat) || 0) * remaining;
+        }, 0)
+      : 0;
+    pushToCustomerDisplay({
+      mode: 'payment',
+      order: {
+        masaAd: order.masaAd,
+        items: (order.items || []).map((it, i) => ({
+          ad: it.ad,
+          adet: it.adet,
+          fiyat: it.fiyat,
+          notlar: it.notlar,
+          ikram: !!(itemStates[i]?.ikramQty > 0),
+        })),
+        araToplam: order.araToplam,
+        indirim: 0, // payment ekranı kendi indirim/manuel discount'unu hesaplar
+        toplam: remainingTL > 0 ? remainingTL : (order.toplam || order.araToplam),
+      },
+      payment: {
+        kalan: remainingTL,
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.id, order?.items, itemStates]);
 
   // Auto-finalize useEffect — early return'lerden ÖNCE olmalı (hooks order kuralı).
   // İçinde order/items/itemStates güvenlik kontrolleri var, koşul yetersizse atlar.
@@ -433,6 +470,11 @@ export default function Payment() {
       });
       setChange(result.change);
       toast.success('Ödeme tamamlandı');
+      // Müşteri ekranına "teşekkürler" + para üstü
+      pushToCustomerDisplay({
+        mode: 'thanks',
+        payment: { paraUstu: result.change || 0 },
+      });
       // Ödeme özeti modal'ını aç — kullanıcı "Masalara Dön" deyince navigate
       setSummaryOpen(true);
     } catch (err) {
@@ -458,6 +500,7 @@ export default function Payment() {
 
   const closeSummary = () => {
     setSummaryOpen(false);
+    pushToCustomerDisplay({ mode: 'idle' });
     navigate('/pos/tables');
   };
 

@@ -42,6 +42,7 @@ import PosPlaceholder from './pages/pos/Placeholder';
 import CallerIdPopup from './components/CallerIdPopup';
 
 import Menu from './pages/menu/Menu';
+import CustomerDisplay from './pages/CustomerDisplay';
 
 export default function App() {
   const initAuth = useAuthStore((s) => s.init);
@@ -116,6 +117,10 @@ export default function App() {
       </Route>
 
       <Route path="/menu/:masaId" element={<Menu />} />
+
+      {/* Müşteri ekranı — 2. ekranda Presentation tarafından açılır.
+          Login gerektirmez; doğrudan BroadcastChannel ile state dinler. */}
+      <Route path="/customer-display" element={<CustomerDisplay />} />
 
       <Route path="*" element={<Navigate to="/admin/login" replace />} />
     </Routes>

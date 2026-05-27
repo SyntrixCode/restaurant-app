@@ -125,9 +125,9 @@ async function seedSettings() {
     {
       gecikmeEsigiDk: 15,
       dusukStokEsigi: 5,
-      restoranAd: 'Lezzet Durağı',
-      restoranAdres: 'Demo Mah. Test Cad. No:1 İstanbul',
-      restoranTel: '0212 000 00 00',
+      restoranAd: 'Alazlı Konya Mutfağı',
+      restoranAdres: '',
+      restoranTel: '',
       vergiOrani: 10,
       paraBirimi: 'TL',
       kdvDahilFiyat: true,

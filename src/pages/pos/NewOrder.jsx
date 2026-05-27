@@ -10,6 +10,7 @@ import { createOrder, addItemsToOrder, updateOrderItems } from '../../firebase/o
 import Modal from '../../components/ui/Modal';
 import KitchenTicket from '../../components/KitchenTicket';
 import ProductOptionsModal from '../../components/ProductOptionsModal';
+import { pushToCustomerDisplay } from '../../plugins/customerDisplay';
 
 export default function NewOrder() {
   const navigate = useNavigate();
@@ -300,6 +301,37 @@ export default function NewOrder() {
   };
 
   const subtotal = total();
+
+  // Müşteri ekranına canlı sepet bilgisi gönder
+  useEffect(() => {
+    if (!masaAd) return;
+    // Mevcut siparişin önceki kalemleri + sepetteki yeni kalemleri birleştir
+    const existingItems = existingOrder?.items || [];
+    const cartItems = items.map((it) => ({
+      ad: it.ad,
+      adet: it.adet,
+      fiyat: it.fiyat,
+      notlar: it.notlar,
+    }));
+    const allItems = [...existingItems, ...cartItems];
+    const grandSubtotal = (existingOrder?.araToplam || 0) + subtotal;
+    pushToCustomerDisplay({
+      mode: items.length > 0 || allItems.length > 0 ? 'order' : 'idle',
+      order: {
+        masaAd,
+        items: allItems,
+        araToplam: grandSubtotal,
+        toplam: grandSubtotal,
+      },
+    });
+  }, [items, masaAd, subtotal, existingOrder?.items, existingOrder?.araToplam]);
+
+  // Sayfa kapanırken müşteri ekranını idle'a çek
+  useEffect(() => {
+    return () => {
+      pushToCustomerDisplay({ mode: 'idle' });
+    };
+  }, []);
 
   return (
     <div className="flex h-full bg-slate-100">

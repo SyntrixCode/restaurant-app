@@ -10,6 +10,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(IminPrinterPlugin.class);
         registerPlugin(NetworkPrinterPlugin.class);
         registerPlugin(AppUpdaterPlugin.class);
+        registerPlugin(CustomerDisplayPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
