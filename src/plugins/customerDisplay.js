@@ -19,10 +19,20 @@ const CustomerDisplay = registerPlugin('CustomerDisplay', {
 const CHANNEL_NAME = 'syntrixpos-customer-display';
 
 let _channel = null;
+let _channelInitTried = false;
 function channel() {
   if (typeof window === 'undefined') return null;
-  if (!_channel) _channel = new BroadcastChannel(CHANNEL_NAME);
-  return _channel;
+  if (_channel) return _channel;
+  if (_channelInitTried) return null;
+  _channelInitTried = true;
+  try {
+    if (typeof BroadcastChannel === 'undefined') return null;
+    _channel = new BroadcastChannel(CHANNEL_NAME);
+    return _channel;
+  } catch (err) {
+    console.warn('customerDisplay: BroadcastChannel oluşturulamadı', err);
+    return null;
+  }
 }
 
 export function isCustomerDisplayNative() {

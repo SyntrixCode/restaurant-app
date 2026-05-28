@@ -244,24 +244,32 @@ export function buildSplitReceiptLines({ order, items = [], payment, settings = 
 /**
  * Müşteri hesap fişi için yardımcı.
  */
-export function buildCustomerReceiptLines({ order, payments = [], settings = {}, change = 0 }) {
+export function buildCustomerReceiptLines({ order, payments = [], settings = {}, change = 0, isAdisyon = false }) {
   const lines = [];
   const baslik = settings.fisBasligi || settings.restoranAd || 'RESTORAN';
   lines.push({ type: 'text', text: baslik, align: 'center', size: 36, bold: true });
+  if (isAdisyon) {
+    lines.push({ type: 'text', text: 'ADISYON', align: 'center', size: 26, bold: true });
+  }
   if (settings.restoranAdres) {
     lines.push({ type: 'text', text: settings.restoranAdres, align: 'center', size: 22 });
   }
   if (settings.restoranTel) {
     lines.push({ type: 'text', text: `Tel: ${settings.restoranTel}`, align: 'center', size: 22 });
   }
+  if (settings.vergiDairesi || settings.vergiNo) {
+    const vd = settings.vergiDairesi ? `${settings.vergiDairesi} VD` : '';
+    const vn = settings.vergiNo ? `VKN: ${settings.vergiNo}` : '';
+    lines.push({ type: 'text', text: [vd, vn].filter(Boolean).join('  '), align: 'center', size: 20 });
+  }
   lines.push({ type: 'divider' });
 
   const now = new Date();
   const tarih = `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  lines.push({ type: 'text', text: `Tarih: ${tarih}` });
-  lines.push({ type: 'text', text: `Masa: ${order.masaAd || 'Paket'}` });
-  if (order.kisiSayisi != null) lines.push({ type: 'text', text: `Kişi: ${order.kisiSayisi}` });
-  lines.push({ type: 'text', text: `Garson: ${order.garsonAd || '-'}` });
+  lines.push({ type: 'text', text: `Tarih: ${tarih}`, size: 22 });
+  lines.push({ type: 'text', text: `Masa: ${order.masaAd || 'Paket'}`, size: 22 });
+  if (order.kisiSayisi != null) lines.push({ type: 'text', text: `Kişi: ${order.kisiSayisi}`, size: 22 });
+  lines.push({ type: 'text', text: `Garson: ${order.garsonAd || '-'}`, size: 22 });
   lines.push({
     type: 'text',
     text: `Fiş No: ${String(order.id || '').slice(0, 8).toUpperCase()}`,
@@ -287,19 +295,20 @@ export function buildCustomerReceiptLines({ order, payments = [], settings = {},
   }
 
   lines.push({ type: 'divider' });
-  lines.push({ type: 'text', text: `Ara Toplam: ${fmt(order.araToplam)} TL`, align: 'right' });
+  lines.push({ type: 'text', text: `Ara Toplam: ${fmt(order.araToplam)} TL`, align: 'right', size: 22 });
   if (order.indirim > 0) {
-    lines.push({ type: 'text', text: `İndirim: -${fmt(order.indirim)} TL`, align: 'right' });
+    lines.push({ type: 'text', text: `İndirim: -${fmt(order.indirim)} TL`, align: 'right', size: 22 });
   }
   lines.push({
     type: 'text',
-    text: `TOPLAM: ${fmt(order.toplam)} TL`,
+    text: `${isAdisyon ? 'ÖDENECEK' : 'TOPLAM'}: ${fmt(order.toplam)} TL`,
     align: 'right',
     size: 36,
     bold: true,
   });
 
-  if (payments.length > 0) {
+  // Ödeme bölümü — sadece gerçek fişte (adisyon değil)
+  if (!isAdisyon && payments.length > 0) {
     lines.push({ type: 'divider' });
     for (const p of payments) {
       const lbl =
@@ -318,8 +327,17 @@ export function buildCustomerReceiptLines({ order, payments = [], settings = {},
   }
 
   lines.push({ type: 'feed', lines: 1 });
-  const altMesaj = settings.fisAltMesaji || 'Teşekkür ederiz';
-  lines.push({ type: 'text', text: altMesaj, align: 'center', size: 24 });
+  if (isAdisyon) {
+    lines.push({
+      type: 'text',
+      text: 'Bu adisyon mali belge degildir',
+      align: 'center',
+      size: 20,
+    });
+  } else {
+    const altMesaj = settings.fisAltMesaji || 'Teşekkür ederiz';
+    lines.push({ type: 'text', text: altMesaj, align: 'center', size: 24 });
+  }
   lines.push({
     type: 'text',
     text: 'powered by {S} syntrixCode',

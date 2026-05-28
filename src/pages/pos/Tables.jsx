@@ -16,6 +16,7 @@ import {
   User,
   Trash2,
   Ban,
+  Printer,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useForm } from 'react-hook-form';
@@ -29,6 +30,8 @@ import { createReservation, cancelReservation } from '../../firebase/reservation
 import { cancelActiveOrder } from '../../firebase/orders';
 import { reservationSchema } from '../../utils/validators';
 import KitchenTicket from '../../components/KitchenTicket';
+import AdisyonTicket from '../../components/AdisyonTicket';
+import { useSettingsStore } from '../../store/settingsStore';
 
 const ZONE_LABELS = {
   ic: 'İç Salon',
@@ -1027,8 +1030,10 @@ function CanvasDecoration({ decor }) {
 
 function FullTableModal({ open, onClose, table, rol, navigate, onDissolve }) {
   const { user, profile } = useAuthStore();
+  const { settings } = useSettingsStore();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancellingTicket, setCancellingTicket] = useState(null);
+  const [adisyonOpen, setAdisyonOpen] = useState(false);
   if (!open || !table) return null;
   const order = table.order;
   const group = table.group;
@@ -1149,6 +1154,14 @@ function FullTableModal({ open, onClose, table, rol, navigate, onDissolve }) {
             )}
           </div>
 
+          {/* Hesap Fişi (Adisyon) — ödemeden önce müşteriye verilir */}
+          <button
+            onClick={() => setAdisyonOpen(true)}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+          >
+            <Printer size={16} /> Hesap Fişi (Adisyon) Bas
+          </button>
+
           {/* Sipariş İptal — yetkili kullanıcılar için, ayrı blokta */}
           {canCancel && (
             <button
@@ -1176,6 +1189,14 @@ function FullTableModal({ open, onClose, table, rol, navigate, onDissolve }) {
         items={cancellingTicket?.items}
         isCancellation={true}
         cancellationReason={cancellingTicket?.sebep || ''}
+      />
+
+      {/* Adisyon (hesap fişi) — ödemeden önce */}
+      <AdisyonTicket
+        open={adisyonOpen}
+        onClose={() => setAdisyonOpen(false)}
+        order={order}
+        settings={settings}
       />
     </Modal>
   );

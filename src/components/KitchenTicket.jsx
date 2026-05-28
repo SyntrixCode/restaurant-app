@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Printer, X, Check } from 'lucide-react';
 import { formatAdet, formatDate } from '../utils/format';
 import { printReceipt, buildKitchenTicketLines, isIminPrinterAvailable } from '../plugins/iminPrinter';
@@ -33,9 +33,24 @@ export default function KitchenTicket({
   useEffect(() => watchCollection('printers', setNetworkPrinters), []);
   const kitchenPrinter = networkPrinters.find((p) => p.aktif && p.ip);
 
+  // Senkron guard — async print başlamadan ÖNCE set edilir.
+  // kitchenPrinter referansı her render değiştiği için effect tekrar
+  // tetiklenebilir; bu ref çift basımı önler.
+  const printStartedRef = useRef(false);
+
+  // Modal kapanınca guard'ı ve printed state'i sıfırla
+  useEffect(() => {
+    if (!open) {
+      printStartedRef.current = false;
+      setPrinted(false);
+    }
+  }, [open]);
+
   // Modal açılınca yazıcı varsa OTOMATİK bas (garson tek tıkla işini bitirsin)
   useEffect(() => {
-    if (!open || !order || !items || printed) return;
+    if (!open || !order || !items) return;
+    if (printStartedRef.current) return; // zaten basıldı/basılıyor
+    printStartedRef.current = true; // SENKRON kilit — async'ten ÖNCE
     let cancelled = false;
     (async () => {
       const lines = buildKitchenTicketLines({ order, items, isAddendum, isCancellation, cancellationReason, isCorrection, correctionDiff });

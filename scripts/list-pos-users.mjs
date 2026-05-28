@@ -1,9 +1,8 @@
-// Tek seferlik: settings/global dokümanındaki "Lezzet Durağı" varsa
-// Alazlı Konya Mutfağı ile değiştirir.
+// POS kullanıcılarını listele — tanılama amaçlı
 import { readFileSync } from 'node:fs';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
-import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { getFirestore, collection, getDocs } from 'firebase/firestore';
 
 function loadEnv(path = '.env.local') {
   const text = readFileSync(path, 'utf8');
@@ -30,29 +29,10 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 await signInWithEmailAndPassword(auth, 'admin@restoran.com', 'Admin123!');
-const ref = doc(db, 'settings', 'global');
-const snap = await getDoc(ref);
-if (!snap.exists()) {
-  console.log('settings/global yok');
-  process.exit(0);
-}
-const cur = snap.data();
-console.log('Şu anki restoranAd:', cur.restoranAd);
-console.log('Şu anki fisBasligi:', cur.fisBasligi);
-
-const patch = {};
-if (cur.restoranAd === 'Lezzet Durağı' || !cur.restoranAd) {
-  patch.restoranAd = 'Alazlı Konya Mutfağı';
-}
-// Fiş başlığı eski "Lezzet Durağı" ise boşalt → restoranAd kullanılır
-if (cur.fisBasligi && cur.fisBasligi.toLowerCase().includes('lezzet')) {
-  patch.fisBasligi = '';
-}
-
-if (Object.keys(patch).length > 0) {
-  await updateDoc(ref, patch);
-  console.log('✓ Güncellendi:', JSON.stringify(patch));
-} else {
-  console.log('Değişiklik yok');
-}
+const snap = await getDocs(collection(db, 'users'));
+console.log(`Toplam kullanıcı: ${snap.size}\n`);
+snap.docs.forEach((d) => {
+  const u = d.data();
+  console.log(`- ${u.ad || '(adsız)'} | rol: ${u.rol || '-'} | kod: ${u.kod || '-'} | aktif: ${u.aktif !== false}`);
+});
 process.exit(0);

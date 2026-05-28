@@ -216,10 +216,9 @@ public class NetworkPrinterPlugin extends Plugin {
     }
 
     private int scaleFromSize(int size) {
-        // iMin'in piksel-tabanlı size'ından (~24-48) Bixolon'un 1-8 ölçeğine map'le
-        if (size >= 44) return 4;
-        if (size >= 36) return 3;
-        if (size >= 28) return 2;
+        // iMin piksel-size'ından Bixolon ölçeğine — 80mm için muhafazakar.
+        // Sadece başlık/toplam (>=32) 2x; normal gövde (28 ve altı) 1x kalır.
+        if (size >= 32) return 2;
         return 1;
     }
 
