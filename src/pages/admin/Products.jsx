@@ -207,7 +207,11 @@ function ProductModal({ open, onClose, editing, categories }) {
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(productSchema),
-    defaultValues: { ad: '', categoryId: '', fiyat: 0, stokTakipli: false, stok: 0, aciklama: '', opsiyonlar: [], aktif: true },
+    defaultValues: {
+      ad: '', categoryId: '', fiyat: 0, stokTakipli: false, stok: 0, aciklama: '', opsiyonlar: [],
+      ceviri: { en: { ad: '', aciklama: '' }, ar: { ad: '', aciklama: '' } },
+      aktif: true,
+    },
   });
 
   useEffect(() => {
@@ -224,6 +228,10 @@ function ProductModal({ open, onClose, editing, categories }) {
               dusukStokEsigi: editing.dusukStokEsigi ?? null,
               aciklama: editing.aciklama || '',
               opsiyonlar: editing.opsiyonlar || [],
+              ceviri: {
+                en: { ad: editing.ceviri?.en?.ad || '', aciklama: editing.ceviri?.en?.aciklama || '' },
+                ar: { ad: editing.ceviri?.ar?.ad || '', aciklama: editing.ceviri?.ar?.aciklama || '' },
+              },
               aktif: editing.aktif ?? true,
             }
           : {
@@ -235,6 +243,7 @@ function ProductModal({ open, onClose, editing, categories }) {
               dusukStokEsigi: null,
               aciklama: '',
               opsiyonlar: [],
+              ceviri: { en: { ad: '', aciklama: '' }, ar: { ad: '', aciklama: '' } },
               aktif: true,
             },
       );
@@ -390,6 +399,33 @@ function ProductModal({ open, onClose, editing, categories }) {
             Garson siparişe eklerken bu seçenekler çıkar. Birden fazla seçilebilir, fiyatı etkilemez.
           </p>
         </div>
+
+        <details className="col-span-2 rounded-lg border border-slate-200 p-3">
+          <summary className="cursor-pointer text-sm font-medium text-slate-700">
+            Çeviriler (QR menü — opsiyonel)
+          </summary>
+          <p className="mt-1 text-xs text-slate-500">
+            Boş bırakılan diller müşteri menüsünde Türkçe gösterilir.
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">İngilizce ad</label>
+              <input {...register('ceviri.en.ad')} className="input" placeholder="English name" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">İngilizce açıklama</label>
+              <input {...register('ceviri.en.aciklama')} className="input" placeholder="English description" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Arapça ad</label>
+              <input {...register('ceviri.ar.ad')} className="input" dir="rtl" placeholder="الاسم بالعربية" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Arapça açıklama</label>
+              <input {...register('ceviri.ar.aciklama')} className="input" dir="rtl" placeholder="الوصف بالعربية" />
+            </div>
+          </div>
+        </details>
 
         <div className="col-span-2">
           <label className="mb-1 block text-sm font-medium text-slate-700">Görsel</label>

@@ -15,6 +15,7 @@ import Modal from '../../components/ui/Modal';
 import { watchCollection, orderBy } from '../../firebase/firestore';
 import { cancelArchivedOrder, uncancelArchivedOrder } from '../../firebase/orders';
 import { useAuthStore } from '../../store/authStore';
+import { exportArchivedOrders } from '../../utils/excelExport';
 import { formatTL, formatDate, formatAdet } from '../../utils/format';
 
 function todayISO() {
@@ -115,13 +116,22 @@ export default function AdminArchive() {
         title="Arşivlenen Siparişler"
         subtitle="Tamamlanan siparişlerin geçmişi"
         actions={
-          <button
-            onClick={exportCSV}
-            disabled={filtered.length === 0}
-            className="btn-secondary disabled:opacity-50"
-          >
-            <Download size={16} /> CSV İndir
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => exportArchivedOrders(filtered, `arsiv_${from}_${to}`)}
+              disabled={filtered.length === 0}
+              className="btn-primary disabled:opacity-50"
+            >
+              <Download size={16} /> Excel İndir
+            </button>
+            <button
+              onClick={exportCSV}
+              disabled={filtered.length === 0}
+              className="btn-secondary disabled:opacity-50"
+            >
+              <Download size={16} /> CSV
+            </button>
+          </div>
         }
       />
 

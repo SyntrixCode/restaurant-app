@@ -160,6 +160,23 @@ public class IminPrinterPlugin extends Plugin {
                 helper.printQrCodeWithAlign(data, align, null);
                 break;
             }
+            case "image": {
+                String asset = line.optString("asset", "");
+                if (asset.isEmpty()) return;
+                try {
+                    android.graphics.Bitmap bmp;
+                    try (java.io.InputStream is = getContext().getAssets().open(asset)) {
+                        bmp = android.graphics.BitmapFactory.decodeStream(is);
+                    }
+                    if (bmp != null) {
+                        // 1 = ortala (iMin printSingleBitmapWithAli: 0 sol,1 orta,2 sağ)
+                        helper.printSingleBitmapWithAli(bmp, 1, null);
+                    }
+                } catch (Throwable ignored) {
+                    // Logo basılamadı — fiş yine çıksın
+                }
+                break;
+            }
             default:
                 // Bilinmeyen tip — yoksay
                 break;

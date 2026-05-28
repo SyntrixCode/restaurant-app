@@ -57,10 +57,30 @@ public class NetworkPrinterPlugin extends Plugin {
             POSPrinter printer = null;
             try {
                 printer = openPrinter(model, ip);
+                // Satırları sırayla işle. 'image' satırında biriken metni flush et,
+                // bitmap'i bas, sonra metne devam et (logo en üstte konumlanır).
                 StringBuilder buf = new StringBuilder();
                 for (int i = 0; i < lines.length(); i++) {
                     JSONObject line = lines.getJSONObject(i);
-                    buf.append(renderLine(line));
+                    String lineType = line.optString("type");
+                    if ("image".equals(lineType)) {
+                        if (buf.length() > 0) {
+                            printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, buf.toString());
+                            buf.setLength(0);
+                        }
+                        printAssetBitmap(printer, line.optString("asset"));
+                    } else if ("qr".equals(lineType)) {
+                        String data = line.optString("data", "");
+                        if (!data.isEmpty()) {
+                            if (buf.length() > 0) {
+                                printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, buf.toString());
+                                buf.setLength(0);
+                            }
+                            printQR(printer, data);
+                        }
+                    } else {
+                        buf.append(renderLine(line));
+                    }
                 }
                 for (int j = 0; j < feedLines; j++) buf.append("\n");
                 if (cut) buf.append(ESC).append("90fP");
@@ -75,6 +95,50 @@ public class NetworkPrinterPlugin extends Plugin {
                 closeQuietly(printer);
             }
         }, "BxlNetworkPrint").start();
+    }
+
+    /**
+     * QR kod basar (Bixolon SDK printBarCode, QRCODE symbology).
+     */
+    private void printQR(POSPrinter printer, String data) {
+        try {
+            printer.printBarCode(
+                    POSPrinterConst.PTR_S_RECEIPT,
+                    data,
+                    POSPrinterConst.PTR_BCS_QRCODE,
+                    180,   // height (dots)
+                    180,   // width (modül boyutu — SDK QR'da yorumlar)
+                    POSPrinterConst.PTR_BC_CENTER,
+                    POSPrinterConst.PTR_BC_TEXT_NONE
+            );
+        } catch (Throwable t) {
+            // QR basılamadı — fiş yine çıksın
+        }
+    }
+
+    /**
+     * assets/ içindeki bir PNG'yi yükleyip Bixolon yazıcıya ortalı basar.
+     * Hata olursa sessizce atlar (logo basılamazsa fiş yine çıksın).
+     */
+    private void printAssetBitmap(POSPrinter printer, String assetName) {
+        if (assetName == null || assetName.isEmpty()) return;
+        try {
+            android.graphics.Bitmap bmp;
+            try (java.io.InputStream is = getContext().getAssets().open(assetName)) {
+                bmp = android.graphics.BitmapFactory.decodeStream(is);
+            }
+            if (bmp == null) return;
+            // Station + parlaklık/sıkıştırma/dither paketlenmiş int (sample'dan)
+            java.nio.ByteBuffer bb = java.nio.ByteBuffer.allocate(4);
+            bb.put((byte) POSPrinterConst.PTR_S_RECEIPT);
+            bb.put((byte) 0); // brightness (default)
+            bb.put((byte) 0); // compress
+            bb.put((byte) 0); // dither
+            // width: PTR_BM_ASIS (orijinal genişlik), ortala
+            printer.printBitmap(bb.getInt(0), bmp, POSPrinterConst.PTR_BM_ASIS, POSPrinterConst.PTR_BM_CENTER);
+        } catch (Throwable t) {
+            // Logo basılamadı — fişin geri kalanı yine çıksın
+        }
     }
 
     @PluginMethod

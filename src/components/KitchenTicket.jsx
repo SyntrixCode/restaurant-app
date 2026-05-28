@@ -4,6 +4,7 @@ import { formatAdet, formatDate } from '../utils/format';
 import { printReceipt, buildKitchenTicketLines, isIminPrinterAvailable } from '../plugins/iminPrinter';
 import { printNetworkReceipt } from '../plugins/networkPrinter';
 import { watchCollection } from '../firebase/firestore';
+import { groupItemsByPrinter } from '../utils/printerRouting';
 
 export default function KitchenTicket({
   open,
@@ -20,6 +21,7 @@ export default function KitchenTicket({
   const [printed, setPrinted] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [networkPrinters, setNetworkPrinters] = useState([]);
+  const [categories, setCategories] = useState([]);
 
   useEffect(() => {
     const handleEsc = (e) => {
@@ -29,9 +31,12 @@ export default function KitchenTicket({
     return () => document.removeEventListener('keydown', handleEsc);
   }, [open, onClose]);
 
-  // Aktif ağ yazıcılarını dinle
+  // Aktif ağ yazıcıları + kategoriler (yazıcı yönlendirmesi için)
   useEffect(() => watchCollection('printers', setNetworkPrinters), []);
-  const kitchenPrinter = networkPrinters.find((p) => p.aktif && p.ip);
+  useEffect(() => watchCollection('categories', setCategories), []);
+  // Kalemleri hedef yazıcılarına göre grupla (mutfak / bar)
+  const printerGroups = groupItemsByPrinter(items, categories, networkPrinters);
+  const hasNetworkPrinter = printerGroups.length > 0;
 
   // Senkron guard — async print başlamadan ÖNCE set edilir.
   // kitchenPrinter referansı her render değiştiği için effect tekrar
@@ -53,20 +58,24 @@ export default function KitchenTicket({
     printStartedRef.current = true; // SENKRON kilit — async'ten ÖNCE
     let cancelled = false;
     (async () => {
-      const lines = buildKitchenTicketLines({ order, items, isAddendum, isCancellation, cancellationReason, isCorrection, correctionDiff });
-
-      // Öncelik: ağdaki Bixolon mutfak yazıcısı (varsa)
-      if (kitchenPrinter) {
+      // Öncelik: ağdaki Bixolon yazıcı(lar) — kalemler kategoriye göre
+      // mutfak/bar yazıcılarına bölünür.
+      if (hasNetworkPrinter) {
         setNativeAvailable(true);
         setPrinting(true);
         try {
-          await printNetworkReceipt({
-            ip: kitchenPrinter.ip,
-            model: kitchenPrinter.model || 'SRP-E300',
-            lines,
-            cut: true,
-            feedLines: 3,
-          });
+          for (const group of printerGroups) {
+            const lines = buildKitchenTicketLines({
+              order, items: group.items, isAddendum, isCancellation, cancellationReason, isCorrection, correctionDiff,
+            });
+            await printNetworkReceipt({
+              ip: group.printer.ip,
+              model: group.printer.model || 'SRP-E300',
+              lines,
+              cut: true,
+              feedLines: 3,
+            });
+          }
           if (!cancelled) {
             setPrinted(true);
             setTimeout(() => !cancelled && onClose(), 800);
@@ -79,7 +88,8 @@ export default function KitchenTicket({
         return;
       }
 
-      // Fallback: iMin dahili termal yazıcı
+      // Fallback: iMin dahili termal yazıcı — tüm kalemler tek fişte
+      const lines = buildKitchenTicketLines({ order, items, isAddendum, isCancellation, cancellationReason, isCorrection, correctionDiff });
       const available = await isIminPrinterAvailable();
       if (cancelled) return;
       setNativeAvailable(available);
@@ -101,23 +111,29 @@ export default function KitchenTicket({
     return () => {
       cancelled = true;
     };
-  }, [open, order, items, isAddendum, isCancellation, cancellationReason, printed, onClose, kitchenPrinter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, order, items, isAddendum, isCancellation, cancellationReason, printed, onClose, hasNetworkPrinter]);
 
   if (!open || !order || !items) return null;
 
   const print = async () => {
     setPrinting(true);
     try {
-      const lines = buildKitchenTicketLines({ order, items, isAddendum, isCancellation, cancellationReason, isCorrection, correctionDiff });
-      if (kitchenPrinter) {
-        await printNetworkReceipt({
-          ip: kitchenPrinter.ip,
-          model: kitchenPrinter.model || 'SRP-E300',
-          lines,
-          cut: true,
-          feedLines: 3,
-        });
+      if (hasNetworkPrinter) {
+        for (const group of printerGroups) {
+          const lines = buildKitchenTicketLines({
+            order, items: group.items, isAddendum, isCancellation, cancellationReason, isCorrection, correctionDiff,
+          });
+          await printNetworkReceipt({
+            ip: group.printer.ip,
+            model: group.printer.model || 'SRP-E300',
+            lines,
+            cut: true,
+            feedLines: 3,
+          });
+        }
       } else {
+        const lines = buildKitchenTicketLines({ order, items, isAddendum, isCancellation, cancellationReason, isCorrection, correctionDiff });
         await printReceipt({
           lines,
           cut: true,
@@ -161,8 +177,10 @@ export default function KitchenTicket({
                   ? '✓ basıldı'
                   : printing
                     ? 'Basılıyor…'
-                    : kitchenPrinter
-                      ? `${kitchenPrinter.ad || 'Mutfak'} (${kitchenPrinter.ip})`
+                    : hasNetworkPrinter
+                      ? printerGroups.length > 1
+                        ? `${printerGroups.length} yazıcı (mutfak/bar)`
+                        : `${printerGroups[0].printer.ad || 'Mutfak'} (${printerGroups[0].printer.ip})`
                       : 'iMin yazıcı'}
               </span>
             )}

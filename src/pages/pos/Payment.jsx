@@ -23,6 +23,12 @@ import { formatTL, minutesSince, formatAdet } from '../../utils/format';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { recordPayment } from '../../firebase/payments';
+import {
+  awardLoyaltyPoints,
+  adjustLoyaltyPoints,
+  computeEarnedPoints,
+  normalizePhone,
+} from '../../firebase/customers';
 import { pickBestDiscount, isCouponValid, isCampaignActive } from '../../utils/discount';
 import {
   computeOrderTotals,
@@ -59,6 +65,8 @@ export default function Payment() {
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [manualDiscount, setManualDiscount] = useState(null); // { tipi: 'yuzde'|'sabit', deger:number, aciklama:string }
   const [manualDiscountModal, setManualDiscountModal] = useState(false);
+  const [loyaltyCustomer, setLoyaltyCustomer] = useState(null); // sadakat müşteri doc'u
+  const [loyaltyRedeem, setLoyaltyRedeem] = useState(null); // { puan, tl } kullanılan puan
 
   const [cashModal, setCashModal] = useState(false);
   const [cardModal, setCardModal] = useState(false);
@@ -228,6 +236,20 @@ export default function Payment() {
   useEffect(() => watchCollection('campaigns', setCampaigns), []);
   useEffect(() => watchCollection('coupons', setCoupons), []);
 
+  // Sadakat: paket siparişte müşteri telefonuna göre puan bakiyesini izle
+  useEffect(() => {
+    if (!settings?.sadakatAktif || !order?.paketMi) {
+      setLoyaltyCustomer(null);
+      return;
+    }
+    const id = normalizePhone(order.musteriTel);
+    if (!id || id.length < 7) {
+      setLoyaltyCustomer(null);
+      return;
+    }
+    return watchDoc('customers', id, setLoyaltyCustomer);
+  }, [settings?.sadakatAktif, order?.paketMi, order?.musteriTel]);
+
   // Müşteri ekranına canlı sipariş + tutar gönder
   useEffect(() => {
     if (!order) return;
@@ -347,6 +369,32 @@ export default function Payment() {
   // Inline (useMemo değil) — koşullu erken return'lerden sonra hook çağırmak
   // React hooks kuralını ihlal eder ve beyaz ekrana yol açar.
   const applicableCampaigns = campaigns.filter((c) => isCampaignActive(c, subtotal));
+
+  // Sadakat puanı kullanımı — kullanılabilir puan ve maksimum indirim
+  const loyaltyEnabled = !!settings?.sadakatAktif && !!order.paketMi;
+  const availablePoints = loyaltyCustomer?.puan || 0;
+  const puanTLKarsiligi = Number(settings.puanTLKarsiligi) || 1;
+  // subtotal'i aşmayacak kadar puan kullanılabilir
+  const maxRedeemablePoints = Math.min(
+    availablePoints,
+    Math.floor(subtotal / puanTLKarsiligi),
+  );
+
+  const applyLoyaltyRedeem = () => {
+    if (maxRedeemablePoints <= 0) return;
+    const tl = maxRedeemablePoints * puanTLKarsiligi;
+    setManualDiscount({
+      tipi: 'sabit',
+      deger: tl,
+      aciklama: `Sadakat puanı (${maxRedeemablePoints} puan)`,
+    });
+    setLoyaltyRedeem({ puan: maxRedeemablePoints, tl });
+  };
+
+  const clearManualDiscount = () => {
+    setManualDiscount(null);
+    setLoyaltyRedeem(null);
+  };
 
   const applyCouponCode = () => {
     if (!couponInput.trim()) return;
@@ -470,6 +518,21 @@ export default function Payment() {
       });
       setChange(result.change);
       toast.success('Ödeme tamamlandı');
+
+      // Sadakat: kullanılan puanı düş + yeni puan kazandır (sessiz, akışı bozmaz)
+      if (settings?.sadakatAktif && order.paketMi && order.musteriTel) {
+        if (loyaltyRedeem?.puan > 0) {
+          adjustLoyaltyPoints({ tel: order.musteriTel, delta: -loyaltyRedeem.puan }).catch((e) =>
+            console.warn('Puan düşülemedi:', e),
+          );
+        }
+        const earned = computeEarnedPoints(result.effectiveTotal, settings);
+        if (earned > 0) {
+          awardLoyaltyPoints({ tel: order.musteriTel, tutar: result.effectiveTotal, settings })
+            .then(() => toast.success(`+${earned} sadakat puanı`))
+            .catch((e) => console.warn('Puan eklenemedi:', e));
+        }
+      }
       // Müşteri ekranına "teşekkürler" + para üstü
       pushToCustomerDisplay({
         mode: 'thanks',
@@ -727,7 +790,7 @@ export default function Payment() {
                     <span className="ml-1 italic text-amber-700">— {manualDiscount.aciklama}</span>
                   )}
                 </span>
-                <button onClick={() => setManualDiscount(null)} className="rounded p-0.5 hover:bg-amber-100">
+                <button onClick={clearManualDiscount} className="rounded p-0.5 hover:bg-amber-100">
                   <X size={12} />
                 </button>
               </div>
@@ -745,6 +808,37 @@ export default function Payment() {
               </p>
             )}
           </div>
+
+          {/* Sadakat puanı kullanımı */}
+          {loyaltyEnabled && availablePoints > 0 && (
+            <div className="mt-3 border-t border-slate-100 pt-2">
+              {loyaltyRedeem ? (
+                <div className="flex items-center justify-between rounded-md bg-purple-50 px-2 py-1.5 text-xs text-purple-800">
+                  <span className="flex items-center gap-1">
+                    <Gift size={12} />
+                    <strong>{loyaltyRedeem.puan} puan kullanıldı</strong>
+                    <span className="ml-1 text-purple-600">(- {formatTL(loyaltyRedeem.tl)})</span>
+                  </span>
+                  <button onClick={clearManualDiscount} className="rounded p-0.5 hover:bg-purple-100">
+                    <X size={12} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={applyLoyaltyRedeem}
+                  disabled={maxRedeemablePoints <= 0}
+                  className="flex w-full items-center justify-between rounded-md border border-dashed border-purple-300 px-2 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-50"
+                >
+                  <span className="flex items-center gap-1">
+                    <Gift size={12} /> Puan Kullan ({availablePoints} puan)
+                  </span>
+                  {maxRedeemablePoints > 0 && (
+                    <span>- {formatTL(maxRedeemablePoints * puanTLKarsiligi)}</span>
+                  )}
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="space-y-1 rounded-lg bg-slate-50 p-4">
@@ -941,6 +1035,7 @@ export default function Payment() {
         subtotal={subtotal}
         onApply={(disc) => {
           setManualDiscount(disc);
+          setLoyaltyRedeem(null);
           setManualDiscountModal(false);
         }}
       />

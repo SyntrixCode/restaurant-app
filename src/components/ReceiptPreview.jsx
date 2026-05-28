@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Printer, X, Check } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { formatTL, formatDate, formatAdet } from '../utils/format';
 import {
   printReceipt,
@@ -159,6 +160,13 @@ export default function ReceiptPreview({ open, onClose, order, payments, setting
 
         <div className="p-6 font-mono text-sm leading-snug" id="receipt">
           <div className="mb-3 text-center">
+            {settings?.fisLogoBas !== false && (
+              <img
+                src="/branding/alazli-logo-receipt.png"
+                alt={settings?.restoranAd || 'Logo'}
+                className="mx-auto mb-2 h-16 w-auto"
+              />
+            )}
             <h1 className="text-lg font-bold">{settings?.fisBasligi || settings?.restoranAd || 'RESTORAN'}</h1>
             {settings?.restoranAdres && <p className="text-xs">{settings.restoranAdres}</p>}
             {settings?.restoranTel && <p className="text-xs">Tel: {settings.restoranTel}</p>}
@@ -255,6 +263,12 @@ export default function ReceiptPreview({ open, onClose, order, payments, setting
 
           <div className="mt-4 text-center text-xs">
             <p>{settings?.fisAltMesaji || 'Teşekkür ederiz'}</p>
+            {settings?.fisQrUrl && (
+              <div className="mt-3 flex flex-col items-center">
+                <p className="mb-1 text-[11px] font-medium">{settings.fisQrMesaj || 'Bizi değerlendirin'}</p>
+                <QRCodeSVG value={settings.fisQrUrl} size={96} level="M" />
+              </div>
+            )}
             <p className="mt-2 text-[10px] text-slate-400">
               powered by {'{'}S{'}'}  syntrixCode
             </p>

@@ -97,6 +97,7 @@ export async function createOrder({
         fiyat: data.fiyat,
         adet: it.adet,
         notlar: it.notlar || '',
+        categoryId: data.categoryId || null, // yazıcı yönlendirmesi (mutfak/bar) için
         eklenmeZamani: new Date(),
       };
     });
@@ -208,6 +209,7 @@ export async function addItemsToOrder({ orderId, garsonId, newItems }) {
         fiyat: data.fiyat,
         adet: it.adet,
         notlar: it.notlar || '',
+        categoryId: data.categoryId || null,
         eklenmeZamani: new Date(),
       };
     });

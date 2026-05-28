@@ -260,15 +260,23 @@ function CategoryModal({ open, onClose, editing, printers, maxSira }) {
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(categorySchema),
-    defaultValues: { ad: '', aktif: true, yaziciId: null },
+    defaultValues: { ad: '', aktif: true, yaziciId: null, ceviri: { en: { ad: '' }, ar: { ad: '' } } },
   });
 
   useEffect(() => {
     if (open) {
       reset(
         editing
-          ? { ad: editing.ad, aktif: editing.aktif ?? true, yaziciId: editing.yaziciId || null }
-          : { ad: '', aktif: true, yaziciId: null },
+          ? {
+              ad: editing.ad,
+              aktif: editing.aktif ?? true,
+              yaziciId: editing.yaziciId || null,
+              ceviri: {
+                en: { ad: editing.ceviri?.en?.ad || '' },
+                ar: { ad: editing.ceviri?.ar?.ad || '' },
+              },
+            }
+          : { ad: '', aktif: true, yaziciId: null, ceviri: { en: { ad: '' }, ar: { ad: '' } } },
       );
     }
   }, [open, editing, reset]);
@@ -330,6 +338,21 @@ function CategoryModal({ open, onClose, editing, printers, maxSira }) {
             Bu kategorideki ürünlerin sipariş fişi seçilen yazıcıya gönderilir.
           </p>
         </div>
+        <details className="rounded-lg border border-slate-200 p-3">
+          <summary className="cursor-pointer text-sm font-medium text-slate-700">
+            Çeviriler (QR menü — opsiyonel)
+          </summary>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">İngilizce ad</label>
+              <input {...register('ceviri.en.ad')} className="input" placeholder="English name" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Arapça ad</label>
+              <input {...register('ceviri.ar.ad')} className="input" dir="rtl" placeholder="الاسم بالعربية" />
+            </div>
+          </div>
+        </details>
         <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
           <span className="text-sm font-medium text-slate-700">Aktif</span>
           <Toggle checked={watch('aktif')} onChange={(v) => setValue('aktif', v)} />

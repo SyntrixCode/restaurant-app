@@ -5,11 +5,16 @@ import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import PoweredBy from '../PoweredBy';
 import UpdateBanner from '../UpdateBanner';
+import WaiterCallAlert from '../WaiterCallAlert';
+import ShiftButton from '../ShiftButton';
+import OfflineBanner from '../OfflineBanner';
 import {
   checkCustomerDisplayAvailable,
   startCustomerDisplay,
   pushToCustomerDisplay,
 } from '../../plugins/customerDisplay';
+import { useNewOrderAlert } from '../../hooks/useNewOrderAlert';
+import { warmupAudio } from '../../utils/sound';
 
 export default function PosLayout() {
   const navigate = useNavigate();
@@ -17,8 +22,12 @@ export default function PosLayout() {
   const { settings } = useSettingsStore();
   const isKasiyer = rol === 'kasiyer' || rol === 'admin';
 
-  // Müşteri ekranını (varsa) başlat — bir kez, POS layout mount olunca
+  // Yeni sipariş ses bildirimi (mutfak/kasa için)
+  useNewOrderAlert();
+
+  // Müşteri ekranını (varsa) başlat + ses sistemini uyandır
   useEffect(() => {
+    warmupAudio();
     (async () => {
       const available = await checkCustomerDisplayAvailable();
       if (available) {
@@ -36,6 +45,8 @@ export default function PosLayout() {
 
   return (
     <div className="flex h-full flex-col bg-slate-100">
+      <OfflineBanner />
+      <WaiterCallAlert />
       <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
         <div className="flex items-center gap-4">
           <img
@@ -53,6 +64,7 @@ export default function PosLayout() {
           {isKasiyer && (
             <PosNavLink to="/pos/packages" icon={Truck} label="Paket Servis" />
           )}
+          <ShiftButton />
           <button onClick={handleLogout} className="btn-ghost">
             <LogOut size={16} /> Çıkış
           </button>

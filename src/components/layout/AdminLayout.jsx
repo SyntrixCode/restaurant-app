@@ -22,10 +22,15 @@ import {
   ClipboardList,
   Wheat,
   ChefHat,
+  Calculator,
+  Phone,
+  FileSpreadsheet,
+  FileCheck2,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import PoweredBy from '../PoweredBy';
+import OfflineBanner from '../OfflineBanner';
 
 const NAV = [
   { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -44,9 +49,15 @@ const NAV = [
   { to: '/admin/campaigns', label: 'Kampanyalar', icon: Megaphone },
   { to: '/admin/coupons', label: 'Kupon Kodları', icon: Megaphone },
   { to: '/admin/packages', label: 'Paket Servis', icon: Truck },
+  { to: '/admin/customers', label: 'Telefon Defteri', icon: Phone },
   { to: '/admin/notifications', label: 'Bildirimler', icon: Bell },
   { to: '/admin/reports', label: 'Raporlar', icon: BarChart3 },
   { to: '/admin/finance', label: 'Finans', icon: Wallet },
+  { to: '/admin/accounting', label: 'Muhasebe', icon: FileSpreadsheet },
+  { to: '/admin/e-invoice', label: 'E-Dönüşüm', icon: FileCheck2 },
+  { to: '/admin/end-of-day', label: 'Gün Sonu (Z)', icon: Calculator },
+  { to: '/admin/staff-report', label: 'Personel Raporu', icon: ClipboardList },
+  { to: '/admin/shifts', label: 'Mesai Takibi', icon: CalendarClock },
   { to: '/admin/printers', label: 'Yazıcılar', icon: Printer },
   { to: '/admin/users', label: 'Kullanıcılar', icon: Users },
   { to: '/admin/settings', label: 'Ayarlar', icon: Settings },
@@ -106,6 +117,7 @@ export default function AdminLayout() {
         </div>
       </aside>
       <main className="flex-1 overflow-y-auto">
+        <OfflineBanner />
         <Outlet />
       </main>
     </div>

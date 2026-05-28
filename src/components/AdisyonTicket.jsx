@@ -153,6 +153,13 @@ export default function AdisyonTicket({ open, onClose, order, settings }) {
 
         <div className="p-6 font-mono text-sm leading-snug" id="adisyon">
           <div className="mb-2 text-center">
+            {settings?.fisLogoBas !== false && (
+              <img
+                src="/branding/alazli-logo-receipt.png"
+                alt={baslik}
+                className="mx-auto mb-2 h-16 w-auto"
+              />
+            )}
             <h1 className="text-lg font-bold">{baslik}</h1>
             <p className="text-xs font-semibold uppercase tracking-widest text-slate-600">ADİSYON</p>
             {settings?.restoranAdres && <p className="text-xs">{settings.restoranAdres}</p>}

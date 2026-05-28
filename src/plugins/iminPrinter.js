@@ -246,6 +246,10 @@ export function buildSplitReceiptLines({ order, items = [], payment, settings = 
  */
 export function buildCustomerReceiptLines({ order, payments = [], settings = {}, change = 0, isAdisyon = false }) {
   const lines = [];
+  // Fiş logosu — ayarda kapatılmadıysa en üstte (siyah-beyaz bitmap)
+  if (settings.fisLogoBas !== false) {
+    lines.push({ type: 'image', asset: 'alazli-logo-receipt.png', align: 'center' });
+  }
   const baslik = settings.fisBasligi || settings.restoranAd || 'RESTORAN';
   lines.push({ type: 'text', text: baslik, align: 'center', size: 36, bold: true });
   if (isAdisyon) {
@@ -338,6 +342,19 @@ export function buildCustomerReceiptLines({ order, payments = [], settings = {},
     const altMesaj = settings.fisAltMesaji || 'Teşekkür ederiz';
     lines.push({ type: 'text', text: altMesaj, align: 'center', size: 24 });
   }
+
+  // Müşteri anketi / değerlendirme QR'ı — ayarda URL girilmişse
+  if (settings.fisQrUrl) {
+    lines.push({ type: 'feed', lines: 1 });
+    lines.push({
+      type: 'text',
+      text: settings.fisQrMesaj || 'Bizi değerlendirin',
+      align: 'center',
+      size: 22,
+    });
+    lines.push({ type: 'qr', data: settings.fisQrUrl, align: 'center', size: 6 });
+  }
+
   lines.push({
     type: 'text',
     text: 'powered by {S} syntrixCode',

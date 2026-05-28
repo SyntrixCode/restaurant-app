@@ -19,6 +19,13 @@ export const categorySchema = z.object({
   ad: z.string().min(1, 'Kategori adı zorunlu').max(100),
   aktif: z.boolean(),
   yaziciId: z.string().nullable().optional(),
+  // QR menü çevirileri (opsiyonel)
+  ceviri: z
+    .object({
+      en: z.object({ ad: z.string().optional() }).optional(),
+      ar: z.object({ ad: z.string().optional() }).optional(),
+    })
+    .optional(),
 });
 
 export const productSchema = z.object({
@@ -36,6 +43,13 @@ export const productSchema = z.object({
   // Hızlı not seçimi — ör. ["acılı", "acısız", "soğansız"]. Fiyatı etkilemez,
   // sipariş kaydında item.notlar alanına "acılı, soğansız" şeklinde yazılır.
   opsiyonlar: z.array(z.string()).optional().default([]),
+  // QR menü çevirileri (opsiyonel). Boşsa müşteri menüsünde TR'ye düşer.
+  ceviri: z
+    .object({
+      en: z.object({ ad: z.string().optional(), aciklama: z.string().optional() }).optional(),
+      ar: z.object({ ad: z.string().optional(), aciklama: z.string().optional() }).optional(),
+    })
+    .optional(),
   aktif: z.boolean(),
 });
 
@@ -63,6 +77,7 @@ export const settingsSchema = z.object({
   restoranAdres: z.string().max(200).optional().or(z.literal('')),
   restoranTel: z.string().max(30).optional().or(z.literal('')),
   vergiNo: z.string().max(30).optional().or(z.literal('')),
+  vergiDairesi: z.string().max(60).optional().or(z.literal('')),
   paraBirimi: z.string().min(1).max(10),
   vergiOrani: z.coerce.number().min(0, 'Vergi oranı 0 veya pozitif').max(100, 'En fazla %100'),
   kdvDahilFiyat: z.boolean(),
@@ -72,6 +87,14 @@ export const settingsSchema = z.object({
   dusukStokEsigi: z.coerce.number().int().min(0, '0 veya pozitif').max(1000),
   fisBasligi: z.string().max(50).optional().or(z.literal('')),
   fisAltMesaji: z.string().max(200).optional().or(z.literal('')),
+  fisQrUrl: z.string().max(300).optional().or(z.literal('')),
+  fisQrMesaj: z.string().max(60).optional().or(z.literal('')),
+  fisLogoBas: z.boolean().optional(),
+  garsonCagirmaAcik: z.boolean().optional(),
+  // Sadakat / puan
+  sadakatAktif: z.boolean().optional(),
+  puanKazanmaTL: z.coerce.number().min(1, 'En az 1 TL').max(10000).optional(),
+  puanTLKarsiligi: z.coerce.number().min(0.01, '0\'dan büyük olmalı').max(1000).optional(),
   otomatikFisBas: z.boolean(),
   bildirimAyarlari: z.object({
     gecikme: z.boolean(),
