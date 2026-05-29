@@ -10,6 +10,7 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import com.imin.printer.PrinterHelper;
+import com.imin.printer.IPrinterCallback;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -169,8 +170,8 @@ public class IminPrinterPlugin extends Plugin {
                         bmp = android.graphics.BitmapFactory.decodeStream(is);
                     }
                     if (bmp != null) {
-                        // 1 = ortala (iMin printSingleBitmapWithAli: 0 sol,1 orta,2 sağ)
-                        helper.printSingleBitmapWithAli(bmp, 1, null);
+                        // 1 = ortala (iMin printBitmapWithAlign: 0 sol,1 orta,2 sağ)
+                        helper.printBitmapWithAlign(bmp, 1, (IPrinterCallback) null);
                     }
                 } catch (Throwable ignored) {
                     // Logo basılamadı — fiş yine çıksın
