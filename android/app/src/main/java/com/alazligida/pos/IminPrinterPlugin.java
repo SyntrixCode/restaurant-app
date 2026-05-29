@@ -178,6 +178,21 @@ public class IminPrinterPlugin extends Plugin {
                 }
                 break;
             }
+            case "imageData": {
+                String b64 = line.optString("base64", "");
+                if (b64.isEmpty()) return;
+                try {
+                    byte[] bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
+                    android.graphics.Bitmap bmp =
+                            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                    if (bmp != null) {
+                        helper.printBitmapWithAlign(bmp, 1, (INeoPrinterCallback) null);
+                    }
+                } catch (Throwable ignored) {
+                    // Bitmap basılamadı — sessizce geç
+                }
+                break;
+            }
             default:
                 // Bilinmeyen tip — yoksay
                 break;

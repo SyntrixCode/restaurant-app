@@ -69,6 +69,12 @@ public class NetworkPrinterPlugin extends Plugin {
                             buf.setLength(0);
                         }
                         printAssetBitmap(printer, line.optString("asset"));
+                    } else if ("imageData".equals(lineType)) {
+                        if (buf.length() > 0) {
+                            printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, buf.toString());
+                            buf.setLength(0);
+                        }
+                        printBase64Bitmap(printer, line.optString("base64"));
                     } else if ("qr".equals(lineType)) {
                         String data = line.optString("data", "");
                         if (!data.isEmpty()) {
@@ -127,18 +133,37 @@ public class NetworkPrinterPlugin extends Plugin {
             try (java.io.InputStream is = getContext().getAssets().open(assetName)) {
                 bmp = android.graphics.BitmapFactory.decodeStream(is);
             }
-            if (bmp == null) return;
-            // Station + parlaklık/sıkıştırma/dither paketlenmiş int (sample'dan)
-            java.nio.ByteBuffer bb = java.nio.ByteBuffer.allocate(4);
-            bb.put((byte) POSPrinterConst.PTR_S_RECEIPT);
-            bb.put((byte) 0); // brightness (default)
-            bb.put((byte) 0); // compress
-            bb.put((byte) 0); // dither
-            // width: PTR_BM_ASIS (orijinal genişlik), ortala
-            printer.printBitmap(bb.getInt(0), bmp, POSPrinterConst.PTR_BM_ASIS, POSPrinterConst.PTR_BM_CENTER);
+            printBitmapCentered(printer, bmp);
         } catch (Throwable t) {
             // Logo basılamadı — fişin geri kalanı yine çıksın
         }
+    }
+
+    /**
+     * Base64 PNG'yi (adisyon görseli vb.) decode edip ortalı basar.
+     */
+    private void printBase64Bitmap(POSPrinter printer, String base64) {
+        if (base64 == null || base64.isEmpty()) return;
+        try {
+            byte[] bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
+            android.graphics.Bitmap bmp =
+                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+            printBitmapCentered(printer, bmp);
+        } catch (Throwable t) {
+            // Bitmap basılamadı — sessizce geç
+        }
+    }
+
+    private void printBitmapCentered(POSPrinter printer, android.graphics.Bitmap bmp) throws Exception {
+        if (bmp == null) return;
+        // Station + parlaklık/sıkıştırma/dither paketlenmiş int (sample'dan)
+        java.nio.ByteBuffer bb = java.nio.ByteBuffer.allocate(4);
+        bb.put((byte) POSPrinterConst.PTR_S_RECEIPT);
+        bb.put((byte) 0); // brightness (default)
+        bb.put((byte) 0); // compress
+        bb.put((byte) 0); // dither
+        // width: PTR_BM_ASIS (orijinal genişlik), ortala
+        printer.printBitmap(bb.getInt(0), bmp, POSPrinterConst.PTR_BM_ASIS, POSPrinterConst.PTR_BM_CENTER);
     }
 
     @PluginMethod
