@@ -11,6 +11,8 @@ import {
   openInstallSourcesSetting,
   downloadAndInstall,
 } from '../plugins/appUpdater';
+import { useAuthStore } from '../store/authStore';
+import { approveDistribution } from '../firebase/distribution';
 
 /**
  * Yeni sürüm uyarı banner'ı. Dashboard ve POS Layout'ta üstte gösterilir.
@@ -21,6 +23,7 @@ import {
  */
 export default function UpdateBanner({ to = '/admin/settings' }) {
   const { info, dismissed, dismiss } = useUpdateAvailable();
+  const { user, profile, rol } = useAuthStore();
   const isNative = Capacitor.isNativePlatform();
 
   const [downloading, setDownloading] = useState(false);
@@ -32,6 +35,18 @@ export default function UpdateBanner({ to = '/admin/settings' }) {
 
   const handleDownload = async () => {
     if (!info.latest?.apkUrl) return;
+
+    // Sadece admin onayla → diğer tabletlerin auto-update hook'u devreye girer
+    if (rol === 'admin') {
+      approveDistribution({
+        version: info.latest.version,
+        apkUrl: info.latest.apkUrl,
+        onaylayanId: user?.uid,
+        onaylayanAd: profile?.ad || 'Admin',
+      })
+        .then(() => toast.success('Diğer cihazlara dağıtım onaylandı', { duration: 4000 }))
+        .catch((e) => console.warn('Dağıtım yazılamadı:', e));
+    }
 
     if (isNative && isAppUpdaterNative()) {
       const allowed = await canInstallUnknownSources();

@@ -40,6 +40,7 @@ import { tableSchema } from '../../utils/validators';
 
 const CANVAS_W = 1200;
 const CANVAS_H = 700;
+const SNAP_THRESHOLD = 8; // px — sürüklerken kenar/merkez hizalama yapışma mesafesi
 
 const ZONE_LABELS = {
   ic: 'İç Salon',
@@ -165,7 +166,80 @@ export default function AdminTables() {
   const [localDecorPos, setLocalDecorPos] = useState({});
   const [modal, setModal] = useState(null);
   const [editing, setEditing] = useState(null);
+  const [guides, setGuides] = useState(null); // { v: [x...], h: [y...] }
   const canvasRef = useRef(null);
+
+  // Sürüklenenin GÜNCEL pozisyonu (lokal değişiklikler dahil)
+  const effectivePosTable = (t) => {
+    const lp = localTablePos[t.id];
+    return { x: lp?.x ?? t.x ?? 0, y: lp?.y ?? t.y ?? 0 };
+  };
+  const effectivePosDecor = (d) => {
+    const lp = localDecorPos[d.id];
+    return { x: lp?.x ?? d.x ?? 0, y: lp?.y ?? d.y ?? 0 };
+  };
+
+  // Sürüklenenle aynı bölgedeki diğer masa+dekor kutularını topla — hizalama referansı olarak
+  function alignmentAnchors(excludeKind, excludeId) {
+    const out = [];
+    for (const t of tablesInZone) {
+      if (excludeKind === 'table' && t.id === excludeId) continue;
+      const p = effectivePosTable(t);
+      const w = t.w || sizeFor(t.kapasite).w;
+      const h = t.h || sizeFor(t.kapasite).h;
+      out.push({ x: p.x, y: p.y, w, h });
+    }
+    for (const d of decorsInZone) {
+      if (excludeKind === 'decor' && d.id === excludeId) continue;
+      const p = effectivePosDecor(d);
+      out.push({ x: p.x, y: p.y, w: d.w || 100, h: d.h || 60 });
+    }
+    return out;
+  }
+
+  // px,py boyutlu sürüklenenin (w,h) en yakın hiza çizgisine yapışmasını hesaplar.
+  // Garson ekranındaki computeAlignment'ın admin paneli adaptasyonu.
+  function computeAlignment(anchors, px, py, w, h) {
+    let bestX = { delta: SNAP_THRESHOLD + 1, x: px, line: null };
+    let bestY = { delta: SNAP_THRESHOLD + 1, y: py, line: null };
+    for (const r of anchors) {
+      // [sürüklenen kenar, hedef hiza çizgisi, yapışınca yeni x]
+      const xPairs = [
+        [px, r.x, r.x], // sol-sol
+        [px + w, r.x + r.w, r.x + r.w - w], // sağ-sağ
+        [px + w / 2, r.x + r.w / 2, r.x + r.w / 2 - w / 2], // merkez-merkez
+        [px, r.x + r.w, r.x + r.w], // sol kenar → hedef sağ (bitişik sağ)
+        [px + w, r.x, r.x - w], // sağ kenar → hedef sol (bitişik sol)
+      ];
+      for (const [edge, line, snapX] of xPairs) {
+        const d = Math.abs(edge - line);
+        if (d < bestX.delta) bestX = { delta: d, x: snapX, line };
+      }
+      const yPairs = [
+        [py, r.y, r.y],
+        [py + h, r.y + r.h, r.y + r.h - h],
+        [py + h / 2, r.y + r.h / 2, r.y + r.h / 2 - h / 2],
+        [py, r.y + r.h, r.y + r.h],
+        [py + h, r.y, r.y - h],
+      ];
+      for (const [edge, line, snapY] of yPairs) {
+        const d = Math.abs(edge - line);
+        if (d < bestY.delta) bestY = { delta: d, y: snapY, line };
+      }
+    }
+    const g = { v: [], h: [] };
+    let nx = px;
+    let ny = py;
+    if (bestX.delta <= SNAP_THRESHOLD) {
+      nx = Math.round(bestX.x);
+      g.v.push(Math.round(bestX.line));
+    }
+    if (bestY.delta <= SNAP_THRESHOLD) {
+      ny = Math.round(bestY.y);
+      g.h.push(Math.round(bestY.line));
+    }
+    return { x: nx, y: ny, guides: g };
+  }
 
   useEffect(() => {
     function updateScale() {
@@ -244,16 +318,21 @@ export default function AdminTables() {
     const tableH = table.h || sizeFor(table.kapasite).h;
     const currentScale = scale || 1;
 
+    const anchors = alignmentAnchors('table', table.id);
+
     function onMove(ev) {
       const dx = (ev.clientX - startX) / currentScale;
       const dy = (ev.clientY - startY) / currentScale;
-      const newX = clamp(Math.round(origX + dx), 0, CANVAS_W - tableW);
-      const newY = clamp(Math.round(origY + dy), 0, CANVAS_H - tableH);
-      setLocalTablePos((prev) => ({ ...prev, [table.id]: { x: newX, y: newY } }));
+      const rawX = clamp(Math.round(origX + dx), 0, CANVAS_W - tableW);
+      const rawY = clamp(Math.round(origY + dy), 0, CANVAS_H - tableH);
+      const al = computeAlignment(anchors, rawX, rawY, tableW, tableH);
+      setLocalTablePos((prev) => ({ ...prev, [table.id]: { x: al.x, y: al.y } }));
+      setGuides(al.guides);
     }
     function onUp() {
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp);
+      setGuides(null);
     }
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
@@ -272,16 +351,21 @@ export default function AdminTables() {
     const decH = decor.h || 60;
     const currentScale = scale || 1;
 
+    const anchors = alignmentAnchors('decor', decor.id);
+
     function onMove(ev) {
       const dx = (ev.clientX - startX) / currentScale;
       const dy = (ev.clientY - startY) / currentScale;
-      const newX = clamp(Math.round(origX + dx), 0, CANVAS_W - decW);
-      const newY = clamp(Math.round(origY + dy), 0, CANVAS_H - decH);
-      setLocalDecorPos((prev) => ({ ...prev, [decor.id]: { x: newX, y: newY } }));
+      const rawX = clamp(Math.round(origX + dx), 0, CANVAS_W - decW);
+      const rawY = clamp(Math.round(origY + dy), 0, CANVAS_H - decH);
+      const al = computeAlignment(anchors, rawX, rawY, decW, decH);
+      setLocalDecorPos((prev) => ({ ...prev, [decor.id]: { x: al.x, y: al.y } }));
+      setGuides(al.guides);
     }
     function onUp() {
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp);
+      setGuides(null);
     }
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
@@ -501,6 +585,26 @@ export default function AdminTables() {
                     />
                   );
                 })}
+
+                {/* Sürüklerken hizalama çizgileri (mavi) */}
+                {guides && (
+                  <>
+                    {guides.v.map((gx, i) => (
+                      <div
+                        key={`gv-${i}`}
+                        className="pointer-events-none absolute top-0 bottom-0 z-40 w-px bg-blue-500"
+                        style={{ left: gx }}
+                      />
+                    ))}
+                    {guides.h.map((gy, i) => (
+                      <div
+                        key={`gh-${i}`}
+                        className="pointer-events-none absolute left-0 right-0 z-40 h-px bg-blue-500"
+                        style={{ top: gy }}
+                      />
+                    ))}
+                  </>
+                )}
               </>
             )}
           </div>

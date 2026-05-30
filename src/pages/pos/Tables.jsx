@@ -109,7 +109,9 @@ function sizeFor(kapasite) {
 // Masa taşıma/birleştirme (garson ekranı)
 const LONG_PRESS_MS = 600; // bu kadar basılı tutunca masa "kalkar" ve sürüklenebilir
 const SNAP_THRESHOLD = 8; // px — kenar hizalama yapışma mesafesi
-const MERGE_GAP = 50; // px — bu mesafeye kadar yakına bırakınca birleştirir (en yakın hedefi seçer)
+const MERGE_GAP = 100; // px — bu mesafeye kadar yakına bırakınca birleştirir (tablet parmağı için cömert)
+
+const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
 export default function PosTables() {
   const navigate = useNavigate();
@@ -317,9 +319,10 @@ export default function PosTables() {
     return { x, y, guides };
   }
 
-  // Bırakma konumuna en yakın hedefi bul: tekil boş masa VEYA mevcut grup (ekrandaki combined kutusuyla).
-  // Grup ile tek masa eşit mesafedeyse (özellikle gap=0 — grubun bbox'una bırakıldıysa)
-  // grup tercih edilir; aksi halde aynı kutu içinde komşu tekil masa yakalanıp yanlış birleştirme oluyordu.
+  // Bırakma konumuna en uygun hedefi bul: tekil boş masa VEYA mevcut grup (ekrandaki combined kutusuyla).
+  // Kural: önce ÖRTÜŞME — bırakılan masa bir adayın bbox'unda kalıyorsa o aday kazanır;
+  // birden fazla aday örtüşüyorsa en geniş örtüşme alanı kazanır (genelde grup). Hiçbiri
+  // örtüşmüyorsa en yakın aday (gap) kazanır; eşitlikte grup tercih edilir.
   function findDropTarget(dragged, pos, w, h) {
     const d = { x: pos.x, y: pos.y, w, h };
     const gapOf = (r) => {
@@ -327,12 +330,19 @@ export default function PosTables() {
       const dy = Math.max(0, r.y - (d.y + d.h), d.y - (r.y + r.h));
       return Math.hypot(dx, dy);
     };
+    const overlapOf = (r) => {
+      const ox = Math.min(d.x + d.w, r.x + r.w) - Math.max(d.x, r.x);
+      const oy = Math.min(d.y + d.h, r.y + r.h) - Math.max(d.y, r.y);
+      return ox > 0 && oy > 0 ? ox * oy : 0;
+    };
 
-    // Mevcut gruplar — üyelerin birleşik (combined) kutusu
     let bestGroup = null;
     let bestGroupGap = MERGE_GAP + 1;
+    let bestGroupOverlap = 0;
     for (const g of groups) {
-      const members = tablesInZone.filter((t) => g.memberIds?.includes(t.id));
+      const members = tablesInZone.filter(
+        (t) => g.memberIds?.includes(t.id) || t.grupId === g.id,
+      );
       if (members.length === 0 || members.some((m) => m.id === dragged.id)) continue;
       const ps = members.map((t) => ({
         ...effectivePosition(t),
@@ -344,29 +354,40 @@ export default function PosTables() {
       const maxX = Math.max(...ps.map((p) => p.x + p.w));
       const maxY = Math.max(...ps.map((p) => p.y + p.h));
       const rect = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+      const ov = overlapOf(rect);
       const gap = gapOf(rect);
-      if (gap <= MERGE_GAP && gap < bestGroupGap) {
+      const isCandidate = ov > 0 || gap <= MERGE_GAP;
+      const isBetter = ov > bestGroupOverlap || (ov === bestGroupOverlap && gap < bestGroupGap);
+      if (isCandidate && isBetter) {
+        bestGroupOverlap = ov;
         bestGroupGap = gap;
         bestGroup = { kind: 'group', group: g, rect };
       }
     }
-    // Grubun kutusunun içine düştüyse (gap=0) hep grubu seç — komşu tekil masa kazanmasın
-    if (bestGroup && bestGroupGap === 0) return bestGroup;
 
-    // Tekil boş + gruplanmamış masalar
     let bestTable = null;
     let bestTableGap = MERGE_GAP + 1;
+    let bestTableOverlap = 0;
     for (const o of tablesInZone) {
       if (o.id === dragged.id || o.grupId || o.durum !== 'bos') continue;
       const rect = rectFor(o, effectivePosition(o));
+      const ov = overlapOf(rect);
       const gap = gapOf(rect);
-      if (gap <= MERGE_GAP && gap < bestTableGap) {
+      const isCandidate = ov > 0 || gap <= MERGE_GAP;
+      const isBetter = ov > bestTableOverlap || (ov === bestTableOverlap && gap < bestTableGap);
+      if (isCandidate && isBetter) {
+        bestTableOverlap = ov;
         bestTableGap = gap;
         bestTable = { kind: 'table', table: o, rect };
       }
     }
 
-    // İkisi de varsa: küçük gap'li kazanır, eşitlikte grup tercih edilir
+    // 1) Bir taraf örtüşüyorsa: en geniş örtüşme kazanır (eşitlikte grup)
+    if (bestGroupOverlap > 0 || bestTableOverlap > 0) {
+      if (bestGroupOverlap >= bestTableOverlap) return bestGroup || bestTable;
+      return bestTable;
+    }
+    // 2) Kimse örtüşmüyor → en yakın (eşitlikte grup)
     if (bestGroup && bestTable) return bestGroupGap <= bestTableGap ? bestGroup : bestTable;
     return bestGroup || bestTable;
   }
@@ -457,26 +478,63 @@ export default function PosTables() {
     try {
       if (group) {
         // Mevcut gruba ekle — grubun sağ kenarına yerleştir (combined genişlik büyür)
-        const members = tablesInZone.filter((t) => group.memberIds.includes(t.id));
+        const members = tablesInZone.filter(
+          (t) => group.memberIds.includes(t.id) || t.grupId === group.id,
+        );
         const ps = members.map((t) => ({
           ...effectivePosition(t),
           w: t.w || sizeFor(t.kapasite).w,
         }));
         const maxX = Math.max(...ps.map((p) => p.x + p.w));
         const minY = Math.min(...ps.map((p) => p.y));
+        const newPos = { x: maxX, y: minY };
         await addTableToGroup({
           groupId: group.id,
           table: dragged,
-          position: { x: maxX, y: minY },
+          position: newPos,
         });
+        // Snapshot listener gecikmesini köprüle: lokal state'i hemen güncelle.
+        // Firestore listener'ı arkadan gelince noop olur (aynı veri).
+        setGroups((prev) =>
+          prev.map((g) =>
+            g.id === group.id
+              ? {
+                  ...g,
+                  memberIds: [...new Set([...(g.memberIds || []), dragged.id])],
+                  memberAdlari: [...(g.memberAdlari || []), dragged.ad],
+                  kapasite: (g.kapasite || 0) + (dragged.kapasite || 0),
+                  positions: { ...(g.positions || {}), [dragged.id]: newPos },
+                }
+              : g,
+          ),
+        );
+        setTables((prev) =>
+          prev.map((t) => (t.id === dragged.id ? { ...t, grupId: group.id } : t)),
+        );
         toast.success(`${dragged.ad} gruba eklendi`);
       } else {
         const snapPos = computeSnapPosition(target);
-        await createTableGroup({
+        const res = await createTableGroup({
           memberTables: [target, dragged],
           mainTableId: target.id,
           positions: { [dragged.id]: snapPos },
         });
+        // Lokal state'i hemen güncelle (snapshot listener gecikmesini köprüle)
+        const newGroup = {
+          id: res.groupId,
+          memberIds: [target.id, dragged.id],
+          mainTableId: target.id,
+          mainTableAd: target.ad,
+          kapasite: res.kapasite,
+          memberAdlari: [target.ad, dragged.ad],
+          positions: { [dragged.id]: snapPos },
+        };
+        setGroups((prev) => [...prev.filter((g) => g.id !== res.groupId), newGroup]);
+        setTables((prev) =>
+          prev.map((t) =>
+            t.id === target.id || t.id === dragged.id ? { ...t, grupId: res.groupId } : t,
+          ),
+        );
         toast.success(`${target.ad} + ${dragged.ad} birleştirildi`);
       }
       setPendingMerge(null);
@@ -500,8 +558,8 @@ export default function PosTables() {
     }
   };
 
-  const openKisiPrompt = (masaId, masaAd, defaultKisi) => {
-    setKisiPrompt({ masaId, masaAd, defaultKisi });
+  const openKisiPrompt = (masaId, masaAd, defaultKisi, groupId = null) => {
+    setKisiPrompt({ masaId, masaAd, defaultKisi, groupId });
   };
 
   const handleTableClick = (table) => {
@@ -519,7 +577,7 @@ export default function PosTables() {
         return;
       }
       // Free group → ask kisi sayisi, then start order
-      openKisiPrompt(mainId, group.memberAdlari?.join(' + ') || 'Grup', group.kapasite);
+      openKisiPrompt(mainId, group.memberAdlari?.join(' + ') || 'Grup', group.kapasite, group.id);
       return;
     }
     // Standalone
@@ -608,11 +666,15 @@ export default function PosTables() {
             {/* Birleştirilmiş gruplar — tek bir combined masa olarak çizilir */}
             {groups
               .filter((g) =>
-                tablesInZone.some((t) => g.memberIds.includes(t.id)),
+                tablesInZone.some(
+                  (t) => g.memberIds.includes(t.id) || t.grupId === g.id,
+                ),
               )
               .map((g) => {
-                const members = tablesInZone.filter((t) =>
-                  g.memberIds.includes(t.id),
+                // Üye tespiti: memberIds VEYA tablodaki grupId — Firestore sync race'inde
+                // bir taraf güncellenirken diğeri gecikirse görsel tutarsızlığı önler
+                const members = tablesInZone.filter(
+                  (t) => g.memberIds.includes(t.id) || t.grupId === g.id,
                 );
                 if (members.length === 0) return null;
                 const mainTable =
@@ -740,8 +802,22 @@ export default function PosTables() {
         open={!!kisiPrompt}
         masaAd={kisiPrompt?.masaAd}
         defaultKisi={kisiPrompt?.defaultKisi}
+        groupId={kisiPrompt?.groupId}
         onClose={() => setKisiPrompt(null)}
         onConfirm={confirmKisi}
+        onDissolve={async () => {
+          const gId = kisiPrompt?.groupId;
+          if (!gId) return;
+          if (!confirm('Bu grubun tüm masaları ayrılsın mı?')) return;
+          try {
+            await dissolveTableGroup({ groupId: gId, force: true });
+            toast.success('Masalar ayrıldı');
+            setKisiPrompt(null);
+          } catch (err) {
+            console.error(err);
+            toast.error(err.message || 'Ayırma başarısız');
+          }
+        }}
         onSwitchToReserve={() => {
           const k = kisiPrompt;
           setKisiPrompt(null);
@@ -917,7 +993,7 @@ function ConfirmMergeModal({ open, dragged, target, group, submitting, onCancel,
   );
 }
 
-function KisiSayisiModal({ open, masaAd, defaultKisi, onClose, onConfirm, onSwitchToReserve }) {
+function KisiSayisiModal({ open, masaAd, defaultKisi, groupId, onClose, onConfirm, onDissolve, onSwitchToReserve }) {
   const [kisi, setKisi] = useState(defaultKisi || 2);
 
   useEffect(() => {
@@ -935,18 +1011,31 @@ function KisiSayisiModal({ open, masaAd, defaultKisi, onClose, onConfirm, onSwit
       title={`${masaAd} — Kaç kişi?`}
       size="sm"
       footer={
-        <>
-          <button onClick={onClose} className="btn-secondary">
-            İptal
-          </button>
-          <button
-            onClick={() => onConfirm(kisi)}
-            disabled={!kisi || kisi < 1}
-            className="btn-primary disabled:opacity-50"
-          >
-            Devam Et
-          </button>
-        </>
+        <div className="flex w-full items-center justify-between">
+          <div>
+            {groupId && (
+              <button
+                type="button"
+                onClick={onDissolve}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
+              >
+                <Link2Off size={14} /> Masaları Ayır
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="btn-secondary">
+              İptal
+            </button>
+            <button
+              onClick={() => onConfirm(kisi)}
+              disabled={!kisi || kisi < 1}
+              className="btn-primary disabled:opacity-50"
+            >
+              Devam Et
+            </button>
+          </div>
+        </div>
       }
     >
       <div className="space-y-4">

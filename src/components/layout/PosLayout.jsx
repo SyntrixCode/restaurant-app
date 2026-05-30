@@ -4,7 +4,6 @@ import { LogOut, ShoppingCart, Truck, Grid3x3, ClipboardList } from 'lucide-reac
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import PoweredBy from '../PoweredBy';
-import UpdateBanner from '../UpdateBanner';
 import WaiterCallAlert from '../WaiterCallAlert';
 import ShiftButton from '../ShiftButton';
 import OfflineBanner from '../OfflineBanner';
@@ -14,6 +13,7 @@ import {
   pushToCustomerDisplay,
 } from '../../plugins/customerDisplay';
 import { useNewOrderAlert } from '../../hooks/useNewOrderAlert';
+import { useAutoUpdate } from '../../hooks/useAutoUpdate';
 import { warmupAudio } from '../../utils/sound';
 
 export default function PosLayout() {
@@ -24,6 +24,8 @@ export default function PosLayout() {
 
   // Yeni sipariş ses bildirimi (mutfak/kasa için)
   useNewOrderAlert();
+  // Admin yeni sürüm onayladıysa diğer tabletler sessizce indirsin
+  useAutoUpdate();
 
   // Müşteri ekranını (varsa) başlat + ses sistemini uyandır
   useEffect(() => {
@@ -71,10 +73,6 @@ export default function PosLayout() {
         </nav>
       </header>
       <main className="flex-1 overflow-y-auto">
-        {/* POS ekranlarında üstte yeşil "Yeni sürüm hazır" banner'ı */}
-        <div className="px-4 pt-3">
-          <UpdateBanner to="/admin/settings" />
-        </div>
         <Outlet />
       </main>
       <footer className="border-t border-slate-200 bg-white px-4 py-1.5 text-center">

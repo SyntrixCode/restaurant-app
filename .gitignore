@@ -20,3 +20,6 @@ firestore-debug.log
 
 # Derleme çıktıları (build artifact) — git'te tutulmaz
 dist-apk/
+
+# Geçici servis hesabı anahtarı (asla commit etme)
+service-account*.json
