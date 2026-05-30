@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
-import { Save, Store, Receipt, Bell, Settings as SettingsIcon } from 'lucide-react';
+import { Save, Store, Receipt, Bell, Settings as SettingsIcon, CreditCard } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import Toggle from '../../components/ui/Toggle';
 import UpdateCard from '../../components/admin/UpdateCard';
@@ -32,6 +32,9 @@ const DEFAULT_VALUES = {
     rezervasyon: true,
     sesliUyari: true,
   },
+  cardPaymentProvider: 'simulation',
+  cardTerminalIp: '',
+  cardTerminalPort: 9100,
 };
 
 export default function AdminSettings() {
@@ -42,6 +45,7 @@ export default function AdminSettings() {
     handleSubmit,
     control,
     reset,
+    watch,
     formState: { errors, isSubmitting, isDirty },
   } = useForm({
     resolver: zodResolver(settingsSchema),
@@ -53,6 +57,8 @@ export default function AdminSettings() {
       reset({ ...DEFAULT_VALUES, ...settings });
     }
   }, [loading, settings, reset]);
+
+  const cardProvider = watch('cardPaymentProvider');
 
   const onSubmit = async (data) => {
     try {
@@ -180,6 +186,50 @@ export default function AdminSettings() {
               control={control}
               name="otomatikFisBas"
             />
+          </Section>
+
+          {/* Kart POS */}
+          <Section title="Kart POS" icon={CreditCard}>
+            <Field label="Kart Ödeme Modu" error={errors.cardPaymentProvider}>
+              <select {...register('cardPaymentProvider')} className="input">
+                <option value="simulation">Simülasyon (demo — gerçek tahsilat yok)</option>
+                <option value="verifone-tcp">Verifone T650p (ECR — canlı)</option>
+              </select>
+            </Field>
+
+            {cardProvider === 'verifone-tcp' ? (
+              <>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <Field label="Terminal IP" error={errors.cardTerminalIp}>
+                      <input
+                        {...register('cardTerminalIp')}
+                        className="input font-mono"
+                        placeholder="192.168.1.50"
+                      />
+                    </Field>
+                  </div>
+                  <Field label="Port" error={errors.cardTerminalPort}>
+                    <input
+                      type="number"
+                      {...register('cardTerminalPort', { valueAsNumber: true })}
+                      className="input"
+                    />
+                  </Field>
+                </div>
+                <div className="rounded-lg border border-amber-100 bg-amber-50 p-3 text-xs text-amber-800">
+                  Canlı mod, T650p'nin <strong>ECR (harici kasa) moduna</strong> alınmasını ve
+                  banka/ödeme kuruluşu entegrasyonunu gerektirir. Entegrasyon tamamlanana kadar
+                  Simülasyon'da kalın — bu modda gerçek tahsilat denemesi başarısız olur.
+                </div>
+              </>
+            ) : (
+              <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
+                Simülasyon modunda kart akışı taklit edilir, <strong>gerçek tahsilat yapılmaz</strong>.
+                Banka/PF ECR entegrasyonu hazır olunca "Verifone T650p" moduna geçip terminal IP'sini
+                girin — başka bir değişiklik gerekmez.
+              </div>
+            )}
           </Section>
 
           {/* Bildirimler */}

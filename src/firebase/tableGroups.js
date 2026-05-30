@@ -45,6 +45,38 @@ export async function createTableGroup({ memberTables, mainTableId, positions = 
   });
 }
 
+// Mevcut bir gruba yeni bir masa ekler (3+ masalı grup için)
+export async function addTableToGroup({ groupId, table, position = null }) {
+  const groupRef = doc(db, 'tableGroups', groupId);
+  const tableRef = doc(db, 'tables', table.id);
+
+  return runTransaction(db, async (txn) => {
+    const groupSnap = await txn.get(groupRef);
+    if (!groupSnap.exists()) throw new Error('Grup bulunamadı');
+    const tableSnap = await txn.get(tableRef);
+    if (!tableSnap.exists()) throw new Error(`Masa bulunamadı: ${table.ad}`);
+
+    const tData = tableSnap.data();
+    if (tData.grupId) throw new Error(`${tData.ad} zaten bir grupta`);
+    if (tData.durum !== 'bos') throw new Error(`${tData.ad} boş değil, birleştirilemez`);
+
+    const g = groupSnap.data();
+    const memberIds = [...(g.memberIds || [])];
+    if (memberIds.includes(table.id)) return { groupId };
+    memberIds.push(table.id);
+
+    const kapasite = (g.kapasite || 0) + (tData.kapasite || 0);
+    const memberAdlari = [...(g.memberAdlari || []), tData.ad];
+    const positions = { ...(g.positions || {}) };
+    if (position) positions[table.id] = position;
+
+    txn.update(groupRef, { memberIds, kapasite, memberAdlari, positions });
+    txn.update(tableRef, { grupId: groupId });
+
+    return { groupId, kapasite };
+  });
+}
+
 export async function dissolveTableGroup({ groupId, force = false }) {
   const groupRef = doc(db, 'tableGroups', groupId);
 

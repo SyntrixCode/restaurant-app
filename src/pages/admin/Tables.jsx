@@ -14,6 +14,9 @@ import {
   Info,
   Wine,
   ChefHat,
+  Calculator,
+  Footprints,
+  User,
   DoorOpen,
   Square,
   Type,
@@ -48,10 +51,11 @@ const ZONE_LABELS = {
 };
 
 const SIZE_PRESETS = [
-  { kapasite: 2, w: 70, h: 70 },
-  { kapasite: 4, w: 90, h: 90 },
-  { kapasite: 6, w: 110, h: 110 },
-  { kapasite: 8, w: 130, h: 130 },
+  // Yükseklik sabit (100); genişlik kapasiteyle sağa doğru artar
+  { kapasite: 2, w: 100, h: 100 },
+  { kapasite: 4, w: 150, h: 100 },
+  { kapasite: 6, w: 200, h: 100 },
+  { kapasite: 8, w: 250, h: 100 },
 ];
 
 const DURUM_COLORS = {
@@ -71,6 +75,15 @@ const DECOR_PRESETS = {
     className:
       'bg-gradient-to-b from-amber-900 to-amber-700 text-amber-50 border-amber-950 tracking-widest font-bold uppercase',
   },
+  kasa: {
+    label: 'KASA',
+    icon: Calculator,
+    w: 130,
+    h: 60,
+    iconColor: 'text-slate-100',
+    className:
+      'bg-gradient-to-b from-slate-700 to-slate-600 text-slate-50 border-slate-900 tracking-widest font-bold uppercase',
+  },
   mutfak: {
     label: 'MUTFAK',
     icon: ChefHat,
@@ -83,7 +96,7 @@ const DECOR_PRESETS = {
   },
   wc: {
     label: 'WC',
-    icon: null,
+    icon: User,
     w: 60,
     h: 60,
     iconColor: 'text-blue-700',
@@ -109,6 +122,15 @@ const DECOR_PRESETS = {
     className: 'bg-slate-700 border-slate-900',
     noRounded: true,
   },
+  merdiven: {
+    label: 'MERDİVEN',
+    icon: Footprints,
+    w: 80,
+    h: 120,
+    iconColor: 'text-slate-500',
+    className:
+      'bg-slate-200 text-slate-600 border-slate-400 border-[2px] font-semibold tracking-wide uppercase text-xs',
+  },
   etiket: {
     label: 'Yazı',
     icon: null,
@@ -128,7 +150,7 @@ function clamp(v, lo, hi) {
 
 function sizeFor(kapasite) {
   const preset = SIZE_PRESETS.find((p) => p.kapasite >= kapasite);
-  return preset ? { w: preset.w, h: preset.h } : { w: 130, h: 130 };
+  return preset ? { w: preset.w, h: preset.h } : { w: 250, h: 100 };
 }
 
 export default function AdminTables() {
@@ -340,8 +362,8 @@ export default function AdminTables() {
       const id = await createDoc('decorations', {
         tip,
         zone,
-        x: 60,
-        y: 60,
+        x: Math.round(CANVAS_W / 2 - preset.w / 2),
+        y: Math.round(CANVAS_H / 2 - preset.h / 2),
         w: preset.w,
         h: preset.h,
         label: preset.label,
@@ -378,15 +400,6 @@ export default function AdminTables() {
                   </button>
                 </>
               )}
-              <button
-                onClick={() => {
-                  setEditing(null);
-                  setModal('add');
-                }}
-                className="btn-primary"
-              >
-                <Plus size={16} /> Yeni Masa
-              </button>
             </>
           }
         />
@@ -394,9 +407,7 @@ export default function AdminTables() {
 
       <div className="flex items-center gap-1 border-b border-slate-200 bg-white px-8 py-2">
         {zones.map((z) => {
-          const count =
-            tables.filter((t) => (t.zone || 'ic') === z).length +
-            decorations.filter((d) => (d.zone || 'ic') === z).length;
+          const count = tables.filter((t) => (t.zone || 'ic') === z).length;
           return (
             <button
               key={z}
@@ -500,12 +511,23 @@ export default function AdminTables() {
           <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
             Öğe Ekle
           </h3>
+          <button
+            onClick={() => {
+              setEditing(null);
+              setModal('add');
+            }}
+            className="btn-primary mb-3 flex w-full items-center justify-center gap-1.5"
+          >
+            <Plus size={16} /> Yeni Masa
+          </button>
           <div className="mb-6 grid grid-cols-3 gap-2">
             <DecorButton tip="bar" onClick={() => addDecoration('bar')} />
             <DecorButton tip="mutfak" onClick={() => addDecoration('mutfak')} />
+            <DecorButton tip="kasa" onClick={() => addDecoration('kasa')} />
             <DecorButton tip="wc" onClick={() => addDecoration('wc')} />
             <DecorButton tip="cikis" onClick={() => addDecoration('cikis')} />
             <DecorButton tip="duvar" onClick={() => addDecoration('duvar')} />
+            <DecorButton tip="merdiven" onClick={() => addDecoration('merdiven')} />
             <DecorButton tip="etiket" onClick={() => addDecoration('etiket')} />
           </div>
 
@@ -595,7 +617,7 @@ function CanvasTable({ table, x, y, isOccupied, selected, onPointerDown }) {
       className={`absolute z-10 flex cursor-move select-none flex-col items-center justify-center rounded-xl border-2 text-white shadow-md transition-shadow ${color} ${
         selected ? 'ring-4 ring-blue-400 ring-offset-2' : ''
       }`}
-      style={{ left: x, top: y, width: w, height: h, touchAction: 'none' }}
+      style={{ left: x, top: y, width: w, height: h, touchAction: 'none', zIndex: selected ? 50 : undefined }}
     >
       <span className="text-sm font-bold leading-tight">{table.ad}</span>
       <span className="mt-0.5 flex items-center gap-0.5 text-xs opacity-90">
@@ -622,7 +644,7 @@ function CanvasDecoration({ decor, x, y, selected, onPointerDown }) {
       className={`absolute flex cursor-move select-none items-center justify-center gap-1 border-2 shadow-sm transition-shadow ${rounded} ${preset.className} ${
         selected ? 'ring-4 ring-blue-400 ring-offset-2' : ''
       } ${isVertical ? 'flex-col' : 'flex-row'}`}
-      style={{ left: x, top: y, width: w, height: h, touchAction: 'none' }}
+      style={{ left: x, top: y, width: w, height: h, touchAction: 'none', zIndex: selected ? 50 : undefined }}
     >
       {showIcon && <Icon size={Math.min(w, h) >= 50 ? 18 : 14} className={preset.iconColor} />}
       {label && (
@@ -835,8 +857,8 @@ function TableModal({ open, editing, zone, zones, tablesCount, onClose, onSaved 
           ad: data.ad,
           zone: data.zone,
           kapasite: data.kapasite,
-          x: 50,
-          y: 50,
+          x: Math.round(CANVAS_W / 2 - w / 2),
+          y: Math.round(CANVAS_H / 2 - h / 2),
           w,
           h,
           durum: 'bos',

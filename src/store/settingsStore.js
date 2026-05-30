@@ -24,6 +24,9 @@ const DEFAULTS = {
     rezervasyon: true,
     sesliUyari: true,
   },
+  cardPaymentProvider: 'simulation',
+  cardTerminalIp: '',
+  cardTerminalPort: 9100,
 };
 
 export const useSettingsStore = create((set) => ({

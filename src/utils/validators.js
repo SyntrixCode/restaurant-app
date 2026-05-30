@@ -73,6 +73,14 @@ export const settingsSchema = z.object({
     rezervasyon: z.boolean(),
     sesliUyari: z.boolean(),
   }),
+  // Kart POS (ECR) — Payment.jsx bu alanları okur; canlı entegrasyon banka onayı sonrası
+  cardPaymentProvider: z.enum(['simulation', 'verifone-tcp']).default('simulation'),
+  cardTerminalIp: z
+    .string()
+    .regex(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/, 'Geçerli IP girin (örn. 192.168.1.50)')
+    .optional()
+    .or(z.literal('')),
+  cardTerminalPort: z.coerce.number().int().min(1, 'Port 1-65535').max(65535, 'Port 1-65535').default(9100),
 });
 
 export const ingredientSchema = z.object({
