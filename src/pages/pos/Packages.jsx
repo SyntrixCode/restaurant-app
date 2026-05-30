@@ -33,6 +33,7 @@ const KAYNAK_LABELS = {
   yemeksepeti: 'Yemeksepeti',
   getir: 'Getir',
   trendyol: 'Trendyol',
+  migros: 'Migros',
   diger: 'Diğer',
 };
 

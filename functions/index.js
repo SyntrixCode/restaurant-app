@@ -110,35 +110,160 @@ function validateBearer(req, secret) {
   return crypto.timingSafeEqual(Buffer.from(auth), Buffer.from(expected));
 }
 
-const PAKET_KAYNAK_ALLOWED = ['yemeksepeti', 'getir', 'trendyol', 'diger'];
+// Posentegra provider slug → bizim paketKaynak enum'u
+const PROVIDER_MAP = {
+  ys: 'yemeksepeti',
+  yemeksepeti: 'yemeksepeti',
+  yemek_sepeti: 'yemeksepeti',
+  ty: 'trendyol',
+  trendyol: 'trendyol',
+  getir: 'getir',
+  migros: 'migros',
+  migros_yemek: 'migros',
+};
 function normalizePlatform(raw) {
   const s = String(raw || '').toLowerCase().trim();
-  if (PAKET_KAYNAK_ALLOWED.includes(s)) return s;
+  if (PROVIDER_MAP[s]) return PROVIDER_MAP[s];
   if (s.includes('yemek')) return 'yemeksepeti';
   if (s.includes('getir')) return 'getir';
   if (s.includes('trendyol')) return 'trendyol';
+  if (s.includes('migros')) return 'migros';
   return 'diger';
+}
+
+const PLATFORM_LABELS = {
+  yemeksepeti: 'Yemeksepeti',
+  trendyol: 'Trendyol Yemek',
+  getir: 'Getir',
+  migros: 'Migros Yemek',
+  diger: 'Posentegra',
+};
+
+// "Online Ödeme", "PAY_WITH_CARD", "Migros Online" gibi → online (kasiyer ödeme almaz)
+function isPrepaid(posPaymentMethod, paymentMethodText) {
+  const s = `${posPaymentMethod || ''} ${paymentMethodText?.tr || ''} ${paymentMethodText?.en || ''}`.toLowerCase();
+  if (s.includes('nakit') || s.includes('cash')) return false;
+  if (s.includes('kapıda') || s.includes('door')) return false;
+  return s.includes('online') || s.includes('card') || s.includes('kart') || s.includes('pay_with');
+}
+
+// i18n alan → string ('name': { tr, en } → 'Türkçe karşılığı')
+function tr(field) {
+  if (field == null) return '';
+  if (typeof field === 'string') return field;
+  if (typeof field === 'object') return String(field.tr || field.en || '');
+  return String(field);
+}
+
+// Adres parçalarını tek satırda birleştir
+function birlestirAdres(da) {
+  if (!da || typeof da !== 'object') return '';
+  const parts = [];
+  if (da.address) parts.push(da.address);
+  if (da.aptNo) parts.push(`No: ${da.aptNo}`);
+  if (da.floor) parts.push(`Kat: ${da.floor}`);
+  if (da.doorNo) parts.push(`Daire: ${da.doorNo}`);
+  if (da.district) parts.push(da.district);
+  if (da.city) parts.push(da.city);
+  const main = parts.filter(Boolean).join(', ');
+  const desc = da.description && da.description !== '0' ? ` (${da.description})` : '';
+  return (main + desc).trim();
+}
+
+// Ürün opsiyon/ingredient bilgilerini tek bir not stringine düzleştir
+function urunNotlariBirlestir(p) {
+  const parts = [];
+
+  // Opsiyon kategorileri (örn. menü seçenekleri, porsiyon)
+  if (Array.isArray(p.optionCategories)) {
+    for (const cat of p.optionCategories) {
+      const opsiyonlar = Array.isArray(cat.options) ? cat.options : [];
+      for (const opt of opsiyonlar) {
+        const ad = tr(opt.name);
+        const fiyat = Number(opt.price || 0);
+        const fiyatTxt = fiyat > 0 ? ` (+${fiyat})` : '';
+        if (ad) parts.push(`+ ${ad}${fiyatTxt}`);
+      }
+    }
+  }
+
+  // Çıkarılan malzemeler (V2 öncelikli, yoksa V1)
+  if (Array.isArray(p.removedIngredientsV2) && p.removedIngredientsV2.length) {
+    for (const ing of p.removedIngredientsV2) {
+      const ad = tr(ing.name || ing);
+      if (ad) parts.push(`− ${ad}`);
+    }
+  } else if (Array.isArray(p.removedIngredients)) {
+    for (const s of p.removedIngredients) {
+      // "ÇIKAR:Soğan" formatını temizle
+      const ad = String(s || '').replace(/^[^:]+:\s*/, '').trim();
+      if (ad) parts.push(`− ${ad}`);
+    }
+  }
+
+  // Eklenen malzemeler
+  if (Array.isArray(p.extraIngredients)) {
+    for (const ing of p.extraIngredients) {
+      const ad = tr(ing.name || ing);
+      const fiyat = Number(ing.price || 0);
+      const fiyatTxt = fiyat > 0 ? ` (+${fiyat})` : '';
+      if (ad) parts.push(`+ ${ad}${fiyatTxt}`);
+    }
+  }
+
+  // Ürün notu (müşteri özel notu)
+  const note = tr(p.note);
+  if (note) parts.push(note);
+
+  return parts.join(' · ');
 }
 
 /**
  * Posentegra'nın yolladığı sipariş gövdesini bizim `orders` şemamıza çevirir.
- * Posentegra alan isimleri kesin doküman olmadığı için iki dil/biçim varyantını
- * tolere ediyor; raw payload da `posentegraRaw` altına saklanıyor (debug için).
+ *
+ * Üç platformun (Migros / Trendyol / Yemeksepeti) gerçek payload örneklerine göre
+ * yazıldı; alan isimleri ortak (provider, pid, products, client, totalPrice...).
+ * Raw payload `posentegraRaw` altında saklanır (debug + ileride yeni alanlar).
  */
 function mapPosentegraOrder(body) {
-  const itemsRaw = body.items || body.urunler || body.products || [];
-  const items = (Array.isArray(itemsRaw) ? itemsRaw : []).map((it) => ({
-    ad: String(it.name || it.ad || it.product_name || it.urun_adi || 'Ürün'),
-    adet: Number(it.quantity || it.qty || it.adet || it.miktar || 1),
-    fiyat: Number(it.price || it.unit_price || it.fiyat || it.birim_fiyat || 0),
-    notlar: String(it.note || it.notes || it.notlar || it.aciklama || ''),
-  }));
+  const productsRaw = body.products || body.items || body.urunler || [];
+  const products = Array.isArray(productsRaw) ? productsRaw : [];
+
+  const items = products.map((p) => {
+    const ad = tr(p.name) || 'Ürün';
+    const adet = Number(p.count || p.quantity || p.adet || 1);
+    // Opsiyon dahil tek-birim fiyatı; yoksa düz price
+    const fiyatBirim = Number(p.priceWithOption || p.price || 0);
+    return {
+      ad,
+      adet,
+      fiyat: fiyatBirim,
+      notlar: urunNotlariBirlestir(p),
+    };
+  });
 
   const araToplam = items.reduce((s, it) => s + (it.fiyat || 0) * (it.adet || 0), 0);
-  const toplam = Number(body.total || body.toplam || body.tutar || araToplam);
+  const indirim = Number(body.totalDiscount || 0);
+  const toplam = Number(body.totalDiscountedPrice || body.totalPrice || araToplam);
 
-  const paketKaynak = normalizePlatform(body.platform || body.kaynak || body.source || body.app);
-  const platformAd = paketKaynak === 'diger' ? 'Posentegra' : paketKaynak[0].toUpperCase() + paketKaynak.slice(1);
+  const slug = body.provider?.slug || body.platform || body.kaynak || body.source || body.app;
+  const paketKaynak = normalizePlatform(slug);
+  const platformAd = body.provider?.kaynak || PLATFORM_LABELS[paketKaynak] || 'Posentegra';
+
+  const client = body.client || body.customer || {};
+  const musteriAd = String(client.name || body.musteri_ad || '');
+  const musteriTel = String(client.clientPhoneNumber || client.contactPhoneNumber || client.phone || body.musteri_tel || '');
+  const musteriAdres = client.deliveryAddress
+    ? birlestirAdres(client.deliveryAddress)
+    : String(client.address || body.musteri_adres || '');
+
+  const odemeTipi = tr(body.paymentMethodText) || body.posPaymentMethod || '';
+  const onceden = isPrepaid(body.posPaymentMethod, body.paymentMethodText);
+
+  // Posentegra'nın bize geri çağırırken kullanacağı id (verify/cancel/change-status için)
+  const posentegraPid = body.pid ? String(body.pid) : null;
+
+  const scheduledDate = body.scheduledDate?.$date || body.scheduledDate || null;
 
   return {
     masaId: null,
@@ -149,22 +274,32 @@ function mapPosentegraOrder(body) {
     durum: 'aktif',
     items,
     araToplam,
-    indirim: 0,
+    indirim,
     kuponKodu: null,
     kampanyaId: null,
     toplam,
     paketMi: true,
     paketKaynak,
-    musteriAd: String(body.customer?.name || body.musteri_ad || body.musteriAd || body.ad_soyad || ''),
-    musteriTel: String(body.customer?.phone || body.musteri_tel || body.musteriTel || body.telefon || ''),
-    musteriAdres: String(body.customer?.address || body.musteri_adres || body.musteriAdres || body.adres || ''),
-    posentegraSiparisNo: String(body.order_id || body.siparis_no || body.id || body.posentegra_id || '') || null,
+    paketKaynakAd: platformAd, // güzel görünen ad — UI'da Migros Yemek vs gösterir
+    musteriAd,
+    musteriTel,
+    musteriAdres,
+    musteriNotu: tr(body.clientNote) || '',
+    odemeTipi,
+    oncedenOdendi: onceden, // online ödenmişse kasiyer ödeme almaz
+    // Posentegra referansları (callback'ler için)
+    posentegraPid,
+    posentegraConfirmationId: body.confirmationId ? String(body.confirmationId) : null,
+    posentegraShortCode: body.shortCode ? String(body.shortCode) : null,
+    posentegraRestaurantId: body.restaurantId || null,
     posentegraRaw: body,
     olusturmaZamani: FieldValue.serverTimestamp(),
     hazirlandiZamani: null,
     masayaGittiZamani: null,
     tamamlandiZamani: null,
     gecikmeli: false,
+    zamanlanmis: !!scheduledDate,
+    zamanlanmisTarih: scheduledDate || null,
   };
 }
 
@@ -186,12 +321,12 @@ export const posentegraOrder = onRequest(
     }
     try {
       const body = req.body || {};
-      // Posentegra siparis_no ile çift kayıt önle — varsa mevcut order'ı dön
-      const posSiparisNo = String(body.order_id || body.siparis_no || body.id || '') || null;
-      if (posSiparisNo) {
+      // pid ile çift kayıt önle — Posentegra'nın bizim için tanımladığı sipariş kimliği
+      const pid = body.pid ? String(body.pid) : null;
+      if (pid) {
         const existing = await db
           .collection('orders')
-          .where('posentegraSiparisNo', '==', posSiparisNo)
+          .where('posentegraPid', '==', pid)
           .limit(1)
           .get();
         if (!existing.empty) {
@@ -201,7 +336,13 @@ export const posentegraOrder = onRequest(
       }
       const orderData = mapPosentegraOrder(body);
       const ref = await db.collection('orders').add(orderData);
-      console.log('[posentegraOrder] OK', { ref: ref.id, kaynak: orderData.paketKaynak, pos: posSiparisNo });
+      console.log('[posentegraOrder] OK', {
+        ref: ref.id,
+        kaynak: orderData.paketKaynak,
+        pid,
+        items: orderData.items.length,
+        toplam: orderData.toplam,
+      });
       res.status(200).json({ pos_ticket: ref.id });
     } catch (err) {
       console.error('[posentegraOrder] HATA:', err);
@@ -229,18 +370,18 @@ export const posentegraCancel = onRequest(
     try {
       const body = req.body || {};
       const posTicket = String(body.pos_ticket || body.order_id || '');
-      const posSiparisNo = String(body.posentegra_siparis_no || body.siparis_no || body.id || '');
-      const sebep = String(body.sebep || body.reason || 'Posentegra üzerinden iptal');
+      const pid = String(body.pid || body.posentegra_id || '');
+      const sebep = String(body.sebep || body.reason || tr(body.reasonName) || 'Posentegra üzerinden iptal');
 
       let orderRef = null;
       if (posTicket) {
         const snap = await db.collection('orders').doc(posTicket).get();
         if (snap.exists) orderRef = snap.ref;
       }
-      if (!orderRef && posSiparisNo) {
+      if (!orderRef && pid) {
         const snap = await db
           .collection('orders')
-          .where('posentegraSiparisNo', '==', posSiparisNo)
+          .where('posentegraPid', '==', pid)
           .limit(1)
           .get();
         if (!snap.empty) orderRef = snap.docs[0].ref;

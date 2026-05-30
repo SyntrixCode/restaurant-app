@@ -175,7 +175,7 @@ export const paketSchema = z.object({
     .max(20)
     .regex(/^[0-9\s+()-]+$/, 'Sadece rakam ve telefon karakterleri'),
   musteriAdres: z.string().min(5, 'Adres en az 5 karakter').max(500),
-  paketKaynak: z.enum(['manuel', 'telefon', 'yemeksepeti', 'getir', 'trendyol', 'diger']),
+  paketKaynak: z.enum(['manuel', 'telefon', 'yemeksepeti', 'getir', 'trendyol', 'migros', 'diger']),
   paketNotlar: z.string().max(300).optional().or(z.literal('')),
 });
 

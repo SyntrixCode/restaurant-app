@@ -34,10 +34,11 @@ const KAYNAK_LABELS = {
   yemeksepeti: 'Yemeksepeti',
   getir: 'Getir',
   trendyol: 'Trendyol',
+  migros: 'Migros',
   diger: 'Diğer',
 };
 
-const APP_KAYNAKLAR = ['yemeksepeti', 'getir', 'trendyol'];
+const APP_KAYNAKLAR = ['yemeksepeti', 'getir', 'trendyol', 'migros'];
 
 const KAYNAK_COLORS = {
   manuel: 'bg-slate-100 text-slate-700',
@@ -45,6 +46,7 @@ const KAYNAK_COLORS = {
   yemeksepeti: 'bg-red-100 text-red-700',
   getir: 'bg-purple-100 text-purple-700',
   trendyol: 'bg-orange-100 text-orange-700',
+  migros: 'bg-emerald-100 text-emerald-700',
   diger: 'bg-slate-100 text-slate-700',
 };
 

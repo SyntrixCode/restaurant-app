@@ -18,12 +18,13 @@ import { updateOrderStatus } from '../../firebase/orders';
 import { recordPayment } from '../../firebase/payments';
 import { awardLoyaltyPoints, computeEarnedPoints } from '../../firebase/customers';
 
-const APP_KAYNAKLAR = ['yemeksepeti', 'getir', 'trendyol'];
+const APP_KAYNAKLAR = ['yemeksepeti', 'getir', 'trendyol', 'migros'];
 
 const KAYNAK_LABELS = {
   yemeksepeti: 'Yemeksepeti',
   getir: 'Getir',
   trendyol: 'Trendyol',
+  migros: 'Migros',
 };
 
 export default function ActiveOrders() {
