@@ -12,6 +12,7 @@ import {
   Calculator,
   Footprints,
   DoorOpen,
+  DoorClosed,
   Type,
   CalendarClock,
   Phone,
@@ -77,6 +78,12 @@ const DECOR_PRESETS = {
     iconColor: 'text-emerald-700',
     className:
       'bg-white text-emerald-700 border-emerald-500 border-[3px] font-semibold tracking-wide uppercase',
+  },
+  kapi: {
+    icon: DoorClosed,
+    iconColor: 'text-amber-700',
+    className:
+      'bg-white text-amber-700 border-amber-500 border-[3px] font-semibold tracking-wide uppercase',
   },
   duvar: {
     icon: null,
@@ -176,8 +183,9 @@ export default function PosTables() {
   );
 
   const zones = useMemo(() => {
-    const set = new Set(tables.map((t) => t.zone || 'ic'));
-    if (set.size === 0) set.add('ic');
+    // Her zaman görünmesini istediğimiz bölgeler (henüz masası olmasa bile)
+    const ALWAYS = ['ic', 'dis', 'teras'];
+    const set = new Set([...ALWAYS, ...tables.map((t) => t.zone || 'ic')]);
     return [...set];
   }, [tables]);
 
@@ -268,10 +276,21 @@ export default function PosTables() {
     return best;
   }
 
-  function computeSnapPosition(target) {
+  // Dragged'ın target'a göre orijinal konumuna bakıp o yöne snap'ler:
+  // sol/sağ/üst/alt — kullanıcı hangi yönden geliyorsa orada bitişik olur.
+  // Eski sürüm hep "sağa" snap'liyordu, sağdan sola sürüklemede layout kayıyordu.
+  function computeSnapPosition(target, dragged) {
     const t = rectFor(target, effectivePosition(target));
-    // Bitişik (0 boşluk) — hedefin sağına yapışır → combined genişlik
-    return { x: t.x + t.w, y: t.y };
+    const dw = dragged.w || sizeFor(dragged.kapasite).w;
+    const dh = dragged.h || sizeFor(dragged.kapasite).h;
+    const dPos = { x: dragged.x ?? 0, y: dragged.y ?? 0 };
+    const dx = dPos.x - t.x;
+    const dy = dPos.y - t.y;
+    // Hangi eksende daha çok kaymışsa o yönde snap
+    if (Math.abs(dy) > Math.abs(dx)) {
+      return dy < 0 ? { x: t.x, y: t.y - dh } : { x: t.x, y: t.y + t.h };
+    }
+    return dx < 0 ? { x: t.x - dw, y: t.y } : { x: t.x + t.w, y: t.y };
   }
 
   // Sürüklerken kenar/merkez hizalama: en yakın hizaya yapışır, çizgileri döndürür
@@ -369,7 +388,9 @@ export default function PosTables() {
     let bestTableGap = MERGE_GAP + 1;
     let bestTableOverlap = 0;
     for (const o of tablesInZone) {
-      if (o.id === dragged.id || o.grupId || o.durum !== 'bos') continue;
+      // Rezerve masaya birleştirme olmaz; gruplu masalar yukarıda group olarak değerlendirildi.
+      // Dolu (siparişli) masaya birleştirme serbest — sipariş ana masada kalır.
+      if (o.id === dragged.id || o.grupId || o.durum === 'rezerve') continue;
       const rect = rectFor(o, effectivePosition(o));
       const ov = overlapOf(rect);
       const gap = gapOf(rect);
@@ -484,10 +505,28 @@ export default function PosTables() {
         const ps = members.map((t) => ({
           ...effectivePosition(t),
           w: t.w || sizeFor(t.kapasite).w,
+          h: t.h || sizeFor(t.kapasite).h,
         }));
+        const minX = Math.min(...ps.map((p) => p.x));
         const maxX = Math.max(...ps.map((p) => p.x + p.w));
         const minY = Math.min(...ps.map((p) => p.y));
-        const newPos = { x: maxX, y: minY };
+        const maxY = Math.max(...ps.map((p) => p.y + p.h));
+        const cX = (minX + maxX) / 2;
+        const cY = (minY + maxY) / 2;
+        const dW = dragged.w || sizeFor(dragged.kapasite).w;
+        const dH = dragged.h || sizeFor(dragged.kapasite).h;
+        const dxFromCenter = (dragged.x ?? 0) - cX;
+        const dyFromCenter = (dragged.y ?? 0) - cY;
+        let newPos;
+        if (Math.abs(dyFromCenter) > Math.abs(dxFromCenter)) {
+          newPos = dyFromCenter < 0
+            ? { x: Math.round(cX - dW / 2), y: minY - dH }
+            : { x: Math.round(cX - dW / 2), y: maxY };
+        } else {
+          newPos = dxFromCenter < 0
+            ? { x: minX - dW, y: minY }
+            : { x: maxX, y: minY };
+        }
         await addTableToGroup({
           groupId: group.id,
           table: dragged,
@@ -513,7 +552,7 @@ export default function PosTables() {
         );
         toast.success(`${dragged.ad} gruba eklendi`);
       } else {
-        const snapPos = computeSnapPosition(target);
+        const snapPos = computeSnapPosition(target, dragged);
         const res = await createTableGroup({
           memberTables: [target, dragged],
           mainTableId: target.id,

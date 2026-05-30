@@ -18,15 +18,24 @@ const payload = {
       district: 'Selçuklu',
     },
   },
-  totalPrice: 250, totalDiscount: 0, totalDiscountedPrice: 250,
+  totalPrice: 450, totalDiscount: 0, totalDiscountedPrice: 450,
   clientNote: 'Az pişmiş olsun',
   paymentMethod: 0, paymentMethodText: { tr: 'Kapıda Nakit' },
   posPaymentMethod: 'Nakit',
-  products: [{
-    id: '1', count: 1, name: { tr: 'Cağ Kebabı' },
-    price: 250, priceWithOption: 250, totalPriceWithOption: 250,
-    optionCategories: [], removedIngredients: [], extraIngredients: [],
-  }],
+  products: [
+    {
+      id: '1', count: 1, name: { tr: 'Adana Kebap' },
+      price: 380, priceWithOption: 380, totalPriceWithOption: 380,
+      optionCategories: [],
+      removedIngredientsV2: [{ id: '1', name: 'Soğan' }],
+      extraIngredients: [],
+    },
+    {
+      id: '2', count: 2, name: { tr: 'Ayran' },
+      price: 35, priceWithOption: 35, totalPriceWithOption: 70,
+      optionCategories: [], removedIngredients: [], extraIngredients: [],
+    },
+  ],
   confirmationId: 'TEST-FLOW',
 };
 

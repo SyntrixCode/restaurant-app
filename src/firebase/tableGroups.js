@@ -23,7 +23,13 @@ export async function createTableGroup({ memberTables, mainTableId, positions = 
       if (!s.exists()) throw new Error(`Masa bulunamadı: ${memberTables[i].ad}`);
       const data = s.data();
       if (data.grupId) throw new Error(`${data.ad} zaten bir grupta`);
-      if (data.durum !== 'bos') throw new Error(`${data.ad} boş değil, birleştirilemez`);
+      // Ana masa dolu olabilir (mevcut sipariş üstünde kalır). Eklenen masalar boş olmalı.
+      if (s.id !== main.id && data.durum !== 'bos') {
+        throw new Error(`${data.ad} boş değil, birleştirilemez`);
+      }
+      if (data.durum === 'rezerve') {
+        throw new Error(`${data.ad} rezerve, birleştirilemez`);
+      }
     }
 
     const groupRef = doc(collection(db, 'tableGroups'));

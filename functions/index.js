@@ -473,7 +473,15 @@ export const posentegraConfirm = onCall(
     if (!pid) throw new HttpsError('failed-precondition', 'Posentegra siparişi değil');
     if (order.posentegraOnayli) return { ok: true, already: true };
 
-    await posentegraApi.verifyOrder(POSENTEGRA_API_KEY.value(), pid);
+    try {
+      await posentegraApi.verifyOrder(POSENTEGRA_API_KEY.value(), pid);
+    } catch (err) {
+      console.warn('[posentegraConfirm] Posentegra hatası', err.status, err.body);
+      if (err.status === 404) {
+        throw new HttpsError('not-found', `Posentegra'da sipariş bulunamadı (pid: ${pid})`);
+      }
+      throw new HttpsError('internal', err.message || 'Posentegra çağrısı başarısız');
+    }
     await orderRef.update({
       posentegraOnayli: true,
       posentegraOnayZamani: FieldValue.serverTimestamp(),
@@ -510,7 +518,15 @@ export const posentegraReject = onCall(
     if (!pid) throw new HttpsError('failed-precondition', 'Posentegra siparişi değil');
     if (order.durum === 'iptal') return { ok: true, already: true };
 
-    await posentegraApi.cancelOrder(POSENTEGRA_API_KEY.value(), pid, reason || 'Restoran reddi', note);
+    try {
+      await posentegraApi.cancelOrder(POSENTEGRA_API_KEY.value(), pid, reason || 'Restoran reddi', note);
+    } catch (err) {
+      console.warn('[posentegraReject] Posentegra hatası', err.status, err.body);
+      if (err.status === 404) {
+        throw new HttpsError('not-found', `Posentegra'da sipariş bulunamadı (pid: ${pid})`);
+      }
+      throw new HttpsError('internal', err.message || 'Posentegra çağrısı başarısız');
+    }
     await orderRef.update({
       durum: 'iptal',
       iptal: {

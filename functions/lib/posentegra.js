@@ -28,8 +28,14 @@ async function call(method, path, apiKey, body) {
     json = { raw: text };
   }
   if (!res.ok) {
-    const msg = json?.message || json?.error || text || `HTTP ${res.status}`;
-    const err = new Error(`Posentegra ${method} ${path}: ${msg}`);
+    // Hata mesajı genelde json.error.message veya json.message altında
+    const msg =
+      json?.error?.message ||
+      json?.message ||
+      (typeof json?.error === 'string' ? json.error : null) ||
+      text ||
+      `HTTP ${res.status}`;
+    const err = new Error(`Posentegra ${method} ${path} (${res.status}): ${msg}`);
     err.status = res.status;
     err.body = json;
     throw err;

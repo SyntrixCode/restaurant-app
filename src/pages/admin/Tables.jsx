@@ -18,6 +18,7 @@ import {
   Footprints,
   User,
   DoorOpen,
+  DoorClosed,
   Square,
   Type,
   Minus as MinusIcon,
@@ -112,6 +113,15 @@ const DECOR_PRESETS = {
     iconColor: 'text-emerald-700',
     className:
       'bg-white text-emerald-700 border-emerald-500 border-[3px] font-semibold tracking-wide uppercase',
+  },
+  kapi: {
+    label: 'KAPI',
+    icon: DoorClosed,
+    w: 90,
+    h: 60,
+    iconColor: 'text-amber-700',
+    className:
+      'bg-white text-amber-700 border-amber-500 border-[3px] font-semibold tracking-wide uppercase',
   },
   duvar: {
     label: '',
@@ -276,10 +286,11 @@ export default function AdminTables() {
   );
 
   const zones = useMemo(() => {
-    const set = new Set();
+    // Her zaman görünmesini istediğimiz bölgeler (henüz masası olmasa bile)
+    const ALWAYS = ['ic', 'dis', 'teras'];
+    const set = new Set(ALWAYS);
     tables.forEach((t) => set.add(t.zone || 'ic'));
     decorations.forEach((d) => set.add(d.zone || 'ic'));
-    if (set.size === 0) set.add('ic');
     return [...set];
   }, [tables, decorations]);
 
@@ -630,6 +641,7 @@ export default function AdminTables() {
             <DecorButton tip="kasa" onClick={() => addDecoration('kasa')} />
             <DecorButton tip="wc" onClick={() => addDecoration('wc')} />
             <DecorButton tip="cikis" onClick={() => addDecoration('cikis')} />
+            <DecorButton tip="kapi" onClick={() => addDecoration('kapi')} />
             <DecorButton tip="duvar" onClick={() => addDecoration('duvar')} />
             <DecorButton tip="merdiven" onClick={() => addDecoration('merdiven')} />
             <DecorButton tip="etiket" onClick={() => addDecoration('etiket')} />
