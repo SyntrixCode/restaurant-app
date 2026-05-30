@@ -317,16 +317,20 @@ export default function PosTables() {
     return { x, y, guides };
   }
 
-  // Bırakma konumuna en yakın hedefi bul: tekil boş masa VEYA mevcut grup (ekrandaki combined kutusuyla)
+  // Bırakma konumuna en yakın hedefi bul: tekil boş masa VEYA mevcut grup (ekrandaki combined kutusuyla).
+  // Grup ile tek masa eşit mesafedeyse (özellikle gap=0 — grubun bbox'una bırakıldıysa)
+  // grup tercih edilir; aksi halde aynı kutu içinde komşu tekil masa yakalanıp yanlış birleştirme oluyordu.
   function findDropTarget(dragged, pos, w, h) {
     const d = { x: pos.x, y: pos.y, w, h };
-    const candidates = [];
-    // Tekil boş + gruplanmamış masalar
-    for (const o of tablesInZone) {
-      if (o.id === dragged.id || o.grupId || o.durum !== 'bos') continue;
-      candidates.push({ kind: 'table', table: o, rect: rectFor(o, effectivePosition(o)) });
-    }
-    // Mevcut gruplar — üyelerin birleşik (combined) kutusu = ekranda görünen kutu
+    const gapOf = (r) => {
+      const dx = Math.max(0, r.x - (d.x + d.w), d.x - (r.x + r.w));
+      const dy = Math.max(0, r.y - (d.y + d.h), d.y - (r.y + r.h));
+      return Math.hypot(dx, dy);
+    };
+
+    // Mevcut gruplar — üyelerin birleşik (combined) kutusu
+    let bestGroup = null;
+    let bestGroupGap = MERGE_GAP + 1;
     for (const g of groups) {
       const members = tablesInZone.filter((t) => g.memberIds?.includes(t.id));
       if (members.length === 0 || members.some((m) => m.id === dragged.id)) continue;
@@ -339,26 +343,32 @@ export default function PosTables() {
       const minY = Math.min(...ps.map((p) => p.y));
       const maxX = Math.max(...ps.map((p) => p.x + p.w));
       const maxY = Math.max(...ps.map((p) => p.y + p.h));
-      candidates.push({
-        kind: 'group',
-        group: g,
-        rect: { x: minX, y: minY, w: maxX - minX, h: maxY - minY },
-      });
-    }
-    // En yakın aday (kenar mesafesi; örtüşüyorsa 0)
-    let best = null;
-    let bestGap = MERGE_GAP + 1;
-    for (const c of candidates) {
-      const r = c.rect;
-      const dx = Math.max(0, r.x - (d.x + d.w), d.x - (r.x + r.w));
-      const dy = Math.max(0, r.y - (d.y + d.h), d.y - (r.y + r.h));
-      const gap = Math.hypot(dx, dy);
-      if (gap <= MERGE_GAP && gap < bestGap) {
-        bestGap = gap;
-        best = c;
+      const rect = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+      const gap = gapOf(rect);
+      if (gap <= MERGE_GAP && gap < bestGroupGap) {
+        bestGroupGap = gap;
+        bestGroup = { kind: 'group', group: g, rect };
       }
     }
-    return best;
+    // Grubun kutusunun içine düştüyse (gap=0) hep grubu seç — komşu tekil masa kazanmasın
+    if (bestGroup && bestGroupGap === 0) return bestGroup;
+
+    // Tekil boş + gruplanmamış masalar
+    let bestTable = null;
+    let bestTableGap = MERGE_GAP + 1;
+    for (const o of tablesInZone) {
+      if (o.id === dragged.id || o.grupId || o.durum !== 'bos') continue;
+      const rect = rectFor(o, effectivePosition(o));
+      const gap = gapOf(rect);
+      if (gap <= MERGE_GAP && gap < bestTableGap) {
+        bestTableGap = gap;
+        bestTable = { kind: 'table', table: o, rect };
+      }
+    }
+
+    // İkisi de varsa: küçük gap'li kazanır, eşitlikte grup tercih edilir
+    if (bestGroup && bestTable) return bestGroupGap <= bestTableGap ? bestGroup : bestTable;
+    return bestGroup || bestTable;
   }
 
   function handleTablePointerDown(e, table) {
