@@ -7,7 +7,10 @@
  * yazıcıya gönderilir.
  */
 
-const WIDTH = 576; // 80mm termal (203 dpi) ≈ 576 nokta
+// Yerleşim 576 nokta üzerinde tasarlandı, en sonda hedef yazıcı genişliğine
+// (58mm yerleşik iMin: 384 nokta) indirgenir → kağıda sığar, soldan kayma olmaz.
+const WIDTH = 576;
+const TARGET_WIDTH = 384; // 58mm @ 203dpi (iMin Swan 1 Pro yerleşik yazıcı)
 const PAD = 18;
 const RIGHT = WIDTH - PAD;
 
@@ -269,8 +272,21 @@ export async function renderAdisyonBitmap({ order, settings = {} }) {
 
   const contentH = Math.ceil(y);
 
-  // 1-bit eşikleme (termal için keskin siyah/beyaz)
-  const imgData = ctx.getImageData(0, 0, WIDTH, contentH);
+  // Hedef yazıcı genişliğine indirge (576 → 384) ve içerik yüksekliğine kırp
+  const scale = TARGET_WIDTH / WIDTH;
+  const targetH = Math.max(1, Math.round(contentH * scale));
+  const out = document.createElement('canvas');
+  out.width = TARGET_WIDTH;
+  out.height = targetH;
+  const octx = out.getContext('2d');
+  octx.imageSmoothingEnabled = true;
+  octx.imageSmoothingQuality = 'high';
+  octx.fillStyle = '#fff';
+  octx.fillRect(0, 0, TARGET_WIDTH, targetH);
+  octx.drawImage(canvas, 0, 0, WIDTH, contentH, 0, 0, TARGET_WIDTH, targetH);
+
+  // 1-bit eşikleme (termal için keskin siyah/beyaz, ölçeklenmiş kenarları sertleştirir)
+  const imgData = octx.getImageData(0, 0, TARGET_WIDTH, targetH);
   const d = imgData.data;
   for (let i = 0; i < d.length; i += 4) {
     const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
@@ -278,12 +294,7 @@ export async function renderAdisyonBitmap({ order, settings = {} }) {
     d[i] = d[i + 1] = d[i + 2] = v;
     d[i + 3] = 255;
   }
-
-  // İçerik yüksekliğine kırp
-  const out = document.createElement('canvas');
-  out.width = WIDTH;
-  out.height = contentH;
-  out.getContext('2d').putImageData(imgData, 0, 0);
+  octx.putImageData(imgData, 0, 0);
 
   const dataUrl = out.toDataURL('image/png');
   const base64 = dataUrl.split(',')[1] || '';
