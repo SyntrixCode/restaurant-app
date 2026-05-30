@@ -32,8 +32,14 @@ export async function fetchLatestRelease() {
     const list = await res.json();
     if (!Array.isArray(list) || list.length === 0) return null;
 
-    // APK içeren en yeni release'i seç (liste zaten created_at desc sıralı)
-    const apkRelease = list.find((r) =>
+    // GitHub API bazen sıralamayı garanti etmiyor — published_at'a göre
+    // manuel sıralayıp en yeni APK içeren release'i seç.
+    const sorted = [...list].sort((a, b) => {
+      const ta = new Date(a.published_at || a.created_at || 0).getTime();
+      const tb = new Date(b.published_at || b.created_at || 0).getTime();
+      return tb - ta; // descending — en yeni başta
+    });
+    const apkRelease = sorted.find((r) =>
       (r.assets || []).some((a) => a.name.toLowerCase().endsWith('.apk')),
     );
     if (!apkRelease) return null;

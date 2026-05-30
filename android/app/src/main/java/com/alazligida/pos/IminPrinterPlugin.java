@@ -10,6 +10,7 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import com.imin.printer.PrinterHelper;
+import com.imin.printer.INeoPrinterCallback;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -158,6 +159,38 @@ public class IminPrinterPlugin extends Plugin {
                 int qrSize = line.optInt("size", 6); // 1-10, default 6
                 helper.setQrCodeSize(qrSize);
                 helper.printQrCodeWithAlign(data, align, null);
+                break;
+            }
+            case "image": {
+                String asset = line.optString("asset", "");
+                if (asset.isEmpty()) return;
+                try {
+                    android.graphics.Bitmap bmp;
+                    try (java.io.InputStream is = getContext().getAssets().open(asset)) {
+                        bmp = android.graphics.BitmapFactory.decodeStream(is);
+                    }
+                    if (bmp != null) {
+                        // 1 = ortala (iMin printBitmapWithAlign: 0 sol,1 orta,2 sağ)
+                        helper.printBitmapWithAlign(bmp, 1, (INeoPrinterCallback) null);
+                    }
+                } catch (Throwable ignored) {
+                    // Logo basılamadı — fiş yine çıksın
+                }
+                break;
+            }
+            case "imageData": {
+                String b64 = line.optString("base64", "");
+                if (b64.isEmpty()) return;
+                try {
+                    byte[] bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
+                    android.graphics.Bitmap bmp =
+                            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                    if (bmp != null) {
+                        helper.printBitmapWithAlign(bmp, 1, (INeoPrinterCallback) null);
+                    }
+                } catch (Throwable ignored) {
+                    // Bitmap basılamadı — sessizce geç
+                }
                 break;
             }
             default:

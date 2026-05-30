@@ -57,10 +57,36 @@ public class NetworkPrinterPlugin extends Plugin {
             POSPrinter printer = null;
             try {
                 printer = openPrinter(model, ip);
+                // Satırları sırayla işle. 'image' satırında biriken metni flush et,
+                // bitmap'i bas, sonra metne devam et (logo en üstte konumlanır).
                 StringBuilder buf = new StringBuilder();
                 for (int i = 0; i < lines.length(); i++) {
                     JSONObject line = lines.getJSONObject(i);
-                    buf.append(renderLine(line));
+                    String lineType = line.optString("type");
+                    if ("image".equals(lineType)) {
+                        if (buf.length() > 0) {
+                            printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, buf.toString());
+                            buf.setLength(0);
+                        }
+                        printAssetBitmap(printer, line.optString("asset"));
+                    } else if ("imageData".equals(lineType)) {
+                        if (buf.length() > 0) {
+                            printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, buf.toString());
+                            buf.setLength(0);
+                        }
+                        printBase64Bitmap(printer, line.optString("base64"));
+                    } else if ("qr".equals(lineType)) {
+                        String data = line.optString("data", "");
+                        if (!data.isEmpty()) {
+                            if (buf.length() > 0) {
+                                printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, buf.toString());
+                                buf.setLength(0);
+                            }
+                            printQR(printer, data);
+                        }
+                    } else {
+                        buf.append(renderLine(line));
+                    }
                 }
                 for (int j = 0; j < feedLines; j++) buf.append("\n");
                 if (cut) buf.append(ESC).append("90fP");
@@ -75,6 +101,69 @@ public class NetworkPrinterPlugin extends Plugin {
                 closeQuietly(printer);
             }
         }, "BxlNetworkPrint").start();
+    }
+
+    /**
+     * QR kod basar (Bixolon SDK printBarCode, QRCODE symbology).
+     */
+    private void printQR(POSPrinter printer, String data) {
+        try {
+            printer.printBarCode(
+                    POSPrinterConst.PTR_S_RECEIPT,
+                    data,
+                    POSPrinterConst.PTR_BCS_QRCODE,
+                    180,   // height (dots)
+                    180,   // width (modül boyutu — SDK QR'da yorumlar)
+                    POSPrinterConst.PTR_BC_CENTER,
+                    POSPrinterConst.PTR_BC_TEXT_NONE
+            );
+        } catch (Throwable t) {
+            // QR basılamadı — fiş yine çıksın
+        }
+    }
+
+    /**
+     * assets/ içindeki bir PNG'yi yükleyip Bixolon yazıcıya ortalı basar.
+     * Hata olursa sessizce atlar (logo basılamazsa fiş yine çıksın).
+     */
+    private void printAssetBitmap(POSPrinter printer, String assetName) {
+        if (assetName == null || assetName.isEmpty()) return;
+        try {
+            android.graphics.Bitmap bmp;
+            try (java.io.InputStream is = getContext().getAssets().open(assetName)) {
+                bmp = android.graphics.BitmapFactory.decodeStream(is);
+            }
+            printBitmapCentered(printer, bmp);
+        } catch (Throwable t) {
+            // Logo basılamadı — fişin geri kalanı yine çıksın
+        }
+    }
+
+    /**
+     * Base64 PNG'yi (adisyon görseli vb.) decode edip ortalı basar.
+     */
+    private void printBase64Bitmap(POSPrinter printer, String base64) {
+        if (base64 == null || base64.isEmpty()) return;
+        try {
+            byte[] bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
+            android.graphics.Bitmap bmp =
+                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+            printBitmapCentered(printer, bmp);
+        } catch (Throwable t) {
+            // Bitmap basılamadı — sessizce geç
+        }
+    }
+
+    private void printBitmapCentered(POSPrinter printer, android.graphics.Bitmap bmp) throws Exception {
+        if (bmp == null) return;
+        // Station + parlaklık/sıkıştırma/dither paketlenmiş int (sample'dan)
+        java.nio.ByteBuffer bb = java.nio.ByteBuffer.allocate(4);
+        bb.put((byte) POSPrinterConst.PTR_S_RECEIPT);
+        bb.put((byte) 0); // brightness (default)
+        bb.put((byte) 0); // compress
+        bb.put((byte) 0); // dither
+        // width: PTR_BM_ASIS (orijinal genişlik), ortala
+        printer.printBitmap(bb.getInt(0), bmp, POSPrinterConst.PTR_BM_ASIS, POSPrinterConst.PTR_BM_CENTER);
     }
 
     @PluginMethod
@@ -216,10 +305,9 @@ public class NetworkPrinterPlugin extends Plugin {
     }
 
     private int scaleFromSize(int size) {
-        // iMin'in piksel-tabanlı size'ından (~24-48) Bixolon'un 1-8 ölçeğine map'le
-        if (size >= 44) return 4;
-        if (size >= 36) return 3;
-        if (size >= 28) return 2;
+        // iMin piksel-size'ından Bixolon ölçeğine — 80mm için muhafazakar.
+        // Sadece başlık/toplam (>=32) 2x; normal gövde (28 ve altı) 1x kalır.
+        if (size >= 32) return 2;
         return 1;
     }
 

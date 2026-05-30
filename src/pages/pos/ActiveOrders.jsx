@@ -16,6 +16,7 @@ import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL, minutesSince, formatAdet } from '../../utils/format';
 import { updateOrderStatus } from '../../firebase/orders';
 import { recordPayment } from '../../firebase/payments';
+import { awardLoyaltyPoints, computeEarnedPoints } from '../../firebase/customers';
 
 const APP_KAYNAKLAR = ['yemeksepeti', 'getir', 'trendyol'];
 
@@ -28,10 +29,17 @@ const KAYNAK_LABELS = {
 export default function ActiveOrders() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
+  const [, setTick] = useState(0); // canlı süre güncellemesi için
   const { user, profile, rol } = useAuthStore();
   const { settings } = useSettingsStore();
   const gecikmeEsigi = settings.gecikmeEsigiDk || 15;
   const canPay = ['kasiyer', 'admin'].includes(rol);
+
+  // Her 30 sn'de bir yeniden render → süreler canlı güncellenir, gecikme alarmı otomatik tetiklenir
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(
     () =>
@@ -85,6 +93,15 @@ export default function ActiveOrders() {
         ],
         fisBasildi: false,
       });
+      // Sadakat puanı (paket + telefon + program aktif)
+      if (settings?.sadakatAktif && order.musteriTel) {
+        const earned = computeEarnedPoints(order.toplam, settings);
+        if (earned > 0) {
+          awardLoyaltyPoints({ tel: order.musteriTel, tutar: order.toplam, settings })
+            .then(() => toast.success(`+${earned} sadakat puanı`))
+            .catch((e) => console.warn('Puan eklenemedi:', e));
+        }
+      }
       toast.success(`${appLabel} üzerinden ödendi olarak arşivlendi`);
     } catch (err) {
       console.error(err);
@@ -170,11 +187,16 @@ function Section({ title, count, icon: Icon, children }) {
 function MasaOrderCard({ order, gecikmeEsigi, canPay, onPay }) {
   const mins = minutesSince(order.olusturmaZamani);
   const late = mins > gecikmeEsigi;
+  const critical = mins > gecikmeEsigi * 2; // 2 katı → kritik
 
   return (
     <div
-      className={`rounded-xl border-2 bg-white p-4 shadow-sm ${
-        late ? 'border-red-500' : 'border-slate-200'
+      className={`rounded-xl border-2 bg-white p-4 shadow-sm transition ${
+        critical
+          ? 'animate-pulse border-red-600 bg-red-50/40 ring-2 ring-red-300'
+          : late
+            ? 'border-red-500'
+            : 'border-slate-200'
       }`}
     >
       <div className="mb-3 flex items-start justify-between">
@@ -195,6 +217,7 @@ function MasaOrderCard({ order, gecikmeEsigi, canPay, onPay }) {
             {late && <AlertTriangle size={14} className="mr-1 inline" />}
             <Clock size={12} className="mr-1 inline" />
             {mins} dk
+            {critical && <span className="ml-1 text-xs font-bold uppercase">GECİKTİ!</span>}
           </p>
           <p className="text-base font-bold text-slate-900">{formatTL(order.toplam)}</p>
         </div>

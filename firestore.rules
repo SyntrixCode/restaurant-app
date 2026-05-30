@@ -150,5 +150,34 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if isAdmin();
     }
+
+    match /zReports/{id} {
+      allow read: if isAdmin() || isKasiyer();
+      allow create: if isAdmin() || isKasiyer();
+      allow update, delete: if isAdmin();
+    }
+
+    // Personel mesai (clock in/out) — personel kendi mesaisini açar/kapatır.
+    match /shifts/{id} {
+      allow read: if isStaff();
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    // Müşteri telefon defteri (paket servis) — personel okur/yazar.
+    match /customers/{id} {
+      allow read: if isStaff();
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    // Garson çağırma — müşteri masadaki QR menüden oluşturur (giriş gerektirmez).
+    // Kötüye kullanımı sınırlamak için sadece beklenen tip/durum ile oluşturulabilir.
+    match /waiterCalls/{id} {
+      allow read: if isStaff();
+      allow create: if request.resource.data.durum == 'bekliyor'
+                    && request.resource.data.tip in ['garson', 'hesap'];
+      allow update, delete: if isStaff();
+    }
   }
 }

@@ -7,18 +7,19 @@ export const useCartStore = create((set, get) => ({
 
   start: (masaId, masaAd) => set({ masaId, masaAd, items: [] }),
 
-  addItem: (product) => {
+  addItem: (product, initialNotes = '') => {
     const items = [...get().items];
     const existing = items.find((it) => it.productId === product.id);
     if (existing) {
       existing.adet += 1;
+      // Mevcut notları koru, üzerine yazma. Garson düzenle butonundan değiştirebilir.
     } else {
       items.push({
         productId: product.id,
         ad: product.ad,
         fiyat: product.fiyat,
         adet: 1,
-        notlar: '',
+        notlar: initialNotes || '',
       });
     }
     set({ items });

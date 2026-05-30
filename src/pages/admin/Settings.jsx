@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
-import { Save, Store, Receipt, Bell, Settings as SettingsIcon, CreditCard } from 'lucide-react';
+import { Save, Store, Receipt, Bell, Gift, Settings as SettingsIcon, CreditCard } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import Toggle from '../../components/ui/Toggle';
 import UpdateCard from '../../components/admin/UpdateCard';
@@ -14,6 +14,7 @@ const DEFAULT_VALUES = {
   restoranAdres: '',
   restoranTel: '',
   vergiNo: '',
+  vergiDairesi: '',
   paraBirimi: 'TL',
   vergiOrani: 10,
   kdvDahilFiyat: true,
@@ -23,6 +24,13 @@ const DEFAULT_VALUES = {
   dusukStokEsigi: 5,
   fisBasligi: '',
   fisAltMesaji: 'Teşekkür ederiz',
+  fisQrUrl: '',
+  fisQrMesaj: 'Bizi değerlendirin',
+  fisLogoBas: true,
+  garsonCagirmaAcik: true,
+  sadakatAktif: false,
+  puanKazanmaTL: 10,
+  puanTLKarsiligi: 1,
   otomatikFisBas: true,
   bildirimAyarlari: {
     gecikme: true,
@@ -92,7 +100,7 @@ export default function AdminSettings() {
           {/* Restoran Bilgileri */}
           <Section title="Restoran Bilgileri" icon={Store}>
             <Field label="Restoran Adı" error={errors.restoranAd}>
-              <input {...register('restoranAd')} className="input" placeholder="Lezzet Durağı" />
+              <input {...register('restoranAd')} className="input" placeholder="Alazlı Konya Mutfağı" />
             </Field>
             <Field label="Adres" error={errors.restoranAdres}>
               <input {...register('restoranAdres')} className="input" />
@@ -105,6 +113,9 @@ export default function AdminSettings() {
                 <input {...register('vergiNo')} className="input" />
               </Field>
             </div>
+            <Field label="Vergi Dairesi" error={errors.vergiDairesi}>
+              <input {...register('vergiDairesi')} className="input" placeholder="Selçuklu" />
+            </Field>
           </Section>
 
           {/* Operasyon */}
@@ -167,7 +178,7 @@ export default function AdminSettings() {
               <input
                 {...register('fisBasligi')}
                 className="input font-mono"
-                placeholder="LEZZET DURAĞI"
+                placeholder="Boşsa restoran adı kullanılır"
               />
               <p className="mt-1 text-xs text-slate-500">
                 Fişin en üstünde basılır. Boşsa restoran adı kullanılır.
@@ -178,6 +189,29 @@ export default function AdminSettings() {
                 {...register('fisAltMesaji')}
                 className="input"
                 placeholder="Teşekkür ederiz"
+              />
+            </Field>
+            <ToggleField
+              label="Fişte Logo Bas"
+              hint="Fişin tepesinde restoran logosu (siyah-beyaz) basılır"
+              control={control}
+              name="fisLogoBas"
+            />
+            <Field label="Değerlendirme QR Linki" error={errors.fisQrUrl}>
+              <input
+                {...register('fisQrUrl')}
+                className="input"
+                placeholder="https://g.page/r/... (Google yorum linki)"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Girilirse fişin altına QR kod basılır. Müşteri okutup değerlendirir. Boşsa QR çıkmaz.
+              </p>
+            </Field>
+            <Field label="QR Üstü Mesaj" error={errors.fisQrMesaj}>
+              <input
+                {...register('fisQrMesaj')}
+                className="input"
+                placeholder="Bizi değerlendirin"
               />
             </Field>
             <ToggleField
@@ -270,6 +304,31 @@ export default function AdminSettings() {
               control={control}
               name="bildirimAyarlari.sesliUyari"
             />
+            <ToggleField
+              label="Masadan Garson Çağırma"
+              hint="QR menüde 'Garson Çağır' / 'Hesap İste' butonları gösterilir"
+              control={control}
+              name="garsonCagirmaAcik"
+            />
+          </Section>
+
+          {/* Sadakat / Puan */}
+          <Section title="Sadakat / Puan" icon={Gift}>
+            <ToggleField
+              label="Sadakat Programı"
+              hint="Paket müşterileri telefonlarına göre puan kazanır (puan, ödeme sonrası eklenir)"
+              control={control}
+              name="sadakatAktif"
+            />
+            <Field label="Puan Kazanma Oranı (her kaç TL'ye 1 puan)" error={errors.puanKazanmaTL}>
+              <input type="number" step="1" min="1" {...register('puanKazanmaTL')} className="input" placeholder="10" />
+            </Field>
+            <Field label="1 Puan = Kaç TL İndirim" error={errors.puanTLKarsiligi}>
+              <input type="number" step="0.01" min="0.01" {...register('puanTLKarsiligi')} className="input" placeholder="1" />
+            </Field>
+            <p className="text-xs text-slate-500">
+              Örnek: 100 TL paket ödeyen müşteri (oran 10) 10 puan kazanır. 1 puan = 1 TL ise sonraki siparişte 10 TL indirim kullanabilir.
+            </p>
           </Section>
 
           {/* Yazılım Güncelleme — form dışında, kendi state'i */}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2, Package, Image as ImageIcon, Upload } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Image as ImageIcon, Upload, X } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import Modal from '../../components/ui/Modal';
@@ -207,7 +207,11 @@ function ProductModal({ open, onClose, editing, categories }) {
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(productSchema),
-    defaultValues: { ad: '', categoryId: '', fiyat: 0, stok: 0, aciklama: '', aktif: true },
+    defaultValues: {
+      ad: '', categoryId: '', fiyat: 0, stokTakipli: false, stok: 0, aciklama: '', opsiyonlar: [],
+      ceviri: { en: { ad: '', aciklama: '' }, ar: { ad: '', aciklama: '' } },
+      aktif: true,
+    },
   });
 
   useEffect(() => {
@@ -218,18 +222,28 @@ function ProductModal({ open, onClose, editing, categories }) {
               ad: editing.ad,
               categoryId: editing.categoryId,
               fiyat: editing.fiyat,
+              // Mevcut ürünlerde undefined ise eski davranış (takipli) korunur
+              stokTakipli: editing.stokTakipli !== false,
               stok: editing.stok,
               dusukStokEsigi: editing.dusukStokEsigi ?? null,
               aciklama: editing.aciklama || '',
+              opsiyonlar: editing.opsiyonlar || [],
+              ceviri: {
+                en: { ad: editing.ceviri?.en?.ad || '', aciklama: editing.ceviri?.en?.aciklama || '' },
+                ar: { ad: editing.ceviri?.ar?.ad || '', aciklama: editing.ceviri?.ar?.aciklama || '' },
+              },
               aktif: editing.aktif ?? true,
             }
           : {
               ad: '',
               categoryId: categories[0]?.id || '',
               fiyat: 0,
+              stokTakipli: false, // Yeni ürünlerde default: stoksuz
               stok: 0,
               dusukStokEsigi: null,
               aciklama: '',
+              opsiyonlar: [],
+              ceviri: { en: { ad: '', aciklama: '' }, ar: { ad: '', aciklama: '' } },
               aktif: true,
             },
       );
@@ -329,28 +343,89 @@ function ProductModal({ open, onClose, editing, categories }) {
           {errors.fiyat && <p className="mt-1 text-xs text-red-600">{errors.fiyat.message}</p>}
         </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Stok</label>
-          <input type="number" {...register('stok')} className="input" />
-          {errors.stok && <p className="mt-1 text-xs text-red-600">{errors.stok.message}</p>}
+        {/* Stok Takibi toggle — mutfak ürünlerinde kapalı, paketli ürünlerde açık */}
+        <div className="col-span-2">
+          <div className="flex items-start justify-between gap-3 rounded-lg bg-slate-50 p-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-800">Stok Takibi</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Açık: kola, su, paketli ürünler (sınırlı sayı). Kapalı: menemen, pide, kebap (mutfaktan yapılır, stok yok).
+              </p>
+            </div>
+            <Toggle
+              checked={!!watch('stokTakipli')}
+              onChange={(v) => setValue('stokTakipli', v, { shouldDirty: true })}
+            />
+          </div>
         </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Düşük Stok Eşiği (opsiyonel)
-          </label>
-          <input
-            type="number"
-            {...register('dusukStokEsigi')}
-            className="input"
-            placeholder="Boş = global ayar"
-          />
-        </div>
+        {watch('stokTakipli') && (
+          <>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Stok</label>
+              <input type="number" {...register('stok')} className="input" />
+              {errors.stok && <p className="mt-1 text-xs text-red-600">{errors.stok.message}</p>}
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Düşük Stok Eşiği (opsiyonel)
+              </label>
+              <input
+                type="number"
+                {...register('dusukStokEsigi')}
+                className="input"
+                placeholder="Boş = global ayar"
+              />
+            </div>
+          </>
+        )}
 
         <div className="col-span-2">
           <label className="mb-1 block text-sm font-medium text-slate-700">Açıklama</label>
           <textarea {...register('aciklama')} rows={2} className="input" />
         </div>
+
+        <div className="col-span-2">
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Opsiyonlar (sipariş notları)
+          </label>
+          <OptionTagsInput
+            value={watch('opsiyonlar') || []}
+            onChange={(arr) => setValue('opsiyonlar', arr, { shouldDirty: true })}
+            placeholder="acılı, acısız, soğansız ..."
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Garson siparişe eklerken bu seçenekler çıkar. Birden fazla seçilebilir, fiyatı etkilemez.
+          </p>
+        </div>
+
+        <details className="col-span-2 rounded-lg border border-slate-200 p-3">
+          <summary className="cursor-pointer text-sm font-medium text-slate-700">
+            Çeviriler (QR menü — opsiyonel)
+          </summary>
+          <p className="mt-1 text-xs text-slate-500">
+            Boş bırakılan diller müşteri menüsünde Türkçe gösterilir.
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">İngilizce ad</label>
+              <input {...register('ceviri.en.ad')} className="input" placeholder="English name" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">İngilizce açıklama</label>
+              <input {...register('ceviri.en.aciklama')} className="input" placeholder="English description" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Arapça ad</label>
+              <input {...register('ceviri.ar.ad')} className="input" dir="rtl" placeholder="الاسم بالعربية" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Arapça açıklama</label>
+              <input {...register('ceviri.ar.aciklama')} className="input" dir="rtl" placeholder="الوصف بالعربية" />
+            </div>
+          </div>
+        </details>
 
         <div className="col-span-2">
           <label className="mb-1 block text-sm font-medium text-slate-700">Görsel</label>
@@ -391,5 +466,60 @@ function ProductModal({ open, onClose, editing, categories }) {
         </div>
       </form>
     </Modal>
+  );
+}
+
+function OptionTagsInput({ value, onChange, placeholder }) {
+  const [input, setInput] = useState('');
+  const tags = Array.isArray(value) ? value : [];
+
+  const commit = () => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    // Virgülle birden fazla yapıştırılırsa hepsini ekle
+    const parts = trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+    const unique = [...new Set([...tags, ...parts])];
+    onChange(unique);
+    setInput('');
+  };
+
+  const remove = (idx) => {
+    onChange(tags.filter((_, i) => i !== idx));
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-slate-300 bg-white p-2 focus-within:border-blue-500">
+      {tags.map((t, i) => (
+        <span
+          key={i}
+          className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-800"
+        >
+          {t}
+          <button
+            type="button"
+            onClick={() => remove(i)}
+            className="rounded-full p-0.5 hover:bg-blue-200"
+          >
+            <X size={11} />
+          </button>
+        </span>
+      ))}
+      <input
+        type="text"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            commit();
+          } else if (e.key === 'Backspace' && !input && tags.length > 0) {
+            remove(tags.length - 1);
+          }
+        }}
+        onBlur={commit}
+        placeholder={tags.length === 0 ? placeholder : ''}
+        className="flex-1 min-w-[120px] bg-transparent text-sm outline-none"
+      />
+    </div>
   );
 }
