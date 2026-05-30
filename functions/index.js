@@ -1,11 +1,12 @@
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
-import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onDocumentWritten, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import { defineSecret } from 'firebase-functions/params';
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import crypto from 'node:crypto';
+import { posentegraApi, POSENTEGRA_STATUS_MAP } from './lib/posentegra.js';
 
 initializeApp();
 setGlobalOptions({ region: 'europe-west1' });
@@ -13,6 +14,8 @@ setGlobalOptions({ region: 'europe-west1' });
 // Posentegra → bize webhook çağrılarındaki Bearer token'ı doğrulamak için.
 // CLI ile set edilir: `firebase functions:secrets:set POSENTEGRA_WEBHOOK_SECRET`
 const POSENTEGRA_WEBHOOK_SECRET = defineSecret('POSENTEGRA_WEBHOOK_SECRET');
+// Posentegra'ya outbound çağrılar için (verify/cancel/change-status)
+const POSENTEGRA_API_KEY = defineSecret('POSENTEGRA_API_KEY');
 
 const auth = getAuth();
 const db = getFirestore();
@@ -442,6 +445,126 @@ export const posentegraCancel = onRequest(
     } catch (err) {
       console.error('[posentegraCancel] HATA:', err);
       res.status(500).json({ error: 'internal', message: err.message });
+    }
+  },
+);
+
+/**
+ * Garson "Kabul Et" basınca → Posentegra'ya verify gönderir, order'da onaylı flag'i set eder.
+ */
+export const posentegraConfirm = onCall(
+  { secrets: [POSENTEGRA_API_KEY], region: 'europe-west1' },
+  async (req) => {
+    if (!req.auth) throw new HttpsError('unauthenticated', 'Giriş gerekli');
+    const userSnap = await db.collection('users').doc(req.auth.uid).get();
+    if (!userSnap.exists) throw new HttpsError('permission-denied', 'Kullanıcı bulunamadı');
+    const userData = userSnap.data();
+    if (!userData.aktif || !['admin', 'kasiyer', 'garson'].includes(userData.rol)) {
+      throw new HttpsError('permission-denied', 'Yetki yok');
+    }
+
+    const orderId = String(req.data?.orderId || '');
+    if (!orderId) throw new HttpsError('invalid-argument', 'orderId gerekli');
+    const orderRef = db.collection('orders').doc(orderId);
+    const orderSnap = await orderRef.get();
+    if (!orderSnap.exists) throw new HttpsError('not-found', 'Sipariş bulunamadı');
+    const order = orderSnap.data();
+    const pid = order.posentegraPid;
+    if (!pid) throw new HttpsError('failed-precondition', 'Posentegra siparişi değil');
+    if (order.posentegraOnayli) return { ok: true, already: true };
+
+    await posentegraApi.verifyOrder(POSENTEGRA_API_KEY.value(), pid);
+    await orderRef.update({
+      posentegraOnayli: true,
+      posentegraOnayZamani: FieldValue.serverTimestamp(),
+      posentegraOnaylayanId: req.auth.uid,
+      posentegraOnaylayanAd: userData.ad || 'Personel',
+    });
+    return { ok: true };
+  },
+);
+
+/**
+ * Garson/Kasiyer "Reddet" basınca → Posentegra'ya cancel gönderir, order'ı iptal'e alır.
+ */
+export const posentegraReject = onCall(
+  { secrets: [POSENTEGRA_API_KEY], region: 'europe-west1' },
+  async (req) => {
+    if (!req.auth) throw new HttpsError('unauthenticated', 'Giriş gerekli');
+    const userSnap = await db.collection('users').doc(req.auth.uid).get();
+    if (!userSnap.exists) throw new HttpsError('permission-denied', 'Kullanıcı bulunamadı');
+    const userData = userSnap.data();
+    if (!userData.aktif || !['admin', 'kasiyer'].includes(userData.rol)) {
+      throw new HttpsError('permission-denied', 'Yetki yok');
+    }
+
+    const orderId = String(req.data?.orderId || '');
+    const reason = String(req.data?.reason || '');
+    const note = String(req.data?.note || '');
+    if (!orderId) throw new HttpsError('invalid-argument', 'orderId gerekli');
+    const orderRef = db.collection('orders').doc(orderId);
+    const orderSnap = await orderRef.get();
+    if (!orderSnap.exists) throw new HttpsError('not-found', 'Sipariş bulunamadı');
+    const order = orderSnap.data();
+    const pid = order.posentegraPid;
+    if (!pid) throw new HttpsError('failed-precondition', 'Posentegra siparişi değil');
+    if (order.durum === 'iptal') return { ok: true, already: true };
+
+    await posentegraApi.cancelOrder(POSENTEGRA_API_KEY.value(), pid, reason || 'Restoran reddi', note);
+    await orderRef.update({
+      durum: 'iptal',
+      iptal: {
+        edildi: true,
+        sebep: note || reason || 'Posentegra üzerinden reddedildi',
+        edenId: req.auth.uid,
+        edenAd: userData.ad || 'Personel',
+        zaman: FieldValue.serverTimestamp(),
+      },
+      iptalZamani: FieldValue.serverTimestamp(),
+    });
+    return { ok: true };
+  },
+);
+
+/**
+ * GET — iptal nedenleri listesi (UI dropdown için).
+ */
+export const posentegraReasons = onCall(
+  { secrets: [POSENTEGRA_API_KEY], region: 'europe-west1' },
+  async (req) => {
+    if (!req.auth) throw new HttpsError('unauthenticated', 'Giriş gerekli');
+    const orderId = String(req.data?.orderId || '');
+    if (!orderId) throw new HttpsError('invalid-argument', 'orderId gerekli');
+    const orderSnap = await db.collection('orders').doc(orderId).get();
+    if (!orderSnap.exists) throw new HttpsError('not-found', 'Sipariş bulunamadı');
+    const pid = orderSnap.data().posentegraPid;
+    if (!pid) throw new HttpsError('failed-precondition', 'Posentegra siparişi değil');
+    const reasons = await posentegraApi.getCancelReasons(POSENTEGRA_API_KEY.value(), pid);
+    return { reasons };
+  },
+);
+
+/**
+ * order.durum değiştiğinde Posentegra'ya otomatik bildir.
+ * 'hazirlandi' → status 400, 'masayaGitti' → 500, 'tamamlandi' → 900.
+ * Posentegra siparişi olmayan order'larda noop.
+ */
+export const posentegraOnStatusChange = onDocumentUpdated(
+  { document: 'orders/{orderId}', secrets: [POSENTEGRA_API_KEY], region: 'europe-west1' },
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    if (!before || !after) return;
+    const pid = after.posentegraPid;
+    if (!pid) return;
+    if (before.durum === after.durum) return;
+    const statusCode = POSENTEGRA_STATUS_MAP[after.durum];
+    if (statusCode == null) return;
+    try {
+      await posentegraApi.changeStatus(POSENTEGRA_API_KEY.value(), pid, statusCode);
+      console.log('[posentegraOnStatusChange] OK', { pid, durum: after.durum, status: statusCode });
+    } catch (err) {
+      console.warn('[posentegraOnStatusChange] HATA', { pid, durum: after.durum, msg: err.message });
     }
   },
 );

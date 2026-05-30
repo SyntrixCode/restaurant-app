@@ -12,6 +12,8 @@ export default defineConfig({
       workbox: {
         // QR menü ve admin için temel offline cache
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+        // Ana bundle 2 MB'ı geçebiliyor — limiti 5 MB yap
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         // Firestore dinamik istekler cache'lenmesin
         navigateFallbackDenylist: [/^\/__/, /^\/api\//],
         runtimeCaching: [

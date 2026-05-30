@@ -7,6 +7,10 @@ import {
   Receipt,
   Send,
   Smartphone,
+  Check,
+  X,
+  StickyNote,
+  CreditCard,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -17,6 +21,8 @@ import { formatTL, minutesSince, formatAdet } from '../../utils/format';
 import { updateOrderStatus } from '../../firebase/orders';
 import { recordPayment } from '../../firebase/payments';
 import { awardLoyaltyPoints, computeEarnedPoints } from '../../firebase/customers';
+import { confirmPosentegraOrder, rejectPosentegraOrder } from '../../firebase/posentegra';
+import Modal from '../../components/ui/Modal';
 
 const APP_KAYNAKLAR = ['yemeksepeti', 'getir', 'trendyol', 'migros'];
 
@@ -61,6 +67,38 @@ export default function ActiveOrders() {
 
   const masaOrders = visible.filter((o) => !o.paketMi);
   const paketOrders = visible.filter((o) => o.paketMi);
+
+  // Posentegra red modali
+  const [rejectFor, setRejectFor] = useState(null); // { order }
+  const [rejecting, setRejecting] = useState(false);
+
+  const handleConfirmPosentegra = async (order) => {
+    if (!confirm(`${order.paketKaynakAd || 'Posentegra'} siparişi kabul edilsin mi?`)) return;
+    const t = toast.loading('Kabul ediliyor…');
+    try {
+      await confirmPosentegraOrder(order.id);
+      toast.success('Sipariş kabul edildi, mutfağa gönderildi', { id: t });
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || 'Kabul edilemedi', { id: t });
+    }
+  };
+
+  const handleRejectPosentegra = async (sebep, not) => {
+    if (!rejectFor) return;
+    setRejecting(true);
+    const t = toast.loading('Reddediliyor…');
+    try {
+      await rejectPosentegraOrder(rejectFor.id, { reason: sebep, note: not });
+      toast.success('Sipariş reddedildi', { id: t });
+      setRejectFor(null);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || 'Reddedilemedi', { id: t });
+    } finally {
+      setRejecting(false);
+    }
+  };
 
   const handleYolaCikar = async (order) => {
     try {
@@ -157,6 +195,9 @@ export default function ActiveOrders() {
                       order={o}
                       gecikmeEsigi={gecikmeEsigi}
                       canPay={canPay}
+                      canReject={['admin', 'kasiyer'].includes(rol)}
+                      onConfirm={() => handleConfirmPosentegra(o)}
+                      onReject={() => setRejectFor(o)}
                       onYolaCikar={() => handleYolaCikar(o)}
                       onAppPaid={() => handleAppPaid(o)}
                       onManuelPay={() => navigate(`/pos/payment?orderId=${o.id}`)}
@@ -168,6 +209,13 @@ export default function ActiveOrders() {
           </>
         )}
       </div>
+
+      <PosentegraRejectModal
+        order={rejectFor}
+        submitting={rejecting}
+        onClose={() => setRejectFor(null)}
+        onConfirm={handleRejectPosentegra}
+      />
     </div>
   );
 }
@@ -235,32 +283,56 @@ function MasaOrderCard({ order, gecikmeEsigi, canPay, onPay }) {
   );
 }
 
-function PaketOrderCard({ order, gecikmeEsigi, canPay, onYolaCikar, onAppPaid, onManuelPay }) {
+function PaketOrderCard({
+  order,
+  gecikmeEsigi,
+  canPay,
+  canReject,
+  onConfirm,
+  onReject,
+  onYolaCikar,
+  onAppPaid,
+  onManuelPay,
+}) {
   const mins = minutesSince(order.olusturmaZamani);
   const late = mins > gecikmeEsigi;
   const yolda = order.durum === 'masayaGitti';
   const appOrder = APP_KAYNAKLAR.includes(order.paketKaynak);
+  // Posentegra: pid var ama henüz onaylanmamışsa "yeni gelen" — Kabul/Red gerekli
+  const isPosentegra = !!order.posentegraPid;
+  const needsConfirm = isPosentegra && !order.posentegraOnayli;
+  const onceden = !!order.oncedenOdendi;
+
+  const borderCls = needsConfirm
+    ? 'border-amber-400 ring-2 ring-amber-200'
+    : late && !yolda
+      ? 'border-red-500'
+      : yolda
+        ? 'border-purple-400'
+        : 'border-slate-200';
 
   return (
-    <div
-      className={`rounded-xl border-2 bg-white p-4 shadow-sm ${
-        late && !yolda
-          ? 'border-red-500'
-          : yolda
-            ? 'border-purple-400'
-            : 'border-slate-200'
-      }`}
-    >
+    <div className={`rounded-xl border-2 bg-white p-4 shadow-sm ${borderCls}`}>
       <div className="mb-3 flex items-start justify-between">
         <div className="min-w-0">
           <h3 className="truncate text-base font-bold text-slate-900">
             {order.musteriAd || 'Paket'}
           </h3>
-          <p className="flex items-center gap-2 text-xs text-slate-500">
-            <span>{order.garsonAd}</span>
+          <p className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+            <span>{order.paketKaynakAd || order.garsonAd}</span>
             {appOrder && (
               <span className="inline-flex items-center gap-0.5 rounded-full bg-purple-50 px-1.5 py-0.5 text-purple-700">
                 <Smartphone size={10} /> {KAYNAK_LABELS[order.paketKaynak]}
+              </span>
+            )}
+            {needsConfirm && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 font-bold text-amber-800">
+                ⚡ YENİ
+              </span>
+            )}
+            {onceden && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-emerald-700">
+                <CreditCard size={10} /> Önceden Ödendi
               </span>
             )}
             {yolda && (
@@ -269,9 +341,17 @@ function PaketOrderCard({ order, gecikmeEsigi, canPay, onYolaCikar, onAppPaid, o
               </span>
             )}
           </p>
+          {order.musteriTel && (
+            <p className="mt-0.5 text-[11px] text-slate-500">📞 {order.musteriTel}</p>
+          )}
           {order.musteriAdres && (
             <p className="mt-1 line-clamp-2 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-800">
               📍 {order.musteriAdres}
+            </p>
+          )}
+          {order.musteriNotu && (
+            <p className="mt-1 line-clamp-2 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-800">
+              <StickyNote size={10} className="mr-0.5 inline" /> {order.musteriNotu}
             </p>
           )}
         </div>
@@ -282,21 +362,42 @@ function PaketOrderCard({ order, gecikmeEsigi, canPay, onYolaCikar, onAppPaid, o
             {mins} dk
           </p>
           <p className="text-base font-bold text-slate-900">{formatTL(order.toplam)}</p>
+          {order.odemeTipi && (
+            <p className="text-[10px] text-slate-500">{order.odemeTipi}</p>
+          )}
         </div>
       </div>
 
       <ItemList items={order.items} />
 
-      {/* Buton mantığı: aktif → Yola Çıkar; yolda → ödeme seçenekleri */}
-      {!yolda ? (
+      {/* Buton mantığı: önce Kabul/Red, sonra Yola Çıkar, sonra ödeme */}
+      {needsConfirm ? (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={onConfirm}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+          >
+            <Check size={14} /> Kabul Et
+          </button>
+          <button
+            onClick={onReject}
+            disabled={!canReject}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+            title={canReject ? '' : 'Reddetme yetkisi yok'}
+          >
+            <X size={14} /> Reddet
+          </button>
+        </div>
+      ) : !yolda ? (
         <button onClick={onYolaCikar} className="btn-primary w-full text-sm">
           <Send size={14} /> Yola Çıkar
         </button>
       ) : canPay ? (
-        appOrder ? (
+        appOrder || onceden ? (
           <div className="grid grid-cols-2 gap-2">
             <button onClick={onAppPaid} className="btn-primary text-sm">
-              <Smartphone size={14} /> {KAYNAK_LABELS[order.paketKaynak]} Ödendi
+              <Smartphone size={14} />{' '}
+              {onceden ? 'Önceden Ödendi · Kapat' : `${KAYNAK_LABELS[order.paketKaynak]} Ödendi`}
             </button>
             <button onClick={onManuelPay} className="btn-secondary text-sm">
               Manuel Ödeme
@@ -313,6 +414,74 @@ function PaketOrderCard({ order, gecikmeEsigi, canPay, onYolaCikar, onAppPaid, o
         </p>
       )}
     </div>
+  );
+}
+
+const REJECT_REASONS = [
+  'Ürün mevcut değil',
+  'Kapanış saati geçti',
+  'Adres teslimat alanı dışında',
+  'Mutfak yoğun',
+  'Yanlış sipariş / dublike',
+  'Diğer',
+];
+
+function PosentegraRejectModal({ order, submitting, onClose, onConfirm }) {
+  const [sebep, setSebep] = useState(REJECT_REASONS[0]);
+  const [not, setNot] = useState('');
+  useEffect(() => {
+    if (order) {
+      setSebep(REJECT_REASONS[0]);
+      setNot('');
+    }
+  }, [order]);
+  if (!order) return null;
+  return (
+    <Modal
+      open={!!order}
+      onClose={onClose}
+      title={`${order.musteriAd || 'Paket'} — Siparişi Reddet`}
+      size="sm"
+      footer={
+        <>
+          <button onClick={onClose} disabled={submitting} className="btn-secondary">
+            Vazgeç
+          </button>
+          <button
+            onClick={() => onConfirm(sebep, not)}
+            disabled={submitting}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            <X size={14} /> {submitting ? 'Reddediliyor…' : 'Reddet'}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          ⚠️ Bu sipariş <strong>{order.paketKaynakAd || 'Posentegra'}</strong> üzerinde de iptal
+          edilir. Müşteriye iptal bildirimi gider.
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Sebep</label>
+          <select value={sebep} onChange={(e) => setSebep(e.target.value)} className="input">
+            {REJECT_REASONS.map((r) => (
+              <option key={r}>{r}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Açıklama (opsiyonel)</label>
+          <textarea
+            value={not}
+            onChange={(e) => setNot(e.target.value)}
+            rows={2}
+            className="input"
+            placeholder="Müşteriye iletilebilecek kısa açıklama"
+          />
+        </div>
+      </div>
+    </Modal>
   );
 }
 
