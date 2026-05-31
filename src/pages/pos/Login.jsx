@@ -88,7 +88,7 @@ export default function PosLogin() {
             key={i}
             className={`flex h-16 w-14 items-center justify-center rounded-xl border-2 text-3xl font-bold transition ${
               code.length > i
-                ? 'border-blue-500 bg-blue-500/20'
+                ? 'border-red-500 bg-red-500/20'
                 : 'border-slate-600 bg-slate-800'
             }`}
           >
@@ -114,7 +114,7 @@ export default function PosLogin() {
 
       <div className="mt-8 text-center text-xs text-slate-500">
         <p>{DEVICE_NAME}</p>
-        <a href="/admin/login" className="mt-2 inline-block text-blue-400 hover:underline">
+        <a href="/admin/login" className="mt-2 inline-block text-red-400 hover:underline">
           Admin Girişi →
         </a>
       </div>
@@ -124,7 +124,7 @@ export default function PosLogin() {
 
 function Keypad({ label, icon: Icon, onClick, disabled, kind }) {
   const styles = {
-    primary: 'bg-blue-600 hover:bg-blue-700 text-white',
+    primary: 'bg-red-600 hover:bg-red-700 text-white',
     ghost: 'bg-slate-700 hover:bg-slate-600 text-slate-200',
     default: 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700',
   };

@@ -65,8 +65,8 @@ export default function AdminLogin() {
     <div className="flex h-full items-center justify-center bg-slate-100 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
         <div className="mb-6 flex flex-col items-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100">
-            <ShieldCheck className="text-blue-600" size={28} />
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-100">
+            <ShieldCheck className="text-red-600" size={28} />
           </div>
           <h1 className="mt-4 text-3xl font-extrabold tracking-wide text-slate-900">
             SyntrixPos
@@ -133,7 +133,7 @@ export default function AdminLogin() {
         </form>
 
         <div className="mt-6 text-center">
-          <a href="/pos/login" className="text-sm text-blue-600 hover:underline">
+          <a href="/pos/login" className="text-sm text-red-600 hover:underline">
             POS Cihazı Girişi →
           </a>
         </div>
