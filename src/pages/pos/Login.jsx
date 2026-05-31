@@ -11,7 +11,7 @@ const DEVICE_NAME = import.meta.env.VITE_DEVICE_NAME || 'POS Cihazı';
 
 export default function PosLogin() {
   const navigate = useNavigate();
-  const { user, loading } = useAuthStore();
+  const { user, loading, rol } = useAuthStore();
   const [code, setCode] = useState('');
   const [attempts, setAttempts] = useState(0);
   const [lockedUntil, setLockedUntil] = useState(0);
@@ -20,8 +20,12 @@ export default function PosLogin() {
   const [shake, setShake] = useState(false);
 
   useEffect(() => {
-    if (!loading && user) navigate('/pos/tables', { replace: true });
-  }, [user, loading, navigate]);
+    if (!loading && user) {
+      // Kurye doğrudan teslimat ekranına gider
+      const home = rol === 'kurye' ? '/pos/orders/active' : '/pos/tables';
+      navigate(home, { replace: true });
+    }
+  }, [user, loading, rol, navigate]);
 
   useEffect(() => {
     if (lockedUntil <= Date.now()) return;

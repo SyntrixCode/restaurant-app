@@ -21,6 +21,7 @@ export default function PosLayout() {
   const { profile, rol, logout } = useAuthStore();
   const { settings } = useSettingsStore();
   const isKasiyer = rol === 'kasiyer' || rol === 'admin';
+  const isKurye = rol === 'kurye';
 
   // Yeni sipariş ses bildirimi (mutfak/kasa için)
   useNewOrderAlert();
@@ -61,8 +62,12 @@ export default function PosLayout() {
           </span>
         </div>
         <nav className="flex items-center gap-1">
-          <PosNavLink to="/pos/tables" icon={Grid3x3} label="Masalar" />
-          <PosNavLink to="/pos/orders/active" icon={ClipboardList} label="Aktif Siparişler" />
+          {!isKurye && <PosNavLink to="/pos/tables" icon={Grid3x3} label="Masalar" />}
+          <PosNavLink
+            to="/pos/orders/active"
+            icon={ClipboardList}
+            label={isKurye ? 'Teslimat Bekleyen' : 'Aktif Siparişler'}
+          />
           {isKasiyer && (
             <PosNavLink to="/pos/packages" icon={Truck} label="Paket Servis" />
           )}

@@ -8,7 +8,7 @@ export const adminLoginSchema = z.object({
 
 export const userSchema = z.object({
   ad: z.string().min(2, 'Ad en az 2 karakter').max(100),
-  rol: z.enum(['garson', 'kasiyer']),
+  rol: z.enum(['garson', 'kasiyer', 'kurye']),
   kod: z
     .string()
     .regex(/^\d{4}$/, '4 haneli sayı olmalı'),

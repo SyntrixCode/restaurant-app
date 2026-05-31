@@ -15,7 +15,11 @@ service cloud.firestore {
     function isAdmin() { return isActive() && role() == 'admin'; }
     function isKasiyer() { return isActive() && role() == 'kasiyer'; }
     function isStaff() {
-      return isActive() && role() in ['admin', 'kasiyer', 'garson'];
+      return isActive() && role() in ['admin', 'kasiyer', 'garson', 'kurye'];
+    }
+    function isCashier() {
+      // Ödeme/arşiv yazabilecek roller — kurye teslim ettiğinde kendi siparişini kapatır
+      return isActive() && role() in ['admin', 'kasiyer', 'kurye'];
     }
 
     match /users/{userId} {
@@ -72,13 +76,13 @@ service cloud.firestore {
 
     match /archivedOrders/{id} {
       allow read: if isStaff();
-      allow create: if isAdmin() || isKasiyer();
+      allow create: if isCashier();
       allow update, delete: if isAdmin();
     }
 
     match /payments/{id} {
       allow read: if isStaff();
-      allow create: if isAdmin() || isKasiyer();
+      allow create: if isCashier();
       allow update, delete: if isAdmin();
     }
 

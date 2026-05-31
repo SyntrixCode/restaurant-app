@@ -23,6 +23,7 @@ import { recordPayment } from '../../firebase/payments';
 import { awardLoyaltyPoints, computeEarnedPoints } from '../../firebase/customers';
 import { confirmPosentegraOrder, rejectPosentegraOrder } from '../../firebase/posentegra';
 import Modal from '../../components/ui/Modal';
+import KitchenTicket from '../../components/KitchenTicket';
 
 const APP_KAYNAKLAR = ['yemeksepeti', 'getir', 'trendyol', 'migros'];
 
@@ -67,10 +68,17 @@ export default function ActiveOrders() {
 
   const masaOrders = visible.filter((o) => !o.paketMi);
   const paketOrders = visible.filter((o) => o.paketMi);
+  const isKurye = rol === 'kurye';
+  // Kurye sadece "yolda" paketleri görür
+  const kuryeYoldaOrders = paketOrders.filter((o) => o.durum === 'masayaGitti');
+
+  const [teslimFor, setTeslimFor] = useState(null); // { order }
 
   // Posentegra red modali
   const [rejectFor, setRejectFor] = useState(null); // { order }
   const [rejecting, setRejecting] = useState(false);
+  // Mutfak fişi (Posentegra kabul sonrası açılır, otomatik basar)
+  const [kitchenTicket, setKitchenTicket] = useState(null);
 
   const handleConfirmPosentegra = async (order) => {
     if (!confirm(`${order.paketKaynakAd || 'Posentegra'} siparişi kabul edilsin mi?`)) return;
@@ -78,6 +86,21 @@ export default function ActiveOrders() {
     try {
       await confirmPosentegraOrder(order.id);
       toast.success('Sipariş kabul edildi, mutfağa gönderildi', { id: t });
+      // Mutfak fişini otomatik bas — KitchenTicket modal kendi yazıcı yönlendirmesini yapar
+      setKitchenTicket({
+        order: {
+          id: order.id,
+          masaAd: order.masaAd || `Paket - ${order.paketKaynakAd || 'Posentegra'}`,
+          kisiSayisi: null,
+          garsonAd: order.paketKaynakAd || order.garsonAd || 'Posentegra',
+        },
+        items: (order.items || []).map((it) => ({
+          ad: it.ad,
+          adet: it.adet,
+          notlar: it.notlar,
+          categoryId: it.categoryId || null,
+        })),
+      });
     } catch (err) {
       console.error(err);
       toast.error(err.message || 'Kabul edilemedi', { id: t });
@@ -163,7 +186,24 @@ export default function ActiveOrders() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
-        {visible.length === 0 ? (
+        {isKurye ? (
+          kuryeYoldaOrders.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-400">
+              <Truck size={40} />
+              <p>Teslim edilecek paket yok.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {kuryeYoldaOrders.map((o) => (
+                <KuryeOrderCard
+                  key={o.id}
+                  order={o}
+                  onTeslim={() => setTeslimFor(o)}
+                />
+              ))}
+            </div>
+          )
+        ) : visible.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-400">
             <Receipt size={40} />
             <p>Açık sipariş yok.</p>
@@ -215,6 +255,58 @@ export default function ActiveOrders() {
         submitting={rejecting}
         onClose={() => setRejectFor(null)}
         onConfirm={handleRejectPosentegra}
+      />
+
+      <KitchenTicket
+        open={!!kitchenTicket}
+        onClose={() => setKitchenTicket(null)}
+        order={kitchenTicket?.order}
+        items={kitchenTicket?.items}
+      />
+
+      <KuryeTeslimModal
+        order={teslimFor}
+        onClose={() => setTeslimFor(null)}
+        onConfirm={async (yontem) => {
+          if (!teslimFor) return;
+          const t = toast.loading('Teslim ediliyor…');
+          try {
+            await recordPayment({
+              orderId: teslimFor.id,
+              kasiyerId: user.uid,
+              kasiyerAd: profile?.ad || 'Kurye',
+              payments: [
+                {
+                  tutar: teslimFor.toplam,
+                  yontem,
+                  kartTipi:
+                    yontem === 'uygulama'
+                      ? teslimFor.paketKaynakAd || 'Uygulama'
+                      : yontem === 'kart'
+                        ? 'Banka Kartı'
+                        : null,
+                },
+              ],
+              fisBasildi: false,
+            });
+            // Sadakat puanı (paket + telefon + program aktif)
+            if (settings?.sadakatAktif && teslimFor.musteriTel) {
+              const earned = computeEarnedPoints(teslimFor.toplam, settings);
+              if (earned > 0) {
+                awardLoyaltyPoints({
+                  tel: teslimFor.musteriTel,
+                  tutar: teslimFor.toplam,
+                  settings,
+                }).catch((e) => console.warn('Puan eklenemedi:', e));
+              }
+            }
+            toast.success('Sipariş teslim edildi', { id: t });
+            setTeslimFor(null);
+          } catch (err) {
+            console.error(err);
+            toast.error(err.message || 'Teslim alınamadı', { id: t });
+          }
+        }}
       />
     </div>
   );
@@ -482,6 +574,160 @@ function PosentegraRejectModal({ order, submitting, onClose, onConfirm }) {
         </div>
       </div>
     </Modal>
+  );
+}
+
+function KuryeOrderCard({ order, onTeslim }) {
+  const mins = minutesSince(order.olusturmaZamani);
+  const onceden = !!order.oncedenOdendi;
+  return (
+    <div className="rounded-xl border-2 border-purple-300 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-start justify-between">
+        <div className="min-w-0">
+          <h3 className="truncate text-lg font-bold text-slate-900">
+            {order.musteriAd || 'Paket'}
+          </h3>
+          <p className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+            {order.paketKaynakAd && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-purple-50 px-1.5 py-0.5 text-purple-700">
+                <Smartphone size={10} /> {order.paketKaynakAd}
+              </span>
+            )}
+            {onceden ? (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-emerald-700">
+                <CreditCard size={10} /> Önceden Ödendi
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-amber-700">
+                💵 Kapıda Ödeme
+              </span>
+            )}
+          </p>
+          {order.musteriTel && (
+            <a
+              href={`tel:${order.musteriTel}`}
+              className="mt-1 inline-block text-sm font-medium text-blue-600 hover:underline"
+            >
+              📞 {order.musteriTel}
+            </a>
+          )}
+          {order.musteriAdres && (
+            <p className="mt-1 rounded bg-amber-50 px-2 py-1 text-xs text-amber-900">
+              📍 {order.musteriAdres}
+            </p>
+          )}
+          {order.musteriNotu && (
+            <p className="mt-1 rounded bg-blue-50 px-2 py-1 text-xs italic text-blue-800">
+              <StickyNote size={10} className="mr-0.5 inline" /> {order.musteriNotu}
+            </p>
+          )}
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-slate-500">
+            <Clock size={11} className="mr-0.5 inline" /> {mins} dk
+          </p>
+          <p className="mt-0.5 text-xl font-bold text-slate-900">{formatTL(order.toplam)}</p>
+        </div>
+      </div>
+
+      <ItemList items={order.items} />
+
+      <button
+        onClick={onTeslim}
+        className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-base font-bold text-white shadow transition active:scale-95 hover:bg-emerald-700"
+      >
+        ✓ Teslim Ettim
+      </button>
+    </div>
+  );
+}
+
+function KuryeTeslimModal({ order, onClose, onConfirm }) {
+  const [yontem, setYontem] = useState(null);
+  useEffect(() => {
+    if (order) {
+      // Önceden ödendiyse default 'uygulama', değilse 'nakit'
+      setYontem(order.oncedenOdendi ? 'uygulama' : 'nakit');
+    }
+  }, [order]);
+  if (!order) return null;
+  const onceden = !!order.oncedenOdendi;
+  return (
+    <Modal
+      open={!!order}
+      onClose={onClose}
+      title={`${order.musteriAd || 'Paket'} — Teslim Et`}
+      size="sm"
+      footer={
+        <>
+          <button onClick={onClose} className="btn-secondary">Vazgeç</button>
+          <button
+            onClick={() => yontem && onConfirm(yontem)}
+            disabled={!yontem}
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+          >
+            <Check size={16} /> Onayla ({formatTL(order.toplam)})
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className={`rounded-lg p-3 text-sm ${onceden ? 'bg-emerald-50 text-emerald-900' : 'bg-amber-50 text-amber-900'}`}>
+          {onceden ? (
+            <>
+              ✓ Bu sipariş <strong>{order.paketKaynakAd}</strong> üzerinden{' '}
+              <strong>önceden ödenmiş</strong>. Müşteriden para almıyorsun, sadece teslim et.
+            </>
+          ) : (
+            <>
+              💵 Müşteriden <strong>{formatTL(order.toplam)}</strong> almalısın.{' '}
+              Topladığın parayı restorana dönünce kasiyere teslim et.
+            </>
+          )}
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-700">Ödeme Yöntemi</label>
+          <div className="grid grid-cols-3 gap-2">
+            <YontemButton
+              active={yontem === 'nakit'}
+              icon="💵"
+              label="Nakit"
+              onClick={() => setYontem('nakit')}
+            />
+            <YontemButton
+              active={yontem === 'kart'}
+              icon="💳"
+              label="Kart"
+              onClick={() => setYontem('kart')}
+            />
+            <YontemButton
+              active={yontem === 'uygulama'}
+              icon="📱"
+              label="Önceden Ödendi"
+              onClick={() => setYontem('uygulama')}
+            />
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function YontemButton({ active, icon, label, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex flex-col items-center gap-1 rounded-lg border-2 py-3 text-xs font-semibold transition ${
+        active
+          ? 'border-blue-500 bg-blue-50 text-blue-700'
+          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+      }`}
+    >
+      <span className="text-2xl">{icon}</span>
+      {label}
+    </button>
   );
 }
 
