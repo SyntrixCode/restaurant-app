@@ -18,6 +18,8 @@ const STRINGS = {
     garsonCagrildi: 'Garson çağrıldı',
     hesapIste: 'Hesap İste',
     hesapIstendi: 'Hesap istendi',
+    tel: 'Tel',
+    masa: 'Masa',
   },
   en: {
     menuHazirlaniyor: 'Menu is being prepared.',
@@ -27,6 +29,8 @@ const STRINGS = {
     garsonCagrildi: 'Waiter called',
     hesapIste: 'Request Bill',
     hesapIstendi: 'Bill requested',
+    tel: 'Phone',
+    masa: 'Table',
   },
   ar: {
     menuHazirlaniyor: 'القائمة قيد الإعداد.',
@@ -36,6 +40,8 @@ const STRINGS = {
     garsonCagrildi: 'تم استدعاء النادل',
     hesapIste: 'طلب الفاتورة',
     hesapIstendi: 'تم طلب الفاتورة',
+    tel: 'هاتف',
+    masa: 'طاولة',
   },
 };
 

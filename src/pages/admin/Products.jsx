@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2, Package, Image as ImageIcon, Upload, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Image as ImageIcon, Upload, X, Languages } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import Modal from '../../components/ui/Modal';
@@ -12,6 +12,7 @@ import { productSchema } from '../../utils/validators';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL } from '../../utils/format';
 import { SPARK_MODE, getStorageRef } from '../../firebase/config';
+import { translateMenu } from '../../firebase/translation';
 
 export default function Products() {
   const [products, setProducts] = useState([]);
@@ -20,6 +21,28 @@ export default function Products() {
   const [filter, setFilter] = useState({ categoryId: 'all', stock: 'all', search: '' });
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [translating, setTranslating] = useState(false);
+
+  const handleAutoTranslate = async () => {
+    if (translating) return;
+    if (!confirm('Tüm kategori ve ürünleri TR\'den EN ve AR\'a otomatik çevirelim mi?\n\nMevcut çeviriler korunur (sadece eksik olanlar doldurulur).')) return;
+    setTranslating(true);
+    const t = toast.loading('Menü çevriliyor… (yeni ürünler için 1-2 dk sürebilir)');
+    try {
+      const res = await translateMenu({ force: false });
+      const c = res?.categories || {};
+      const p = res?.products || {};
+      toast.success(
+        `✓ Çeviri tamam — ${c.updated || 0}+${p.updated || 0} doc güncellendi, ${c.skipped || 0}+${p.skipped || 0} doc zaten çevrili`,
+        { id: t, duration: 6000 },
+      );
+    } catch (err) {
+      console.error(err);
+      toast.error('Çeviri hatası: ' + (err.message || 'bilinmeyen'), { id: t });
+    } finally {
+      setTranslating(false);
+    }
+  };
 
   useEffect(() => watchCollection('products', setProducts), []);
   useEffect(() => watchCollection('categories', setCategories, orderBy('sira', 'asc')), []);
@@ -66,15 +89,25 @@ export default function Products() {
         title="Ürünler"
         subtitle="Menü ürünleri, stok ve fiyat yönetimi"
         actions={
-          <button
-            onClick={() => {
-              setEditing(null);
-              setOpen(true);
-            }}
-            className="btn-primary"
-          >
-            <Plus size={16} /> Yeni Ürün
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleAutoTranslate}
+              disabled={translating}
+              className="btn-secondary"
+              title="Tüm kategori ve ürünleri TR'den EN ve AR'a otomatik çevirir (mevcut çeviriler korunur)"
+            >
+              <Languages size={16} /> {translating ? 'Çevriliyor…' : 'Otomatik Çevir (TR→EN/AR)'}
+            </button>
+            <button
+              onClick={() => {
+                setEditing(null);
+                setOpen(true);
+              }}
+              className="btn-primary"
+            >
+              <Plus size={16} /> Yeni Ürün
+            </button>
+          </div>
         }
       />
 

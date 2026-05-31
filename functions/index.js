@@ -7,6 +7,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import crypto from 'node:crypto';
 import { posentegraApi, POSENTEGRA_STATUS_MAP } from './lib/posentegra.js';
+import { translate as translateText } from './lib/menuTranslator.js';
 
 initializeApp();
 setGlobalOptions({ region: 'europe-west1' });
@@ -735,3 +736,63 @@ export const onUserWrite = onDocumentWritten('users/{userId}', async (event) => 
     }
   }
 });
+
+/**
+ * Tüm kategori ve ürünleri TR → EN/AR çevirir.
+ * Konya/Türk yemek sözlüğü + Google Translate fallback.
+ * - Mevcut çeviri varsa atlanır (force=true ile ezilir)
+ * - Sadece admin tetikleyebilir
+ */
+export const translateMenu = onCall(
+  { region: 'europe-west1', timeoutSeconds: 540, memory: '256MiB' },
+  async (req) => {
+    if (!req.auth) throw new HttpsError('unauthenticated', 'Giriş gerekli');
+    const userSnap = await db.collection('users').doc(req.auth.uid).get();
+    const isAdmin = userSnap.exists && userSnap.data().rol === 'admin';
+    if (!isAdmin && req.auth.token?.rol !== 'admin') {
+      throw new HttpsError('permission-denied', 'Admin yetkisi gerekli');
+    }
+    const force = !!req.data?.force;
+    const result = {
+      categories: { updated: 0, skipped: 0 },
+      products: { updated: 0, skipped: 0 },
+    };
+
+    async function processCollection(name, fields, statKey) {
+      const snap = await db.collection(name).get();
+      console.log(`[translateMenu] ${name}: ${snap.size} kayıt`);
+      for (const doc of snap.docs) {
+        const d = doc.data();
+        const cev = JSON.parse(JSON.stringify(d.ceviri || {}));
+        let changed = false;
+        for (const lang of ['en', 'ar']) {
+          for (const field of fields) {
+            const src = d[field];
+            if (!src) continue;
+            if (!force && cev[lang]?.[field]) continue;
+            const t = await translateText(src, lang);
+            if (!cev[lang]) cev[lang] = {};
+            cev[lang][field] = t;
+            changed = true;
+          }
+        }
+        if (!changed) {
+          result[statKey].skipped++;
+          continue;
+        }
+        try {
+          await doc.ref.update({ ceviri: cev });
+          result[statKey].updated++;
+        } catch (err) {
+          console.warn(`[translateMenu] ${name}/${doc.id} yazılamadı:`, err.message);
+        }
+      }
+    }
+
+    await processCollection('categories', ['ad'], 'categories');
+    await processCollection('products', ['ad', 'aciklama'], 'products');
+
+    console.log('[translateMenu] sonuç:', result);
+    return result;
+  },
+);

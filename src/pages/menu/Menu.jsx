@@ -198,7 +198,7 @@ export default function Menu() {
 
       <footer className="border-t border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500">
         {settings.restoranAdres && <p>{settings.restoranAdres}</p>}
-        {settings.restoranTel && <p>Tel: {settings.restoranTel}</p>}
+        {settings.restoranTel && <p>{t(lang, 'tel')}: {settings.restoranTel}</p>}
         <div className="mt-3">
           <PoweredBy />
         </div>
