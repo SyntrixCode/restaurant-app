@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { fetchOne } from '../firebase/firestore';
-import { watchAuth, logout as fbLogout } from '../firebase/auth';
+import { watchAuth, logout as fbLogout, tryRestoreAdminSession } from '../firebase/auth';
 
 export const useAuthStore = create((set, get) => ({
   user: null,
@@ -8,10 +8,18 @@ export const useAuthStore = create((set, get) => ({
   rol: null,
   loading: true,
   error: null,
+  _restoreAttempted: false,
 
   init: () => {
     const unsub = watchAuth(async (firebaseUser) => {
       if (!firebaseUser) {
+        // Capacitor APK'da Firebase persistence bazen restore edemiyor.
+        // İlk null geldiğinde kayıtlı credential ile sessiz re-login dene.
+        if (!get()._restoreAttempted) {
+          set({ _restoreAttempted: true });
+          const restored = await tryRestoreAdminSession();
+          if (restored) return; // watchAuth tekrar tetiklenecek, user gelecek
+        }
         set({ user: null, profile: null, rol: null, loading: false });
         return;
       }
@@ -36,7 +44,7 @@ export const useAuthStore = create((set, get) => ({
 
   logout: async () => {
     await fbLogout();
-    set({ user: null, profile: null, rol: null });
+    set({ user: null, profile: null, rol: null, _restoreAttempted: true });
   },
 
   hasRole: (...roles) => {

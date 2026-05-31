@@ -11,6 +11,11 @@ import {
 } from 'firebase/auth';
 import { auth, POS_EMAIL_DOMAIN, getSecondaryAuth } from './config';
 import { derivePosCredentials } from '../utils/hash';
+import {
+  saveAdminCredentials,
+  getAdminCredentials,
+  clearAdminCredentials,
+} from '../services/credentialStore';
 
 // Capacitor APK ortamında browserLocalPersistence (localStorage) güvenilmez —
 // WebView her açılışta storage'ı koruyamayabilir. IndexedDB persistence APK'da
@@ -29,8 +34,37 @@ export async function loginAdmin(email, password, rememberMe = false) {
     await setRememberPersistence();
   } else {
     await setPersistence(auth, browserSessionPersistence);
+    await clearAdminCredentials(); // önceki kalıntı varsa temizle
   }
-  return signInWithEmailAndPassword(auth, email, password);
+  const cred = await signInWithEmailAndPassword(auth, email, password);
+  // Login başarılı + remember → native storage'a yaz (APK'da kalıcı oturum)
+  if (rememberMe) {
+    try {
+      await saveAdminCredentials(email, password);
+    } catch (err) {
+      console.warn('Credential kaydedilemedi (remember-me):', err);
+    }
+  }
+  return cred;
+}
+
+/**
+ * Uygulama açılışında Firebase auth restore başarısızsa kayıtlı credential ile
+ * sessiz re-login dener. Başarısızsa credential temizler.
+ * @returns {Promise<boolean>} true=re-login başarılı (watchAuth tekrar tetiklenir)
+ */
+export async function tryRestoreAdminSession() {
+  const creds = await getAdminCredentials();
+  if (!creds) return false;
+  try {
+    await setRememberPersistence();
+    await signInWithEmailAndPassword(auth, creds.email, creds.password);
+    return true;
+  } catch (err) {
+    console.warn('Otomatik oturum restore başarısız, credential temizleniyor:', err.code || err.message);
+    await clearAdminCredentials();
+    return false;
+  }
 }
 
 export async function loginPos(kod) {
@@ -75,7 +109,8 @@ export async function createPosUser({ kod, ad, rol }) {
   }
 }
 
-export function logout() {
+export async function logout() {
+  await clearAdminCredentials(); // logout = beni hatırlama da sıfırlanır
   return signOut(auth);
 }
 
