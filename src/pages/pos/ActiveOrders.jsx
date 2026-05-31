@@ -14,14 +14,14 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { watchCollection, where, orderBy } from '../../firebase/firestore';
+import { watchCollection, where, orderBy, patchDoc, serverTimestamp } from '../../firebase/firestore';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL, minutesSince, formatAdet } from '../../utils/format';
 import { updateOrderStatus } from '../../firebase/orders';
 import { recordPayment } from '../../firebase/payments';
 import { awardLoyaltyPoints, computeEarnedPoints } from '../../firebase/customers';
-import { confirmPosentegraOrder, rejectPosentegraOrder } from '../../firebase/posentegra';
+import { confirmPosentegraOrder, rejectPosentegraOrder, fetchPosentegraReasons } from '../../firebase/posentegra';
 import Modal from '../../components/ui/Modal';
 import KitchenTicket from '../../components/KitchenTicket';
 
@@ -69,10 +69,26 @@ export default function ActiveOrders() {
   const masaOrders = visible.filter((o) => !o.paketMi);
   const paketOrders = visible.filter((o) => o.paketMi);
   const isKurye = rol === 'kurye';
-  // Kurye sadece "yolda" paketleri görür
-  const kuryeYoldaOrders = paketOrders.filter((o) => o.durum === 'masayaGitti');
+  // Kurye sadece KENDİSİNE atanmış "yolda" paketleri görür
+  const kuryeYoldaOrders = paketOrders.filter(
+    (o) => o.durum === 'masayaGitti' && o.kuryeId === user?.uid,
+  );
+
+  // Aktif kuryeler — Yola Çıkar modalında listelenir
+  const [kuryeler, setKuryeler] = useState([]);
+  useEffect(
+    () =>
+      watchCollection(
+        'users',
+        setKuryeler,
+        where('rol', '==', 'kurye'),
+        where('aktif', '==', true),
+      ),
+    [],
+  );
 
   const [teslimFor, setTeslimFor] = useState(null); // { order }
+  const [yolaCikarFor, setYolaCikarFor] = useState(null); // { order }
 
   // Posentegra red modali
   const [rejectFor, setRejectFor] = useState(null); // { order }
@@ -107,12 +123,12 @@ export default function ActiveOrders() {
     }
   };
 
-  const handleRejectPosentegra = async (sebep, not) => {
+  const handleRejectPosentegra = async (sebepId, not, sebepAdi) => {
     if (!rejectFor) return;
     setRejecting(true);
     const t = toast.loading('Reddediliyor…');
     try {
-      await rejectPosentegraOrder(rejectFor.id, { reason: sebep, note: not });
+      await rejectPosentegraOrder(rejectFor.id, { reason: sebepId, reasonName: sebepAdi, note: not });
       toast.success('Sipariş reddedildi', { id: t });
       setRejectFor(null);
     } catch (err) {
@@ -124,12 +140,47 @@ export default function ActiveOrders() {
   };
 
   const handleYolaCikar = async (order) => {
+    // Platform kuryesi (Getir/YS vb. kendi kuryesi) — bizden kurye atanmıyor,
+    // direkt durumu masayaGitti'ye çek, sayaç otomatik başlar.
+    if (order.teslimatTipi === 'platform') {
+      const t = toast.loading('Yola çıkarılıyor…');
+      try {
+        await patchDoc('orders', order.id, {
+          durum: 'masayaGitti',
+          masayaGittiZamani: serverTimestamp(),
+        });
+        toast.success(`${order.platformKuryeAdi || 'Platform kuryesi'} teslim ediyor`, { id: t });
+      } catch (err) {
+        console.error(err);
+        toast.error(err.message || 'İşlem başarısız', { id: t });
+      }
+      return;
+    }
+    // Restoran kuryesi → kurye seçim modalı
+    if (kuryeler.length === 0) {
+      toast.error('Aktif kurye yok. Admin → Kullanıcılar\'dan kurye tanımlayın.');
+      return;
+    }
+    setYolaCikarFor(order);
+  };
+
+  const handleAssignKurye = async (kurye) => {
+    if (!yolaCikarFor) return;
+    const order = yolaCikarFor;
+    const t = toast.loading('Yola çıkarılıyor…');
     try {
-      await updateOrderStatus(order.id, 'masayaGitti');
-      toast.success(`${order.musteriAd || 'Paket'} yola çıkarıldı`);
+      // updateOrderStatus durum + timestamp; kurye atamasını ek alanlarla birlikte yazıyoruz
+      await patchDoc('orders', order.id, {
+        durum: 'masayaGitti',
+        masayaGittiZamani: serverTimestamp(),
+        kuryeId: kurye.id,
+        kuryeAd: kurye.ad,
+      });
+      toast.success(`${kurye.ad} → ${order.musteriAd || 'Paket'}`, { id: t });
+      setYolaCikarFor(null);
     } catch (err) {
       console.error(err);
-      toast.error('Durum güncellenemedi');
+      toast.error(err.message || 'Atanamadı', { id: t });
     }
   };
 
@@ -175,13 +226,17 @@ export default function ActiveOrders() {
     <div className="flex h-full flex-col bg-slate-100">
       <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2">
         <h2 className="text-sm font-semibold text-slate-700">
-          Açık Siparişler
+          {isKurye ? 'Siparişlerim' : 'Açık Siparişler'}
           <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
-            {visible.length}
+            {isKurye ? kuryeYoldaOrders.length : visible.length}
           </span>
         </h2>
         <p className="text-xs text-slate-500">
-          {rol === 'garson' ? 'Sadece sizin siparişleriniz' : 'Tüm açık siparişler'}
+          {isKurye
+            ? 'Sana atanan teslimatlar'
+            : rol === 'garson'
+              ? 'Sadece sizin siparişleriniz'
+              : 'Tüm açık siparişler'}
         </p>
       </div>
 
@@ -198,7 +253,14 @@ export default function ActiveOrders() {
                 <KuryeOrderCard
                   key={o.id}
                   order={o}
-                  onTeslim={() => setTeslimFor(o)}
+                  onTeslim={() => {
+                    const ad = o.musteriAd || 'Müşteri';
+                    const adres = o.musteriAdres ? `\n${o.musteriAdres}` : '';
+                    if (!confirm(`${ad} siparişi teslim edildi mi?${adres}\n\nOnaylarsan ödeme adımına geçilir.`)) {
+                      return;
+                    }
+                    setTeslimFor(o);
+                  }}
                 />
               ))}
             </div>
@@ -264,6 +326,13 @@ export default function ActiveOrders() {
         items={kitchenTicket?.items}
       />
 
+      <KuryeSelectModal
+        order={yolaCikarFor}
+        kuryeler={kuryeler}
+        onClose={() => setYolaCikarFor(null)}
+        onSelect={handleAssignKurye}
+      />
+
       <KuryeTeslimModal
         order={teslimFor}
         onClose={() => setTeslimFor(null)}
@@ -312,6 +381,27 @@ export default function ActiveOrders() {
   );
 }
 
+// Saniye granular canlı sayaç — sadece kendi state'inde güncellenir, parent re-render etmez
+function LiveTimer({ from, className = '' }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  if (!from) return null;
+  // Firestore Timestamp veya Date — ikisini de destekle
+  const start = from?.toMillis ? from.toMillis() : from?.seconds ? from.seconds * 1000 : new Date(from).getTime();
+  if (!start || isNaN(start)) return null;
+  const totalSec = Math.max(0, Math.floor((now - start) / 1000));
+  const dk = Math.floor(totalSec / 60);
+  const sn = totalSec % 60;
+  return (
+    <span className={className}>
+      {dk} dk {String(sn).padStart(2, '0')} sn
+    </span>
+  );
+}
+
 function Section({ title, count, icon: Icon, children }) {
   return (
     <div className="mb-6">
@@ -328,52 +418,92 @@ function Section({ title, count, icon: Icon, children }) {
 function MasaOrderCard({ order, gecikmeEsigi, canPay, onPay }) {
   const mins = minutesSince(order.olusturmaZamani);
   const late = mins > gecikmeEsigi;
-  const critical = mins > gecikmeEsigi * 2; // 2 katı → kritik
+  const critical = mins > gecikmeEsigi * 2;
+
+  // Durum-bilinçli aksent şeridi + dış halka
+  const accentCls = critical ? 'bg-red-600' : late ? 'bg-orange-500' : 'bg-blue-500';
+  const wrapperCls = critical
+    ? 'ring-2 ring-red-300 animate-pulse'
+    : late
+      ? 'ring-2 ring-orange-200'
+      : '';
 
   return (
-    <div
-      className={`rounded-xl border-2 bg-white p-4 shadow-sm transition ${
-        critical
-          ? 'animate-pulse border-red-600 bg-red-50/40 ring-2 ring-red-300'
-          : late
-            ? 'border-red-500'
-            : 'border-slate-200'
-      }`}
-    >
-      <div className="mb-3 flex items-start justify-between">
-        <div className="min-w-0">
-          <h3 className="truncate text-lg font-bold text-slate-900">{order.masaAd}</h3>
-          <p className="flex items-center gap-2 text-xs text-slate-500">
-            <span>{order.garsonAd}</span>
-            {order.kisiSayisi != null && (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-blue-50 px-1.5 py-0.5 text-blue-700">
-                <UsersIcon size={10} /> {order.kisiSayisi}
-              </span>
-            )}
-            <span>· #{order.id.slice(0, 6)}</span>
+    <div className={`group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md ${wrapperCls}`}>
+      {/* Üst aksent şeridi — durum rengi */}
+      <div className={`h-1 w-full ${accentCls}`} />
+
+      {/* HEADER: masa adı + tutar */}
+      <div className="flex items-start justify-between gap-3 p-4 pb-2">
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-lg font-bold leading-tight text-slate-900">
+            {order.masaAd}
+          </h3>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {order.garsonAd} · #{order.id.slice(0, 6)}
           </p>
         </div>
-        <div className="text-right">
-          <p className={`text-sm font-semibold ${late ? 'text-red-600' : 'text-slate-700'}`}>
-            {late && <AlertTriangle size={14} className="mr-1 inline" />}
-            <Clock size={12} className="mr-1 inline" />
-            {mins} dk
-            {critical && <span className="ml-1 text-xs font-bold uppercase">GECİKTİ!</span>}
+        <div className="shrink-0 text-right">
+          <p
+            className={`flex items-center justify-end gap-1 text-xs font-medium ${
+              critical ? 'text-red-700' : late ? 'text-orange-600' : 'text-slate-500'
+            }`}
+          >
+            {(late || critical) && <AlertTriangle size={12} />}
+            <Clock size={12} /> {mins} dk
           </p>
-          <p className="text-base font-bold text-slate-900">{formatTL(order.toplam)}</p>
+          <p className="mt-0.5 text-xl font-bold text-slate-900">{formatTL(order.toplam)}</p>
         </div>
       </div>
 
-      <ItemList items={order.items} />
+      {/* ROZETLER ŞERİDİ */}
+      <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
+        {order.kisiSayisi != null && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+            <UsersIcon size={11} /> {order.kisiSayisi} Kişi
+          </span>
+        )}
+        {critical ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-800">
+            🚨 KRİTİK GECİKME
+          </span>
+        ) : late ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-700">
+            ⏰ Gecikti
+          </span>
+        ) : null}
+      </div>
 
+      {/* ÜRÜNLER — boşluğu doldurur */}
+      <div className="flex-1 border-t border-slate-100 px-4 py-3">
+        <ItemList items={order.items} />
+      </div>
+
+      {/* AKSİYON — kartın dibinde sabit */}
       {canPay && (
-        <button onClick={onPay} className="btn-primary w-full text-sm">
-          Ödeme Al
-        </button>
+        <div className="mt-auto border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+          <button
+            onClick={onPay}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow hover:bg-blue-700 active:scale-95"
+          >
+            <CreditCard size={15} /> Ödeme Al
+          </button>
+        </div>
       )}
     </div>
   );
 }
+
+// Platform → marka rengi (üst aksent şeridi + badge)
+const PLATFORM_THEME = {
+  yemeksepeti: { accent: 'bg-red-500', badge: 'bg-red-50 text-red-700' },
+  getir: { accent: 'bg-purple-500', badge: 'bg-purple-50 text-purple-700' },
+  trendyol: { accent: 'bg-orange-500', badge: 'bg-orange-50 text-orange-700' },
+  migros: { accent: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700' },
+  manuel: { accent: 'bg-slate-400', badge: 'bg-slate-100 text-slate-700' },
+  telefon: { accent: 'bg-blue-500', badge: 'bg-blue-50 text-blue-700' },
+  diger: { accent: 'bg-slate-400', badge: 'bg-slate-100 text-slate-700' },
+};
 
 function PaketOrderCard({
   order,
@@ -389,127 +519,195 @@ function PaketOrderCard({
   const mins = minutesSince(order.olusturmaZamani);
   const late = mins > gecikmeEsigi;
   const yolda = order.durum === 'masayaGitti';
+  const yoldaMins = yolda && order.masayaGittiZamani ? minutesSince(order.masayaGittiZamani) : null;
   const appOrder = APP_KAYNAKLAR.includes(order.paketKaynak);
-  // Posentegra: pid var ama henüz onaylanmamışsa "yeni gelen" — Kabul/Red gerekli
   const isPosentegra = !!order.posentegraPid;
   const needsConfirm = isPosentegra && !order.posentegraOnayli;
+  // Platform kuryesi (Getir Kuryesi vb.) bu siparişi teslim edecek → bizden kurye atamayız
+  const platformDelivery = order.teslimatTipi === 'platform';
   const onceden = !!order.oncedenOdendi;
+  const theme = PLATFORM_THEME[order.paketKaynak] || PLATFORM_THEME.diger;
 
-  const borderCls = needsConfirm
-    ? 'border-amber-400 ring-2 ring-amber-200'
+  // Kart çerçevesi durum-bilinçli
+  const wrapperCls = needsConfirm
+    ? 'ring-2 ring-amber-300 shadow-amber-100'
     : late && !yolda
-      ? 'border-red-500'
-      : yolda
-        ? 'border-purple-400'
-        : 'border-slate-200';
+      ? 'ring-2 ring-red-300'
+      : '';
 
   return (
-    <div className={`rounded-xl border-2 bg-white p-4 shadow-sm ${borderCls}`}>
-      <div className="mb-3 flex items-start justify-between">
-        <div className="min-w-0">
-          <h3 className="truncate text-base font-bold text-slate-900">
+    <div className={`group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md ${wrapperCls}`}>
+      {/* Üst aksent şeridi — platform rengi */}
+      <div className={`h-1 w-full ${theme.accent}`} />
+
+      {/* HEADER: müşteri adı + tutar */}
+      <div className="flex items-start justify-between gap-3 p-4 pb-2">
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-lg font-bold leading-tight text-slate-900">
             {order.musteriAd || 'Paket'}
           </h3>
-          <p className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-            <span>{order.paketKaynakAd || order.garsonAd}</span>
-            {appOrder && (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-purple-50 px-1.5 py-0.5 text-purple-700">
-                <Smartphone size={10} /> {KAYNAK_LABELS[order.paketKaynak]}
-              </span>
-            )}
-            {needsConfirm && (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 font-bold text-amber-800">
-                ⚡ YENİ
-              </span>
-            )}
-            {onceden && (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-emerald-700">
-                <CreditCard size={10} /> Önceden Ödendi
-              </span>
-            )}
-            {yolda && (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-purple-100 px-1.5 py-0.5 text-purple-700">
-                <Truck size={10} /> Yolda
-              </span>
-            )}
-          </p>
           {order.musteriTel && (
-            <p className="mt-0.5 text-[11px] text-slate-500">📞 {order.musteriTel}</p>
-          )}
-          {order.musteriAdres && (
-            <p className="mt-1 line-clamp-2 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-800">
-              📍 {order.musteriAdres}
-            </p>
-          )}
-          {order.musteriNotu && (
-            <p className="mt-1 line-clamp-2 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-800">
-              <StickyNote size={10} className="mr-0.5 inline" /> {order.musteriNotu}
-            </p>
+            <a
+              href={`tel:${order.musteriTel}`}
+              className="mt-0.5 inline-block text-xs font-medium text-blue-600 hover:underline"
+            >
+              📞 {order.musteriTel}
+            </a>
           )}
         </div>
-        <div className="text-right">
-          <p className={`text-sm font-semibold ${late && !yolda ? 'text-red-600' : 'text-slate-700'}`}>
-            {late && !yolda && <AlertTriangle size={14} className="mr-1 inline" />}
-            <Clock size={12} className="mr-1 inline" />
-            {mins} dk
+        <div className="shrink-0 text-right">
+          <p
+            className={`flex items-center justify-end gap-1 text-xs font-medium ${late && !yolda ? 'text-red-600' : 'text-slate-500'}`}
+          >
+            {late && !yolda && <AlertTriangle size={12} />}
+            <Clock size={12} /> {mins} dk
           </p>
-          <p className="text-base font-bold text-slate-900">{formatTL(order.toplam)}</p>
+          <p className="mt-0.5 text-xl font-bold text-slate-900">{formatTL(order.toplam)}</p>
           {order.odemeTipi && (
-            <p className="text-[10px] text-slate-500">{order.odemeTipi}</p>
+            <p className="text-[10px] uppercase tracking-wider text-slate-400">{order.odemeTipi}</p>
           )}
         </div>
       </div>
 
-      <ItemList items={order.items} />
+      {/* ROZETLER ŞERİDİ */}
+      <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
+        {appOrder && (
+          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${theme.badge}`}>
+            <Smartphone size={11} /> {KAYNAK_LABELS[order.paketKaynak]}
+          </span>
+        )}
+        {needsConfirm && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
+            ⚡ YENİ
+          </span>
+        )}
+        {onceden ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+            <CreditCard size={11} /> Önceden Ödendi
+          </span>
+        ) : (
+          yolda && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+              💵 Kapıda Ödeme
+            </span>
+          )
+        )}
+        {yolda && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700">
+            <Truck size={11} /> Yolda{order.kuryeAd ? ` · ${order.kuryeAd}` : ''}
+          </span>
+        )}
+        {platformDelivery && (
+          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${theme.badge}`}>
+            🛵 {order.platformKuryeAdi || `${KAYNAK_LABELS[order.paketKaynak] || ''} Kuryesi`}
+          </span>
+        )}
+      </div>
 
-      {/* Buton mantığı: önce Kabul/Red, sonra Yola Çıkar, sonra ödeme */}
-      {needsConfirm ? (
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={onConfirm}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-          >
-            <Check size={14} /> Kabul Et
-          </button>
-          <button
-            onClick={onReject}
-            disabled={!canReject}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
-            title={canReject ? '' : 'Reddetme yetkisi yok'}
-          >
-            <X size={14} /> Reddet
-          </button>
+      {/* ADRES BLOĞU — harita butonu sadece kuryede gösterilir */}
+      {order.musteriAdres && (
+        <div className="mx-4 mb-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+          <p className="line-clamp-2 text-xs leading-snug text-amber-900">
+            <span className="mr-1">📍</span>
+            {order.musteriAdres}
+          </p>
+          {order.musteriNotu && (
+            <p className="mt-2 rounded-md bg-white/70 px-2 py-1 text-xs italic text-slate-700">
+              <StickyNote size={11} className="mr-1 inline" />
+              {order.musteriNotu}
+            </p>
+          )}
         </div>
-      ) : !yolda ? (
-        <button onClick={onYolaCikar} className="btn-primary w-full text-sm">
-          <Send size={14} /> Yola Çıkar
-        </button>
-      ) : canPay ? (
-        appOrder || onceden ? (
+      )}
+
+      {/* ÜRÜNLER — boşluğu doldurur, böylece aksiyonlar dibe yapışır */}
+      <div className="flex-1 border-t border-slate-100 px-4 py-3">
+        <ItemList items={order.items} />
+      </div>
+
+      {/* AKSİYONLAR — kartın dibinde sabit */}
+      <div className="mt-auto border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+        {needsConfirm ? (
           <div className="grid grid-cols-2 gap-2">
-            <button onClick={onAppPaid} className="btn-primary text-sm">
-              <Smartphone size={14} />{' '}
-              {onceden ? 'Önceden Ödendi · Kapat' : `${KAYNAK_LABELS[order.paketKaynak]} Ödendi`}
+            <button
+              onClick={onConfirm}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white shadow hover:bg-emerald-700 active:scale-95"
+            >
+              <Check size={15} /> Kabul Et
             </button>
-            <button onClick={onManuelPay} className="btn-secondary text-sm">
-              Manuel Ödeme
+            <button
+              onClick={onReject}
+              disabled={!canReject}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-300 bg-white px-3 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+              title={canReject ? '' : 'Reddetme yetkisi yok'}
+            >
+              <X size={15} /> Reddet
             </button>
           </div>
-        ) : (
-          <button onClick={onManuelPay} className="btn-primary w-full text-sm">
-            Ödemeyi Al (Kurye Döndü)
+        ) : !yolda ? (
+          // Sipariş henüz yola çıkmadı — platform/restoran fark etmeksizin "Yola Çıkar"
+          // Platform için kurye seçim modalı açılmıyor (handleYolaCikar içinde bypass var)
+          <button
+            onClick={onYolaCikar}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow hover:bg-blue-700 active:scale-95"
+          >
+            <Send size={15} /> Yola Çıkar
           </button>
-        )
-      ) : (
-        <p className="rounded-lg bg-purple-50 py-2 text-center text-xs text-purple-700">
-          Yolda · ödeme yetkisi yok
-        </p>
-      )}
+        ) : platformDelivery ? (
+          // Yola çıktı + platform kuryesi → pasif gösterge + canlı sayaç + manuel kapat butonu
+          <div className="space-y-2">
+            <div className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800">
+              🛵 {order.platformKuryeAdi || 'Platform Kuryesi'} Teslim Ediyor
+              {order.masayaGittiZamani && (
+                <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-white/80 px-2 py-0.5 text-xs text-amber-900 tabular-nums">
+                  <Clock size={11} />
+                  <LiveTimer from={order.masayaGittiZamani} />
+                </span>
+              )}
+            </div>
+            {canPay && (
+              <button
+                onClick={onAppPaid}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-white px-4 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 active:scale-95"
+                title={`${order.paketKaynakAd || 'Platform'} uygulamasından teslim edildi gördüysen tıkla`}
+              >
+                <Check size={13} /> Teslim Edildi · Siparişi Kapat
+              </button>
+            )}
+          </div>
+        ) : canPay ? (
+          onceden ? (
+            // Önceden ödenmiş (app içi) — para zaten alınmış, tek aksiyon: tamamla
+            <button
+              onClick={onAppPaid}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow hover:bg-emerald-700 active:scale-95"
+            >
+              <Check size={15} /> Teslim Edildi · Siparişi Kapat
+            </button>
+          ) : (
+            // Kapıda ödeme — kurye teslim edince sipariş otomatik düşer, sadece durum gösterimi
+            <div className="flex w-full items-center justify-center gap-2 rounded-lg bg-purple-50 px-4 py-2.5 text-sm font-semibold text-purple-700">
+              <Truck size={15} /> Kurye Yolda
+              {order.masayaGittiZamani && (
+                <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-white/80 px-2 py-0.5 text-xs tabular-nums">
+                  <Clock size={11} />
+                  <LiveTimer from={order.masayaGittiZamani} />
+                </span>
+              )}
+            </div>
+          )
+        ) : (
+          <p className="rounded-lg bg-purple-50 py-2 text-center text-xs font-medium text-purple-700">
+            Yolda · ödeme yetkisi yok
+          </p>
+        )}
+      </div>
     </div>
   );
 }
 
-const REJECT_REASONS = [
+// Onaylanmamış siparişler için yerel sebep listesi — Posentegra'ya gitmediği için ID gerekli değil
+const LOCAL_REJECT_REASONS = [
   'Ürün mevcut değil',
   'Kapanış saati geçti',
   'Adres teslimat alanı dışında',
@@ -519,15 +717,43 @@ const REJECT_REASONS = [
 ];
 
 function PosentegraRejectModal({ order, submitting, onClose, onConfirm }) {
-  const [sebep, setSebep] = useState(REJECT_REASONS[0]);
+  const [reasons, setReasons] = useState([]);
+  const [sebepId, setSebepId] = useState('');
+  const [yerelSebep, setYerelSebep] = useState(LOCAL_REJECT_REASONS[0]);
+  const [yukleniyor, setYukleniyor] = useState(false);
+  const [hata, setHata] = useState(null);
   const [not, setNot] = useState('');
+
+  // Sipariş henüz onaylanmamışsa Posentegra'ya gitmiyoruz, yerel liste yeterli
+  const onaylanmis = !!order?.posentegraOnayli;
+
   useEffect(() => {
-    if (order) {
-      setSebep(REJECT_REASONS[0]);
-      setNot('');
-    }
-  }, [order]);
+    if (!order) return;
+    setNot('');
+    setSebepId('');
+    setHata(null);
+    setYerelSebep(LOCAL_REJECT_REASONS[0]);
+    if (!onaylanmis) return; // onaylanmamış → reasons çağrısı yapma
+    setYukleniyor(true);
+    fetchPosentegraReasons(order.id)
+      .then((list) => {
+        setReasons(list || []);
+        const first = list?.[0];
+        if (first) setSebepId(first.id || first._id || '');
+      })
+      .catch((err) => {
+        console.error('[posentegraReasons] hata', err);
+        setHata(err.message || 'Sebepler yüklenemedi');
+      })
+      .finally(() => setYukleniyor(false));
+  }, [order, onaylanmis]);
+
   if (!order) return null;
+  const seciliSebep = reasons.find((r) => (r.id || r._id) === sebepId);
+  const submitDisabled = onaylanmis
+    ? submitting || !sebepId || yukleniyor
+    : submitting || !yerelSebep;
+
   return (
     <Modal
       open={!!order}
@@ -540,8 +766,12 @@ function PosentegraRejectModal({ order, submitting, onClose, onConfirm }) {
             Vazgeç
           </button>
           <button
-            onClick={() => onConfirm(sebep, not)}
-            disabled={submitting}
+            onClick={() =>
+              onaylanmis
+                ? onConfirm(sebepId, not, seciliSebep?.name)
+                : onConfirm('', not, yerelSebep)
+            }
+            disabled={submitDisabled}
             className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
           >
             <X size={14} /> {submitting ? 'Reddediliyor…' : 'Reddet'}
@@ -556,11 +786,47 @@ function PosentegraRejectModal({ order, submitting, onClose, onConfirm }) {
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Sebep</label>
-          <select value={sebep} onChange={(e) => setSebep(e.target.value)} className="input">
-            {REJECT_REASONS.map((r) => (
-              <option key={r}>{r}</option>
-            ))}
-          </select>
+          {onaylanmis ? (
+            yukleniyor ? (
+              <div className="input flex items-center text-slate-500">
+                Sebepler yükleniyor…
+              </div>
+            ) : hata ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-700">
+                ⚠ {hata}
+              </div>
+            ) : reasons.length === 0 ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800">
+                Sebep listesi boş döndü. Posentegra paneline bakman gerekebilir.
+              </div>
+            ) : (
+              <select
+                value={sebepId}
+                onChange={(e) => setSebepId(e.target.value)}
+                className="input"
+              >
+                {reasons.map((r) => {
+                  const id = r.id || r._id;
+                  const name = r.name || r.title || r.label || id;
+                  return (
+                    <option key={id} value={id}>
+                      {name}
+                    </option>
+                  );
+                })}
+              </select>
+            )
+          ) : (
+            <select
+              value={yerelSebep}
+              onChange={(e) => setYerelSebep(e.target.value)}
+              className="input"
+            >
+              {LOCAL_REJECT_REASONS.map((r) => (
+                <option key={r}>{r}</option>
+              ))}
+            </select>
+          )}
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Açıklama (opsiyonel)</label>
@@ -577,67 +843,149 @@ function PosentegraRejectModal({ order, submitting, onClose, onConfirm }) {
   );
 }
 
+// Google Maps yol tarifi linki — GPS varsa kesin koordinat, yoksa adres metni
+function mapsUrl(order) {
+  const k = order?.musteriKonum;
+  if (k?.lat != null && k?.lon != null) {
+    return `https://www.google.com/maps/dir/?api=1&destination=${k.lat},${k.lon}`;
+  }
+  const adres = order?.musteriAdres || '';
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(adres)}`;
+}
+
+function KuryeSelectModal({ order, kuryeler, onClose, onSelect }) {
+  if (!order) return null;
+  return (
+    <Modal
+      open={!!order}
+      onClose={onClose}
+      title={`${order.musteriAd || 'Paket'} → Hangi kurye?`}
+      size="sm"
+      footer={
+        <button onClick={onClose} className="btn-secondary">İptal</button>
+      }
+    >
+      <div className="space-y-3">
+        <p className="text-sm text-slate-600">
+          Bu paketi teslim edecek kuryeyi seç. Kurye girişinde sadece kendi siparişlerini görür.
+        </p>
+        <div className="space-y-2">
+          {kuryeler.length === 0 ? (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Aktif kurye yok. Önce admin'den kurye tanımla.
+            </p>
+          ) : (
+            kuryeler.map((k) => (
+              <button
+                key={k.id}
+                onClick={() => onSelect(k)}
+                className="flex w-full items-center justify-between rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-left transition hover:border-blue-400 hover:bg-blue-50 active:scale-95"
+              >
+                <span className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-700">
+                    {k.ad?.[0]?.toUpperCase() || 'K'}
+                  </span>
+                  <span className="font-semibold text-slate-900">{k.ad}</span>
+                </span>
+                <Send size={18} className="text-blue-500" />
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function KuryeOrderCard({ order, onTeslim }) {
   const mins = minutesSince(order.olusturmaZamani);
   const onceden = !!order.oncedenOdendi;
+  const theme = PLATFORM_THEME[order.paketKaynak] || PLATFORM_THEME.diger;
+
   return (
-    <div className="rounded-xl border-2 border-purple-300 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex items-start justify-between">
-        <div className="min-w-0">
-          <h3 className="truncate text-lg font-bold text-slate-900">
+    <div className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md">
+      {/* Üst aksent şeridi — platform rengi */}
+      <div className={`h-1 w-full ${theme.accent}`} />
+
+      {/* HEADER: müşteri adı + tutar */}
+      <div className="flex items-start justify-between gap-3 p-4 pb-2">
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-lg font-bold leading-tight text-slate-900">
             {order.musteriAd || 'Paket'}
           </h3>
-          <p className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-            {order.paketKaynakAd && (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-purple-50 px-1.5 py-0.5 text-purple-700">
-                <Smartphone size={10} /> {order.paketKaynakAd}
-              </span>
-            )}
-            {onceden ? (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-emerald-700">
-                <CreditCard size={10} /> Önceden Ödendi
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-amber-700">
-                💵 Kapıda Ödeme
-              </span>
-            )}
-          </p>
           {order.musteriTel && (
             <a
               href={`tel:${order.musteriTel}`}
-              className="mt-1 inline-block text-sm font-medium text-blue-600 hover:underline"
+              className="mt-0.5 inline-block text-sm font-semibold text-blue-600 hover:underline"
             >
               📞 {order.musteriTel}
             </a>
           )}
-          {order.musteriAdres && (
-            <p className="mt-1 rounded bg-amber-50 px-2 py-1 text-xs text-amber-900">
-              📍 {order.musteriAdres}
-            </p>
-          )}
-          {order.musteriNotu && (
-            <p className="mt-1 rounded bg-blue-50 px-2 py-1 text-xs italic text-blue-800">
-              <StickyNote size={10} className="mr-0.5 inline" /> {order.musteriNotu}
-            </p>
-          )}
         </div>
-        <div className="text-right">
-          <p className="text-xs text-slate-500">
-            <Clock size={11} className="mr-0.5 inline" /> {mins} dk
+        <div className="shrink-0 text-right">
+          <p className="flex items-center justify-end gap-1 text-xs font-medium text-slate-500">
+            <Clock size={12} /> {mins} dk
           </p>
           <p className="mt-0.5 text-xl font-bold text-slate-900">{formatTL(order.toplam)}</p>
         </div>
       </div>
 
-      <ItemList items={order.items} />
+      {/* ROZETLER ŞERİDİ */}
+      <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
+        {order.paketKaynakAd && (
+          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${theme.badge}`}>
+            <Smartphone size={11} /> {order.paketKaynakAd}
+          </span>
+        )}
+        {onceden ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+            <CreditCard size={11} /> Önceden Ödendi
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+            💵 Kapıda Ödeme
+          </span>
+        )}
+      </div>
 
-      <button
-        onClick={onTeslim}
-        className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-base font-bold text-white shadow transition active:scale-95 hover:bg-emerald-700"
-      >
-        ✓ Teslim Ettim
-      </button>
+      {/* ADRES BLOĞU + HARİTA (sadece kurye) */}
+      {order.musteriAdres && (
+        <div className="mx-4 mb-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+          <p className="text-sm leading-snug text-amber-900">
+            <span className="mr-1">📍</span>
+            {order.musteriAdres}
+          </p>
+          {order.musteriNotu && (
+            <p className="mt-2 rounded-md bg-white/70 px-2 py-1 text-xs italic text-slate-700">
+              <StickyNote size={11} className="mr-1 inline" />
+              {order.musteriNotu}
+            </p>
+          )}
+          <a
+            href={mapsUrl(order)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-95"
+          >
+            🗺️ Haritada Göster
+          </a>
+        </div>
+      )}
+
+      {/* ÜRÜNLER — boşluğu doldurur, böylece aksiyon dibe yapışır */}
+      <div className="flex-1 border-t border-slate-100 px-4 py-3">
+        <ItemList items={order.items} />
+      </div>
+
+      {/* AKSİYON — kartın dibinde sabit */}
+      <div className="mt-auto border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+        <button
+          onClick={onTeslim}
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-base font-bold text-white shadow hover:bg-emerald-700 active:scale-95"
+        >
+          <Check size={18} /> Teslim Ettim
+        </button>
+      </div>
     </div>
   );
 }
@@ -680,35 +1028,37 @@ function KuryeTeslimModal({ order, onClose, onConfirm }) {
             </>
           ) : (
             <>
-              💵 Müşteriden <strong>{formatTL(order.toplam)}</strong> almalısın.{' '}
-              Topladığın parayı restorana dönünce kasiyere teslim et.
+              💰 Müşteriden <strong>{formatTL(order.toplam)}</strong> tahsil et.{' '}
+              Hangi yöntemle aldıysan aşağıdan seç. Nakit aldıysan restorana dönünce kasiyere teslim et.
             </>
           )}
         </div>
 
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">Ödeme Yöntemi</label>
-          <div className="grid grid-cols-3 gap-2">
-            <YontemButton
-              active={yontem === 'nakit'}
-              icon="💵"
-              label="Nakit"
-              onClick={() => setYontem('nakit')}
-            />
-            <YontemButton
-              active={yontem === 'kart'}
-              icon="💳"
-              label="Kart"
-              onClick={() => setYontem('kart')}
-            />
-            <YontemButton
-              active={yontem === 'uygulama'}
-              icon="📱"
-              label="Önceden Ödendi"
-              onClick={() => setYontem('uygulama')}
-            />
+        {!onceden && (
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">Ödeme Yöntemi</label>
+            <div className="grid grid-cols-3 gap-2">
+              <YontemButton
+                active={yontem === 'nakit'}
+                icon="💵"
+                label="Nakit"
+                onClick={() => setYontem('nakit')}
+              />
+              <YontemButton
+                active={yontem === 'kart'}
+                icon="💳"
+                label="Kart"
+                onClick={() => setYontem('kart')}
+              />
+              <YontemButton
+                active={yontem === 'yemekKarti'}
+                icon="🍴"
+                label="Yemek Kartı"
+                onClick={() => setYontem('yemekKarti')}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </Modal>
   );

@@ -259,9 +259,29 @@ function mapPosentegraOrder(body) {
   const musteriAdres = client.deliveryAddress
     ? birlestirAdres(client.deliveryAddress)
     : String(client.address || body.musteri_adres || '');
+  // GPS konumu — varsa harita için daha kesin
+  const loc = client.location || {};
+  const lat = parseFloat(loc.lat);
+  const lon = parseFloat(loc.lon);
+  const musteriKonum = (!isNaN(lat) && !isNaN(lon)) ? { lat, lon } : null;
 
   const odemeTipi = tr(body.paymentMethodText) || body.posPaymentMethod || '';
   const onceden = isPrepaid(body.posPaymentMethod, body.paymentMethodText);
+
+  // Teslimat tipi — Posentegra kanonik alanı `deliveryType`:
+  //   1 = platform kuryesi (Getir/YS/Trendyol kendi kuryesi getirir, bizden kurye atanmaz)
+  //   2 = restoran kuryesi (biz teslim ederiz, courier objesinde "Restoran Kuryesi" gelir)
+  // courier objesi sadece restoran teslimatında dolu geliyor — name güvenilir bir göstergedir AMA platform durumunda hiç gelmiyor.
+  const deliveryTypeRaw = Number(body.deliveryType);
+  const courierName = String(body.courier?.name || '').trim();
+  let teslimatTipi;
+  if (deliveryTypeRaw === 1) teslimatTipi = 'platform';
+  else if (deliveryTypeRaw === 2) teslimatTipi = 'restoran';
+  else teslimatTipi = courierName.toLowerCase().includes('restoran') ? 'restoran' : 'platform';
+  // Platform kuryesi adı — courier.name yoksa platform adından üret: "Getir Kuryesi"
+  const platformKuryeAdi = teslimatTipi === 'platform'
+    ? (courierName || `${platformAd} Kuryesi`)
+    : null;
 
   // Posentegra'nın bize geri çağırırken kullanacağı id (verify/cancel/change-status için)
   const posentegraPid = body.pid ? String(body.pid) : null;
@@ -287,9 +307,12 @@ function mapPosentegraOrder(body) {
     musteriAd,
     musteriTel,
     musteriAdres,
+    musteriKonum,
     musteriNotu: tr(body.clientNote) || '',
     odemeTipi,
     oncedenOdendi: onceden, // online ödenmişse kasiyer ödeme almaz
+    teslimatTipi, // 'restoran' (biz teslim ederiz) | 'platform' (Getir/YS kuryesi teslim eder)
+    platformKuryeAdi, // 'Getir Kuryesi' gibi — sadece platform teslimatında dolu
     // Posentegra referansları (callback'ler için)
     posentegraPid,
     posentegraConfirmationId: body.confirmationId ? String(body.confirmationId) : null,
@@ -507,7 +530,8 @@ export const posentegraReject = onCall(
     }
 
     const orderId = String(req.data?.orderId || '');
-    const reason = String(req.data?.reason || '');
+    let reason = String(req.data?.reason || ''); // Posentegra sebep ObjectId (varsa)
+    const reasonName = String(req.data?.reasonName || ''); // Kullanıcının seçtiği insan-okunabilir ad
     const note = String(req.data?.note || '');
     if (!orderId) throw new HttpsError('invalid-argument', 'orderId gerekli');
     const orderRef = db.collection('orders').doc(orderId);
@@ -518,20 +542,71 @@ export const posentegraReject = onCall(
     if (!pid) throw new HttpsError('failed-precondition', 'Posentegra siparişi değil');
     if (order.durum === 'iptal') return { ok: true, already: true };
 
+    const apiKey = POSENTEGRA_API_KEY.value();
+    const HEX24 = /^[a-f0-9]{24}$/i;
+
+    // Onaylanmamış sipariş: Posentegra reasons & cancel endpoint'leri bu state'te 400 veriyor.
+    // Çözüm: önce verify (kabul) çağır, sipariş Posentegra'da "preparing"e geçsin,
+    //        sonra reasons listesini al, sebep adına göre ID bul, cancel POST.
+    if (!order.posentegraOnayli) {
+      console.log('[posentegraReject] onaylanmamış sipariş, verify-then-cancel akışı', { pid, reasonName });
+      try {
+        await posentegraApi.verifyOrder(apiKey, pid);
+      } catch (err) {
+        console.warn('[posentegraReject] verify hatası', err.status, err.body);
+        throw new HttpsError('internal', `Verify başarısız: ${err.message || err.status}`);
+      }
+    }
+
+    // Geçerli bir reason ID yoksa Posentegra reasons'tan çözümle (ada göre eşle, yoksa ilkini al)
+    if (!HEX24.test(reason)) {
+      try {
+        const raw = await posentegraApi.getCancelReasons(apiKey, pid);
+        console.log('[posentegraReject] reasons RAW response:', JSON.stringify(raw));
+        // Doc'a göre format: { success, data: { reasons: [{id, name}, ...] } }
+        let list = [];
+        if (Array.isArray(raw?.data?.reasons)) list = raw.data.reasons;
+        else if (Array.isArray(raw?.reasons)) list = raw.reasons;
+        else if (Array.isArray(raw)) list = raw;
+        else if (Array.isArray(raw?.data)) list = raw.data;
+        else if (Array.isArray(raw?.cancelReasons)) list = raw.cancelReasons;
+        else if (Array.isArray(raw?.result)) list = raw.result;
+        console.log('[posentegraReject] reasons list size:', list.length);
+        if (reasonName) {
+          const needle = reasonName.toLowerCase();
+          const match = list.find((r) => String(r.name || r.title || r.label || '').toLowerCase().includes(needle));
+          if (match) reason = match.id || match._id;
+        }
+        if (!HEX24.test(reason) && list[0]) {
+          reason = list[0].id || list[0]._id;
+        }
+      } catch (err) {
+        console.warn('[posentegraReject] reasons hatası', err.status, err.body);
+        throw new HttpsError('internal', `Sebep ID alınamadı: ${err.message || err.status}`);
+      }
+    }
+
+    if (!HEX24.test(reason)) {
+      throw new HttpsError('internal', 'Geçerli sebep ID bulunamadı — Posentegra reasons listesi boş.');
+    }
+
     try {
-      await posentegraApi.cancelOrder(POSENTEGRA_API_KEY.value(), pid, reason || 'Restoran reddi', note);
+      await posentegraApi.cancelOrder(apiKey, pid, reason);
     } catch (err) {
-      console.warn('[posentegraReject] Posentegra hatası', err.status, err.body);
+      console.warn('[posentegraReject] cancel hatası', err.status, err.body);
       if (err.status === 404) {
         throw new HttpsError('not-found', `Posentegra'da sipariş bulunamadı (pid: ${pid})`);
       }
-      throw new HttpsError('internal', err.message || 'Posentegra çağrısı başarısız');
+      throw new HttpsError('internal', err.message || 'Cancel çağrısı başarısız');
     }
+
     await orderRef.update({
       durum: 'iptal',
       iptal: {
         edildi: true,
-        sebep: note || reason || 'Posentegra üzerinden reddedildi',
+        sebep: reasonName || 'Reddedildi',
+        sebepId: reason,
+        not: note || null,
         edenId: req.auth.uid,
         edenAd: userData.ad || 'Personel',
         zaman: FieldValue.serverTimestamp(),
@@ -555,7 +630,28 @@ export const posentegraReasons = onCall(
     if (!orderSnap.exists) throw new HttpsError('not-found', 'Sipariş bulunamadı');
     const pid = orderSnap.data().posentegraPid;
     if (!pid) throw new HttpsError('failed-precondition', 'Posentegra siparişi değil');
-    const reasons = await posentegraApi.getCancelReasons(POSENTEGRA_API_KEY.value(), pid);
+
+    let raw;
+    try {
+      raw = await posentegraApi.getCancelReasons(POSENTEGRA_API_KEY.value(), pid);
+    } catch (err) {
+      console.warn('[posentegraReasons] Posentegra hatası', err.status, err.body);
+      if (err.status === 404) {
+        throw new HttpsError('not-found', `Posentegra'da sipariş bulunamadı (pid: ${pid})`);
+      }
+      throw new HttpsError('internal', `Posentegra reasons (${err.status || '?'}): ${err.message || 'bilinmeyen hata'}`);
+    }
+    console.log('[posentegraReasons] raw response:', JSON.stringify(raw));
+
+    // Doc'a göre format: { success, data: { reasons: [{id, name}, ...] } }
+    let reasons = [];
+    if (Array.isArray(raw?.data?.reasons)) reasons = raw.data.reasons;
+    else if (Array.isArray(raw?.reasons)) reasons = raw.reasons;
+    else if (Array.isArray(raw)) reasons = raw;
+    else if (Array.isArray(raw?.data)) reasons = raw.data;
+    else if (Array.isArray(raw?.cancelReasons)) reasons = raw.cancelReasons;
+    else if (Array.isArray(raw?.result)) reasons = raw.result;
+
     return { reasons };
   },
 );
@@ -581,6 +677,37 @@ export const posentegraOnStatusChange = onDocumentUpdated(
       console.log('[posentegraOnStatusChange] OK', { pid, durum: after.durum, status: statusCode });
     } catch (err) {
       console.warn('[posentegraOnStatusChange] HATA', { pid, durum: after.durum, msg: err.message });
+    }
+  },
+);
+
+/**
+ * Admin yeni kullanıcı eklerken seçtiği 4 haneli PIN'in başka bir kullanıcıda
+ * olup olmadığını sorgular. Firebase Auth (kimliğin asıl kaynağı) üzerinden
+ * derived email'i kontrol eder — kodHash Firestore'da olmadığı için bu yöntem
+ * mevcut tüm kullanıcıları yakalar.
+ */
+export const checkPinAvailable = onCall(
+  { region: 'europe-west1' },
+  async (req) => {
+    if (!req.auth) throw new HttpsError('unauthenticated', 'Giriş gerekli');
+    const userSnap = await db.collection('users').doc(req.auth.uid).get();
+    if (!userSnap.exists || userSnap.data().rol !== 'admin') {
+      throw new HttpsError('permission-denied', 'Admin yetkisi gerekli');
+    }
+    const kod = String(req.data?.kod || '');
+    if (!/^\d{4}$/.test(kod)) {
+      throw new HttpsError('invalid-argument', 'PIN 4 hane olmalı');
+    }
+    const kodHash = hashCode(kod);
+    const projectId = process.env.GCLOUD_PROJECT || 'alazligida-e77b9';
+    const email = `pos-${kodHash.slice(0, 16)}@${projectId}.firebaseapp.com`;
+    try {
+      await auth.getUserByEmail(email);
+      return { inUse: true };
+    } catch (err) {
+      if (err.code === 'auth/user-not-found') return { inUse: false };
+      throw new HttpsError('internal', err.message);
     }
   },
 );

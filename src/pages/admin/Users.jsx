@@ -8,6 +8,10 @@ import StatCard from '../../components/ui/StatCard';
 import Modal from '../../components/ui/Modal';
 import Toggle from '../../components/ui/Toggle';
 import { watchCollection, patchDoc, removeDoc, upsertDoc } from '../../firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { app } from '../../firebase/config';
+
+const checkPinAvailableFn = httpsCallable(getFunctions(app, 'europe-west1'), 'checkPinAvailable');
 import { userSchema, randomCode4 } from '../../utils/validators';
 import { createPosUser } from '../../firebase/auth';
 import { derivePosCredentials } from '../../utils/hash';
@@ -192,6 +196,33 @@ function UserModal({ open, onClose, editing }) {
   const aktif = watch('aktif');
   const kod = watch('kod');
 
+  // Anlık PIN tekillik kontrolü — kod tam 4 hane olunca query at
+  const [kodKullanimda, setKodKullanimda] = useState(false);
+  const [kodKontrolEdiliyor, setKodKontrolEdiliyor] = useState(false);
+  useEffect(() => {
+    if (isEdit) return; // edit modunda kod değiştirilmiyor
+    if (!/^\d{4}$/.test(kod || '')) {
+      setKodKullanimda(false);
+      return;
+    }
+    setKodKontrolEdiliyor(true);
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const res = await checkPinAvailableFn({ kod });
+        if (!cancelled) setKodKullanimda(!!res.data?.inUse);
+      } catch (e) {
+        console.warn('Kod kontrolü hata:', e);
+      } finally {
+        if (!cancelled) setKodKontrolEdiliyor(false);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [kod, isEdit]);
+
   const onSubmit = async (data) => {
     try {
       if (isEdit) {
@@ -239,8 +270,8 @@ function UserModal({ open, onClose, editing }) {
           <button
             type="submit"
             form="user-form"
-            disabled={isSubmitting}
-            className="btn-primary"
+            disabled={isSubmitting || (!isEdit && (kodKullanimda || kodKontrolEdiliyor))}
+            className="btn-primary disabled:opacity-50"
           >
             {isSubmitting ? 'Kaydediliyor...' : 'Kaydet'}
           </button>
@@ -278,6 +309,17 @@ function UserModal({ open, onClose, editing }) {
             </button>
           </div>
           {errors.kod && <p className="mt-1 text-xs text-red-600">{errors.kod.message}</p>}
+          {!isEdit && kod?.length === 4 && !errors.kod && (
+            kodKontrolEdiliyor ? (
+              <p className="mt-1.5 text-sm text-slate-500">Kod kontrol ediliyor…</p>
+            ) : kodKullanimda ? (
+              <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                ⚠ Bu kod başka bir kullanıcıda. Farklı bir kod seçin veya "Otomatik Üret"e basın.
+              </p>
+            ) : (
+              <p className="mt-1.5 text-sm font-medium text-emerald-600">✓ Kod uygun</p>
+            )
+          )}
           {kod?.length === 4 && (
             <p className="mt-1 text-xs text-slate-500">
               Kayıt sonrası kod sadece "{kod[0]}***" şeklinde görünür. Kullanıcıya iletmeyi unutmayın.

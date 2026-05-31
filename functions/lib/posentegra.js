@@ -10,7 +10,7 @@
  *   GET  /orders/{pid}                  → sipariş detayı
  */
 
-const BASE = 'https://api.fastsiparis.com/web-api/v1';
+const BASE = 'https://api.v1.fastsiparis.com/web-api/v1';
 
 async function call(method, path, apiKey, body) {
   const headers = { Authorization: `Bearer ${apiKey}` };
@@ -45,8 +45,9 @@ async function call(method, path, apiKey, body) {
 
 export const posentegraApi = {
   verifyOrder: (apiKey, pid) => call('POST', `/orders/verify/${pid}`, apiKey),
-  cancelOrder: (apiKey, pid, reason, note) =>
-    call('POST', `/orders/cancel/${pid}`, apiKey, { reason, note: note || '' }),
+  // Swagger: body sadece { reason: string } — reason 24-hex ObjectId olmalı (Getir kuralı).
+  cancelOrder: (apiKey, pid, reason) =>
+    call('POST', `/orders/cancel/${pid}`, apiKey, { reason }),
   changeStatus: (apiKey, pid, status) =>
     call('POST', `/orders/change-status/${pid}`, apiKey, { status }),
   getCancelReasons: (apiKey, pid) => call('GET', `/orders/reasons/${pid}`, apiKey),
