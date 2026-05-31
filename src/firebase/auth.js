@@ -3,6 +3,7 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   setPersistence,
+  indexedDBLocalPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
   onAuthStateChanged,
@@ -11,8 +12,24 @@ import {
 import { auth, POS_EMAIL_DOMAIN, getSecondaryAuth } from './config';
 import { derivePosCredentials } from '../utils/hash';
 
+// Capacitor APK ortamında browserLocalPersistence (localStorage) güvenilmez —
+// WebView her açılışta storage'ı koruyamayabilir. IndexedDB persistence APK'da
+// uygulama veri dizininde kalır, uygulama silinmediği sürece oturum açık kalır.
+// Web tarafında IDB yoksa otomatik browserLocalPersistence'a düşer.
+async function setRememberPersistence() {
+  try {
+    await setPersistence(auth, indexedDBLocalPersistence);
+  } catch {
+    await setPersistence(auth, browserLocalPersistence);
+  }
+}
+
 export async function loginAdmin(email, password, rememberMe = false) {
-  await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
+  if (rememberMe) {
+    await setRememberPersistence();
+  } else {
+    await setPersistence(auth, browserSessionPersistence);
+  }
   return signInWithEmailAndPassword(auth, email, password);
 }
 

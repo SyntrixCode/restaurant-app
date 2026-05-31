@@ -1,5 +1,12 @@
 import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
-import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import {
+  getAuth,
+  initializeAuth,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  connectAuthEmulator,
+} from 'firebase/auth';
 import {
   initializeFirestore,
   connectFirestoreEmulator,
@@ -28,7 +35,25 @@ export const db = initializeFirestore(app, {
   }),
 });
 
-export const auth = getAuth(app);
+// Capacitor APK ortamında getAuth() bazen IDB init'ini bekleyemeden localStorage'a
+// düşüyor — sonraki açılışta oturum bulunamıyor ("beni hatırla" çalışmıyor görünüyor).
+// initializeAuth() ile explicit IDB öncelikli sıra veriyoruz.
+function initAuth() {
+  try {
+    return initializeAuth(app, {
+      persistence: [
+        indexedDBLocalPersistence,
+        browserLocalPersistence,
+        browserSessionPersistence,
+      ],
+    });
+  } catch {
+    // HMR / ikinci kez initialize → mevcut instance'ı döndür
+    return getAuth(app);
+  }
+}
+
+export const auth = initAuth();
 
 export function getSecondaryAuth() {
   let secondary;
