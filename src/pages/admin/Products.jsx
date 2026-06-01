@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2, Package, Image as ImageIcon, Upload, X, Languages } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Image as ImageIcon, Upload, X, Languages, FileDown } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import Modal from '../../components/ui/Modal';
@@ -13,6 +13,7 @@ import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL } from '../../utils/format';
 import { SPARK_MODE, getStorageRef } from '../../firebase/config';
 import { translateMenu } from '../../firebase/translation';
+import { importMenu } from '../../firebase/menuImport';
 
 export default function Products() {
   const [products, setProducts] = useState([]);
@@ -22,6 +23,29 @@ export default function Products() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [translating, setTranslating] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  const handleImportMenu = async () => {
+    if (importing) return;
+    const msg = products.length > 0
+      ? `⚠️ MEVCUT ${products.length} ürün ve ${categories.length} kategori SİLİNECEK ve PDF menüsü yüklenecek.\n\nGörseller, fiyatlar ve TR/EN/AR çeviriler dahil olacak.\n\nDevam edilsin mi?`
+      : 'PDF menüsünden kategoriler ve ürünler yüklenecek (görsel + TR/EN/AR çeviri dahil). Devam edilsin mi?';
+    if (!confirm(msg)) return;
+    setImporting(true);
+    const t = toast.loading('Menü import ediliyor…');
+    try {
+      const res = await importMenu({ clearFirst: products.length > 0 });
+      toast.success(
+        `✓ Import tamam — ${res.categoriesAdded} kategori, ${res.productsAdded} ürün yüklendi (silinen: ${res.categoriesCleared}+${res.productsCleared})`,
+        { id: t, duration: 8000 },
+      );
+    } catch (err) {
+      console.error(err);
+      toast.error('Import hatası: ' + (err.message || 'bilinmeyen'), { id: t });
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const handleAutoTranslate = async () => {
     if (translating) return;
@@ -90,6 +114,14 @@ export default function Products() {
         subtitle="Menü ürünleri, stok ve fiyat yönetimi"
         actions={
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleImportMenu}
+              disabled={importing}
+              className="btn-secondary"
+              title="PDF menüsünden kategoriler + ürünler + görsel + çeviriler yüklenir (mevcut menü silinir)"
+            >
+              <FileDown size={16} /> {importing ? 'Yükleniyor…' : 'PDF Menüsünü Yükle'}
+            </button>
             <button
               onClick={handleAutoTranslate}
               disabled={translating}

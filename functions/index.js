@@ -8,6 +8,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import crypto from 'node:crypto';
 import { posentegraApi, POSENTEGRA_STATUS_MAP } from './lib/posentegra.js';
 import { translate as translateText } from './lib/menuTranslator.js';
+import { CATEGORIES as MENU_CATEGORIES, PRODUCTS as MENU_PRODUCTS } from './lib/menuData.js';
 
 initializeApp();
 setGlobalOptions({ region: 'europe-west1' });
@@ -794,5 +795,103 @@ export const translateMenu = onCall(
 
     console.log('[translateMenu] sonuç:', result);
     return result;
+  },
+);
+
+/**
+ * PDF'ten çıkarılmış menü içeriğini Firestore'a yazar.
+ *  - data.clearFirst=true ise mevcut categories ve products silinir
+ *  - menuData.js içindeki CATEGORIES + PRODUCTS yazılır
+ *  - Her ürüne ceviri.en, ceviri.ar ve görsel URL'i (hosting yolu) eklenir
+ */
+export const importMenu = onCall(
+  { region: 'europe-west1', timeoutSeconds: 540, memory: '256MiB' },
+  async (req) => {
+    if (!req.auth) throw new HttpsError('unauthenticated', 'Giriş gerekli');
+    const userSnap = await db.collection('users').doc(req.auth.uid).get();
+    const isAdmin = userSnap.exists && userSnap.data().rol === 'admin';
+    if (!isAdmin && req.auth.token?.rol !== 'admin') {
+      throw new HttpsError('permission-denied', 'Admin yetkisi gerekli');
+    }
+    const clearFirst = !!req.data?.clearFirst;
+    const stats = { categoriesCleared: 0, productsCleared: 0, categoriesAdded: 0, productsAdded: 0 };
+
+    // Mevcut menüyü temizle
+    if (clearFirst) {
+      const oldCats = await db.collection('categories').get();
+      const batch1 = db.batch();
+      oldCats.forEach((d) => batch1.delete(d.ref));
+      await batch1.commit();
+      stats.categoriesCleared = oldCats.size;
+
+      const oldProds = await db.collection('products').get();
+      // Firestore batch 500 limit
+      let batch = db.batch();
+      let count = 0;
+      for (const d of oldProds.docs) {
+        batch.delete(d.ref);
+        count++;
+        if (count % 400 === 0) {
+          await batch.commit();
+          batch = db.batch();
+        }
+      }
+      if (count % 400 !== 0) await batch.commit();
+      stats.productsCleared = oldProds.size;
+    }
+
+    // Kategorileri yaz — id = slug (deterministik, tekrar import idempotent)
+    {
+      const batch = db.batch();
+      for (const c of MENU_CATEGORIES) {
+        const ref = db.collection('categories').doc(c.slug);
+        batch.set(ref, {
+          ad: c.ad,
+          sira: c.sira,
+          aktif: true,
+          ceviri: {
+            en: { ad: c.en },
+            ar: { ad: c.ar },
+          },
+        });
+        stats.categoriesAdded++;
+      }
+      await batch.commit();
+    }
+
+    // Ürünleri yaz — id = slug
+    {
+      let batch = db.batch();
+      let count = 0;
+      for (const p of MENU_PRODUCTS) {
+        const ref = db.collection('products').doc(p.slug);
+        const doc = {
+          ad: p.ad,
+          categoryId: p.kategori,
+          categoryAd: MENU_CATEGORIES.find((c) => c.slug === p.kategori)?.ad || p.kategori,
+          fiyat: p.fiyat,
+          sira: p.sira,
+          aktif: true,
+          stok: 999, // başlangıçta yüksek; reçete yoksa düşmez
+          aciklama: p.aciklama || '',
+          gorsel: p.gorsel || null,
+          ceviri: {
+            en: { ad: p.en, aciklama: p.aciklamaEn || '' },
+            ar: { ad: p.ar, aciklama: p.aciklamaAr || '' },
+          },
+        };
+        batch.set(ref, doc);
+        stats.productsAdded++;
+        count++;
+        if (count % 400 === 0) {
+          await batch.commit();
+          batch = db.batch();
+        }
+      }
+      if (count % 400 !== 0) await batch.commit();
+    }
+
+    console.log('[importMenu] sonuç:', stats);
+    return stats;
   },
 );
