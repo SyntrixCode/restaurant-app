@@ -7,7 +7,19 @@ import { formatTL } from '../../utils/format';
 import PoweredBy from '../../components/PoweredBy';
 import { MENU_LANGS, t, dirFor, localized } from '../../utils/menuI18n';
 
-const CALL_COOLDOWN_MS = 60_000; // aynı masadan 1 dk içinde tekrar çağrı engellenir
+const CALL_COOLDOWN_MS = 60_000;
+
+// Parşömen tema renk paleti — restoran PDF'inden esinlenmiş
+const THEME = {
+  bg: '#f4ecd5',         // parşömen sarımtırak bej
+  bgAlt: '#ede1c0',      // koyu bej (banner altı tonu)
+  banner: '#1f1a14',     // banner / kategori arka planı (koyu kahverengi-siyah)
+  gold: '#d4a749',       // altın aksan (PDF'teki sarı vurgu)
+  goldLight: '#e8c378',  // açık altın (hover, kenarlık)
+  text: '#3a2e1f',       // ana metin (koyu kahverengi)
+  textMuted: '#7a6749',  // ikincil metin
+  divider: '#c9b890',    // dekoratif ayraç çizgisi
+};
 
 export default function Menu() {
   const { masaId } = useParams();
@@ -15,8 +27,8 @@ export default function Menu() {
   const [products, setProducts] = useState([]);
   const [activeCategory, setActiveCategory] = useState(null);
   const [masa, setMasa] = useState(null);
-  const [calling, setCalling] = useState(null); // 'garson' | 'hesap' | null
-  const [calledTip, setCalledTip] = useState(null); // son başarılı çağrının tipi
+  const [calling, setCalling] = useState(null);
+  const [calledTip, setCalledTip] = useState(null);
   const [lang, setLang] = useState('tr');
   const { settings } = useSettingsStore();
   const garsonCagirmaAcik = settings?.garsonCagirmaAcik !== false;
@@ -40,6 +52,7 @@ export default function Menu() {
     activeCategories.forEach((c) => map.set(c.id, []));
     products
       .filter((p) => p.aktif)
+      .sort((a, b) => (a.sira ?? 9999) - (b.sira ?? 9999))
       .forEach((p) => {
         if (map.has(p.categoryId)) map.get(p.categoryId).push(p);
       });
@@ -48,7 +61,6 @@ export default function Menu() {
 
   const handleCall = async (tip) => {
     if (!masaId || calling) return;
-    // Spam koruması: aynı masa+tip için 1 dk cooldown (localStorage)
     const key = `waiterCall:${masaId}:${tip}`;
     const last = Number(localStorage.getItem(key) || 0);
     if (Date.now() - last < CALL_COOLDOWN_MS) {
@@ -61,7 +73,7 @@ export default function Menu() {
       await createDoc('waiterCalls', {
         masaId,
         masaAd: masa?.ad || masaId,
-        tip, // 'garson' | 'hesap'
+        tip,
         durum: 'bekliyor',
         olusturmaZamani: new Date(),
       });
@@ -76,26 +88,43 @@ export default function Menu() {
   };
 
   return (
-    <div className="min-h-full bg-slate-50" dir={dir}>
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <div className="mx-auto flex max-w-2xl items-center gap-3">
+    <div
+      className="min-h-full"
+      dir={dir}
+      style={{
+        background: `${THEME.bg} url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='1' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.92  0 0 0 0 0.85  0 0 0 0 0.68  0 0 0 0.12 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>")`,
+        color: THEME.text,
+        fontFamily: '"Cormorant Garamond", Georgia, "Times New Roman", serif',
+      }}
+    >
+      {/* HEADER: parşömen + logo + dil butonları */}
+      <header
+        className="sticky top-0 z-20 border-b shadow-sm"
+        style={{ background: THEME.bg, borderColor: THEME.divider }}
+      >
+        <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3">
           <img
             src="/branding/alazli-logo.svg"
             alt={settings.restoranAd || 'Alazlı Konya Mutfağı'}
             className="h-[3.75rem] w-auto"
           />
           <div className="ml-auto flex items-center gap-2">
-            {masa && <p className="text-sm text-slate-500">{masa.ad}</p>}
+            {masa && (
+              <p className="text-sm font-medium" style={{ color: THEME.textMuted }}>
+                {masa.ad}
+              </p>
+            )}
             <div className="flex gap-1">
               {MENU_LANGS.map((l) => (
                 <button
                   key={l.code}
                   onClick={() => setLang(l.code)}
-                  className={`rounded-md px-2 py-1 text-xs font-semibold transition ${
+                  className="rounded px-2.5 py-1 text-xs font-bold uppercase tracking-wider transition"
+                  style={
                     lang === l.code
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
+                      ? { background: THEME.banner, color: THEME.gold }
+                      : { background: THEME.bgAlt, color: THEME.text }
+                  }
                 >
                   {l.label}
                 </button>
@@ -105,81 +134,182 @@ export default function Menu() {
         </div>
       </header>
 
-      <nav className="sticky top-[57px] z-10 overflow-x-auto border-b border-slate-200 bg-white px-2 py-2">
-        <div className="mx-auto flex max-w-2xl gap-2">
-          {activeCategories.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => {
-                setActiveCategory(c.id);
-                document.getElementById(`cat-${c.id}`)?.scrollIntoView({ behavior: 'smooth' });
-              }}
-              className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition ${
-                activeCategory === c.id
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              {localized(c, lang, 'ad')}
-            </button>
-          ))}
+      {/* KATEGORİ NAVİGASYON ŞERİDİ */}
+      <nav
+        className="sticky z-10 overflow-x-auto border-b"
+        style={{
+          top: '5.5rem',
+          background: THEME.banner,
+          borderColor: THEME.gold + '40',
+        }}
+      >
+        <div className="mx-auto flex max-w-2xl gap-1 px-2 py-2">
+          {activeCategories.map((c) => {
+            const active = activeCategory === c.id;
+            return (
+              <button
+                key={c.id}
+                onClick={() => {
+                  setActiveCategory(c.id);
+                  document.getElementById(`cat-${c.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+                className="whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-semibold uppercase tracking-wide transition"
+                style={
+                  active
+                    ? { background: THEME.gold, color: THEME.banner }
+                    : { color: THEME.goldLight }
+                }
+              >
+                {localized(c, lang, 'ad')}
+              </button>
+            );
+          })}
         </div>
       </nav>
 
-      <main className="mx-auto max-w-2xl px-4 py-6">
+      <main className="mx-auto max-w-2xl px-4 py-8">
         {activeCategories.length === 0 && (
-          <p className="py-12 text-center text-slate-500">{t(lang, 'menuHazirlaniyor')}</p>
+          <p className="py-12 text-center italic" style={{ color: THEME.textMuted }}>
+            {t(lang, 'menuHazirlaniyor')}
+          </p>
         )}
-        {activeCategories.map((c) => (
-          <section key={c.id} id={`cat-${c.id}`} className="mb-8">
-            <h2 className="mb-3 text-lg font-bold text-slate-900">{localized(c, lang, 'ad')}</h2>
-            <div className="space-y-3">
-              {(grouped.get(c.id) || []).length === 0 ? (
-                <p className="text-sm text-slate-400">{t(lang, 'kategoriBos')}</p>
+        {activeCategories.map((c) => {
+          const list = grouped.get(c.id) || [];
+          return (
+            <section key={c.id} id={`cat-${c.id}`} className="mb-10">
+              {/* PDF stilinde kategori banner — koyu çerçeve içinde altın yazı */}
+              <div
+                className="mb-6 flex items-center justify-center px-6 py-2.5 shadow"
+                style={{
+                  background: THEME.banner,
+                  borderTop: `2px solid ${THEME.gold}`,
+                  borderBottom: `2px solid ${THEME.gold}`,
+                  borderRadius: 0,
+                }}
+              >
+                <span
+                  className="text-center text-xl font-bold uppercase tracking-[0.25em]"
+                  style={{ color: THEME.gold, fontFamily: 'Georgia, serif' }}
+                >
+                  {localized(c, lang, 'ad')}
+                </span>
+              </div>
+
+              {list.length === 0 ? (
+                <p className="text-center text-sm italic" style={{ color: THEME.textMuted }}>
+                  {t(lang, 'kategoriBos')}
+                </p>
               ) : (
-                (grouped.get(c.id) || []).map((p) => (
-                  <article
-                    key={p.id}
-                    className={`flex gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm ${
-                      p.stok <= 0 ? 'opacity-50' : ''
-                    }`}
-                  >
-                    {p.gorsel ? (
-                      <img src={p.gorsel} alt={localized(p, lang, 'ad')} loading="lazy" className="h-20 w-20 rounded-lg object-cover" />
-                    ) : (
-                      <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
-                        <ImageIcon size={20} />
-                      </div>
-                    )}
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="font-semibold text-slate-900">{localized(p, lang, 'ad')}</h3>
-                        <span className="whitespace-nowrap font-bold text-blue-600">{formatTL(p.fiyat)}</span>
-                      </div>
-                      {localized(p, lang, 'aciklama') && (
-                        <p className="mt-1 text-sm text-slate-500">{localized(p, lang, 'aciklama')}</p>
-                      )}
-                      {p.stok <= 0 && (
-                        <span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700">
-                          {t(lang, 'tukendi')}
-                        </span>
-                      )}
-                    </div>
-                  </article>
-                ))
+                <ul className="space-y-3">
+                  {list.map((p) => {
+                    const adTr = p.ad || '';
+                    const adLang = localized(p, lang, 'ad');
+                    const aciklamaLang = localized(p, lang, 'aciklama');
+                    return (
+                      <li
+                        key={p.id}
+                        className={`relative flex gap-3 border px-3 py-3 shadow-sm ${p.stok <= 0 ? 'opacity-50' : ''}`}
+                        style={{
+                          background: 'rgba(255, 252, 240, 0.6)',
+                          borderColor: THEME.divider,
+                          borderRadius: '4px',
+                        }}
+                      >
+                        {p.gorsel ? (
+                          <img
+                            src={p.gorsel}
+                            alt={adLang}
+                            loading="lazy"
+                            className="h-20 w-20 shrink-0 object-cover shadow-sm"
+                            style={{
+                              border: `1.5px solid ${THEME.divider}`,
+                              borderRadius: '2px',
+                            }}
+                          />
+                        ) : (
+                          <div
+                            className="flex h-20 w-20 shrink-0 items-center justify-center"
+                            style={{
+                              background: THEME.bgAlt,
+                              border: `1.5px dashed ${THEME.divider}`,
+                              color: THEME.textMuted,
+                              borderRadius: '2px',
+                            }}
+                          >
+                            <ImageIcon size={22} />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <h3
+                                className="truncate text-base font-bold leading-tight"
+                                style={{ color: THEME.text, fontFamily: 'Georgia, serif' }}
+                              >
+                                {adLang}
+                              </h3>
+                              {lang !== 'tr' && adTr && adTr !== adLang && (
+                                <p
+                                  className="truncate text-xs italic"
+                                  style={{ color: THEME.textMuted }}
+                                >
+                                  {adTr}
+                                </p>
+                              )}
+                            </div>
+                            <span
+                              className="shrink-0 whitespace-nowrap text-lg font-bold"
+                              style={{ color: THEME.gold, fontFamily: 'Georgia, serif' }}
+                            >
+                              {formatTL(p.fiyat)}
+                            </span>
+                          </div>
+                          {aciklamaLang && (
+                            <p
+                              className="mt-1.5 text-sm leading-snug"
+                              style={{ color: THEME.textMuted }}
+                            >
+                              {aciklamaLang}
+                            </p>
+                          )}
+                          {p.stok <= 0 && (
+                            <span
+                              className="mt-1.5 inline-block px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
+                              style={{
+                                background: '#9c2727',
+                                color: THEME.gold,
+                                borderRadius: '2px',
+                              }}
+                            >
+                              {t(lang, 'tukendi')}
+                            </span>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
-            </div>
-          </section>
-        ))}
+            </section>
+          );
+        })}
       </main>
 
+      {/* GARSON ÇAĞIR / HESAP İSTE — koyu banner stil */}
       {masaId && garsonCagirmaAcik && (
-        <div className="sticky bottom-0 z-20 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
-          <div className="mx-auto flex max-w-2xl gap-3">
+        <div
+          className="sticky bottom-0 z-20 border-t backdrop-blur"
+          style={{
+            background: THEME.banner + 'f0',
+            borderColor: THEME.gold + '60',
+          }}
+        >
+          <div className="mx-auto flex max-w-2xl gap-3 px-4 py-3">
             <button
               onClick={() => handleCall('garson')}
               disabled={calling === 'garson'}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3.5 text-base font-semibold text-white shadow-sm transition active:scale-95 disabled:opacity-60"
+              className="flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-3 text-base font-bold uppercase tracking-wider shadow-sm transition active:scale-95 disabled:opacity-60"
+              style={{ background: THEME.gold, color: THEME.banner }}
             >
               {calledTip === 'garson' ? <Check size={20} /> : <BellRing size={20} />}
               {calledTip === 'garson' ? t(lang, 'garsonCagrildi') : t(lang, 'garsonCagir')}
@@ -187,7 +317,12 @@ export default function Menu() {
             <button
               onClick={() => handleCall('hesap')}
               disabled={calling === 'hesap'}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3.5 text-base font-semibold text-white shadow-sm transition active:scale-95 disabled:opacity-60"
+              className="flex flex-1 items-center justify-center gap-2 rounded-md border-2 px-4 py-3 text-base font-bold uppercase tracking-wider shadow-sm transition active:scale-95 disabled:opacity-60"
+              style={{
+                background: 'transparent',
+                color: THEME.gold,
+                borderColor: THEME.gold,
+              }}
             >
               {calledTip === 'hesap' ? <Check size={20} /> : <Receipt size={20} />}
               {calledTip === 'hesap' ? t(lang, 'hesapIstendi') : t(lang, 'hesapIste')}
@@ -196,10 +331,21 @@ export default function Menu() {
         </div>
       )}
 
-      <footer className="border-t border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500">
-        {settings.restoranAdres && <p>{settings.restoranAdres}</p>}
-        {settings.restoranTel && <p>{t(lang, 'tel')}: {settings.restoranTel}</p>}
-        <div className="mt-3">
+      <footer
+        className="border-t px-4 py-6 text-center text-sm"
+        style={{
+          background: THEME.banner,
+          color: THEME.goldLight,
+          borderColor: THEME.gold + '40',
+        }}
+      >
+        {settings.restoranAdres && <p className="italic">{settings.restoranAdres}</p>}
+        {settings.restoranTel && (
+          <p className="mt-1 font-medium">
+            {t(lang, 'tel')}: {settings.restoranTel}
+          </p>
+        )}
+        <div className="mt-3 opacity-70">
           <PoweredBy />
         </div>
       </footer>
