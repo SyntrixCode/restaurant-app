@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
 export const adminLoginSchema = z.object({
-  email: z.string().min(1, 'Email zorunlu').email('Geçersiz email'),
+  // Kullanıcı adı veya tam email. "admin" gibi sade ad girilirse otomatik
+  // @restoran.com eklenir; "x@y.z" formatında girilirse aynen kullanılır.
+  kullaniciAdi: z.string().min(1, 'Kullanıcı adı zorunlu'),
   password: z.string().min(6, 'Şifre en az 6 karakter'),
   rememberMe: z.boolean().optional(),
 });

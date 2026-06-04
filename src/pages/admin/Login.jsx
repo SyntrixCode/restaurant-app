@@ -25,8 +25,17 @@ export default function AdminLogin() {
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(adminLoginSchema),
-    defaultValues: { email: '', password: '', rememberMe: false },
+    defaultValues: { kullaniciAdi: '', password: '', rememberMe: false },
   });
+
+  // "admin" → "admin@restoran.com" gibi otomatik domain ekle.
+  // Tam email girildiyse aynen kullan.
+  const toEmail = (s) => {
+    const v = String(s || '').trim();
+    if (!v) return '';
+    if (v.includes('@')) return v;
+    return `${v}@restoran.com`;
+  };
 
   useEffect(() => {
     if (!loading && user) navigate('/admin/dashboard', { replace: true });
@@ -41,9 +50,10 @@ export default function AdminLogin() {
   const isLocked = lockedUntil > now;
   const remaining = Math.max(0, Math.ceil((lockedUntil - now) / 1000));
 
-  const onSubmit = async ({ email, password, rememberMe }) => {
+  const onSubmit = async ({ kullaniciAdi, password, rememberMe }) => {
     if (isLocked) return;
     try {
+      const email = toEmail(kullaniciAdi);
       await loginAdmin(email, password, rememberMe);
       setAttempts(0);
       toast.success('Giriş başarılı');
@@ -55,7 +65,7 @@ export default function AdminLogin() {
         setAttempts(0);
         toast.error('Çok fazla hatalı deneme. 60 saniye kilitli.');
       } else {
-        toast.error(`Email veya şifre hatalı (${tries}/${MAX_ATTEMPTS})`);
+        toast.error(`Kullanıcı adı veya şifre hatalı (${tries}/${MAX_ATTEMPTS})`);
       }
       console.error(err);
     }
@@ -77,16 +87,19 @@ export default function AdminLogin() {
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Kullanıcı Adı</label>
             <input
-              type="email"
-              autoComplete="email"
-              {...register('email')}
+              type="text"
+              autoComplete="username"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck="false"
+              {...register('kullaniciAdi')}
               className="input"
-              placeholder="admin@restoran.com"
+              placeholder="admin"
             />
-            {errors.email && (
-              <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>
+            {errors.kullaniciAdi && (
+              <p className="mt-1 text-xs text-red-600">{errors.kullaniciAdi.message}</p>
             )}
           </div>
 
