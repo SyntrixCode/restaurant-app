@@ -8,6 +8,9 @@ import {
   browserSessionPersistence,
   onAuthStateChanged,
   updateProfile,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
 } from 'firebase/auth';
 import { auth, POS_EMAIL_DOMAIN, getSecondaryAuth } from './config';
 import { derivePosCredentials } from '../utils/hash';
@@ -112,6 +115,26 @@ export async function createPosUser({ kod, ad, rol }) {
 export async function logout() {
   await clearAdminCredentials(); // logout = beni hatırlama da sıfırlanır
   return signOut(auth);
+}
+
+/**
+ * Giriş yapmış admin'in şifresini günceller.
+ * Önce mevcut şifreyle reauthenticate (Firebase Auth güvenlik gereği),
+ * sonra updatePassword. Hatalar (wrong-password, weak-password) yukarı çıkar.
+ */
+export async function changeAdminPassword(currentPassword, newPassword) {
+  const user = auth.currentUser;
+  if (!user || !user.email) throw new Error('Önce giriş yapın');
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, credential);
+  await updatePassword(user, newPassword);
+  // Beni Hatırla store'unda eski şifre varsa onu da güncelle
+  try {
+    const saved = await getAdminCredentials();
+    if (saved?.email === user.email) {
+      await saveAdminCredentials({ email: user.email, password: newPassword });
+    }
+  } catch {}
 }
 
 export function watchAuth(callback) {

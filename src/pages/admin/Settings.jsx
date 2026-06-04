@@ -6,6 +6,7 @@ import { Save, Store, Receipt, Bell, Gift, Settings as SettingsIcon, CreditCard 
 import PageHeader from '../../components/layout/PageHeader';
 import Toggle from '../../components/ui/Toggle';
 import UpdateCard from '../../components/admin/UpdateCard';
+import PasswordCard from '../../components/admin/PasswordCard';
 import { useSettingsStore } from '../../store/settingsStore';
 import { settingsSchema } from '../../utils/validators';
 
@@ -330,6 +331,9 @@ export default function AdminSettings() {
               Örnek: 100 TL paket ödeyen müşteri (oran 10) 10 puan kazanır. 1 puan = 1 TL ise sonraki siparişte 10 TL indirim kullanabilir.
             </p>
           </Section>
+
+          {/* Hesap şifresi — form dışında, kendi state'i */}
+          <PasswordCard />
 
           {/* Yazılım Güncelleme — form dışında, kendi state'i */}
           <UpdateCard />
