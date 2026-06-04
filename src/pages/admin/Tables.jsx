@@ -49,7 +49,7 @@ const ZONE_LABELS = {
   dis: 'Dış Mekan',
   teras: 'Teras',
   bahce: 'Bahçe',
-  bar: 'Bar',
+  bar: 'Meşrubat',
   kapali: 'Kapalı Alan',
 };
 
@@ -73,7 +73,7 @@ const DURUM_COLORS = {
 
 const DECOR_PRESETS = {
   bar: {
-    label: 'BAR',
+    label: 'MEŞRUBAT',
     icon: Wine,
     w: 220,
     h: 50,

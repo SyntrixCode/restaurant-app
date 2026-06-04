@@ -10,7 +10,7 @@ const ZONE_LABELS = {
   dis: 'Dış Mekan',
   teras: 'Teras',
   bahce: 'Bahçe',
-  bar: 'Bar',
+  bar: 'Meşrubat',
   kapali: 'Kapalı Alan',
 };
 
