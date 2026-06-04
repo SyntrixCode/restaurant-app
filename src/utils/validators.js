@@ -59,6 +59,7 @@ export const tableSchema = z.object({
   ad: z.string().min(1, 'Masa adı zorunlu').max(50),
   zone: z.string().min(1, 'Bölge seçin').max(50),
   kapasite: z.coerce.number().int().min(1).max(20),
+  sekil: z.enum(['kare', 'yuvarlak']).default('kare'),
 });
 
 export const reservationSchema = z.object({

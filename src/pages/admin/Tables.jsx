@@ -20,6 +20,7 @@ import {
   DoorOpen,
   DoorClosed,
   Square,
+  Circle,
   Type,
   Minus as MinusIcon,
 } from 'lucide-react';
@@ -52,12 +53,16 @@ const ZONE_LABELS = {
   kapali: 'Kapalı Alan',
 };
 
+const TABLE_H = 70; // tüm masalar için sabit yükseklik (px)
+
 const SIZE_PRESETS = [
-  // Yükseklik sabit (100); genişlik kapasiteyle sağa doğru artar
-  { kapasite: 2, w: 100, h: 100 },
-  { kapasite: 4, w: 150, h: 100 },
-  { kapasite: 6, w: 200, h: 100 },
-  { kapasite: 8, w: 250, h: 100 },
+  // Yükseklik sabit (TABLE_H); genişlik kapasiteyle sağa doğru artar
+  // kapasite 1 → kare/daire (w=h), büyük kapasiteler dikdörtgen/oval
+  { kapasite: 1, w: 70, h: TABLE_H },
+  { kapasite: 2, w: 80, h: TABLE_H },
+  { kapasite: 4, w: 100, h: TABLE_H },
+  { kapasite: 6, w: 120, h: TABLE_H },
+  { kapasite: 8, w: 140, h: TABLE_H },
 ];
 
 const DURUM_COLORS = {
@@ -161,7 +166,24 @@ function clamp(v, lo, hi) {
 
 function sizeFor(kapasite) {
   const preset = SIZE_PRESETS.find((p) => p.kapasite >= kapasite);
-  return preset ? { w: preset.w, h: preset.h } : { w: 250, h: 100 };
+  return preset ? { w: preset.w, h: preset.h } : { w: 240, h: TABLE_H };
+}
+
+// Yuvarlak masa çapı (w=h, kare oranlı)
+function roundSizeFor(kapasite) {
+  if (kapasite >= 8) return 100;
+  if (kapasite >= 6) return 90;
+  if (kapasite >= 4) return 80;
+  return 70; // 1-2 kişilik
+}
+
+// Şekle göre varsayılan boyut: yuvarlak → kare oranlı (w=h), kare → sabit yükseklik
+function defaultSize(kapasite, sekil) {
+  if (sekil === 'yuvarlak') {
+    const d = roundSizeFor(kapasite);
+    return { w: d, h: d };
+  }
+  return sizeFor(kapasite);
 }
 
 export default function AdminTables() {
@@ -173,6 +195,7 @@ export default function AdminTables() {
   const [zone, setZone] = useState(null);
   const [selected, setSelected] = useState(null); // { kind: 'table'|'decor', id }
   const [localTablePos, setLocalTablePos] = useState({});
+  const [localTableSize, setLocalTableSize] = useState({});
   const [localDecorPos, setLocalDecorPos] = useState({});
   const [modal, setModal] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -191,6 +214,15 @@ export default function AdminTables() {
     const lp = localDecorPos[d.id];
     return { x: lp?.x ?? d.x ?? 0, y: lp?.y ?? d.y ?? 0 };
   };
+  // Masanın GÜNCEL boyutu: yerel resize > özel boyut (customW/H) > kapasite varsayılanı
+  const effectiveSizeTable = (t) => {
+    const ls = localTableSize[t.id];
+    const def = defaultSize(t.kapasite, t.sekil);
+    return {
+      w: ls?.w ?? t.customW ?? def.w,
+      h: ls?.h ?? t.customH ?? def.h,
+    };
+  };
 
   // Sürüklenenle aynı bölgedeki diğer masa+dekor kutularını topla — hizalama referansı olarak
   function alignmentAnchors(excludeKind, excludeId) {
@@ -198,8 +230,7 @@ export default function AdminTables() {
     for (const t of tablesInZone) {
       if (excludeKind === 'table' && t.id === excludeId) continue;
       const p = effectivePosTable(t);
-      const w = t.w || sizeFor(t.kapasite).w;
-      const h = t.h || sizeFor(t.kapasite).h;
+      const { w, h } = effectiveSizeTable(t);
       out.push({ x: p.x, y: p.y, w, h });
     }
     for (const d of decorsInZone) {
@@ -317,7 +348,9 @@ export default function AdminTables() {
     selected?.kind === 'decor' ? decorations.find((d) => d.id === selected.id) : null;
 
   const dirty =
-    Object.keys(localTablePos).length > 0 || Object.keys(localDecorPos).length > 0;
+    Object.keys(localTablePos).length > 0 ||
+    Object.keys(localTableSize).length > 0 ||
+    Object.keys(localDecorPos).length > 0;
 
   function handleStartDragTable(e, table) {
     e.preventDefault();
@@ -328,8 +361,7 @@ export default function AdminTables() {
     const startY = e.clientY;
     const origX = localTablePos[table.id]?.x ?? table.x ?? 0;
     const origY = localTablePos[table.id]?.y ?? table.y ?? 0;
-    const tableW = table.w || sizeFor(table.kapasite).w;
-    const tableH = table.h || sizeFor(table.kapasite).h;
+    const { w: tableW, h: tableH } = effectiveSizeTable(table);
     const currentScale = scale || 1;
 
     const anchors = alignmentAnchors('table', table.id);
@@ -347,6 +379,63 @@ export default function AdminTables() {
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp);
       setGuides(null);
+    }
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  }
+
+  // Kenar/köşe tutamacından boyutlandırma. dir: 'n','s','e','w','ne','nw','se','sw'
+  // Dönme-duyarlı: ekran hareketi masanın yerel eksenine projekte edilir; döndürme
+  // merkez etrafında olduğu için sabit kalması gereken kenar yerinde tutulur.
+  function handleStartResizeTable(e, table, dir) {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelected({ kind: 'table', id: table.id });
+
+    const MIN = 40;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const pos = effectivePosTable(table);
+    const size = effectiveSizeTable(table);
+    const x0 = pos.x;
+    const y0 = pos.y;
+    const w0 = size.w;
+    const h0 = size.h;
+    const cx0 = x0 + w0 / 2;
+    const cy0 = y0 + h0 / 2;
+    const currentScale = scale || 1;
+    const theta = ((table.rotation || 0) * Math.PI) / 180;
+    const cos = Math.cos(theta);
+    const sin = Math.sin(theta);
+
+    // Hangi yerel kenarlar hareket ediyor: +1 sağ/alt, -1 sol/üst, 0 sabit
+    const sx = (dir.includes('e') ? 1 : 0) + (dir.includes('w') ? -1 : 0);
+    const sy = (dir.includes('s') ? 1 : 0) + (dir.includes('n') ? -1 : 0);
+
+    function onMove(ev) {
+      const dx = (ev.clientX - startX) / currentScale;
+      const dy = (ev.clientY - startY) / currentScale;
+      // Ekran delta'sını masanın yerel eksenlerine projekte et
+      const dLocalX = dx * cos + dy * sin;
+      const dLocalY = -dx * sin + dy * cos;
+
+      const w1 = clamp(Math.round(w0 + sx * dLocalX), MIN, CANVAS_W);
+      const h1 = clamp(Math.round(h0 + sy * dLocalY), MIN, CANVAS_H);
+
+      // Karşı kenarı sabit tutmak için merkezi yerel eksende kaydır, ekran koordinatına çevir
+      const shiftLocalX = (sx * (w1 - w0)) / 2;
+      const shiftLocalY = (sy * (h1 - h0)) / 2;
+      const cx1 = cx0 + shiftLocalX * cos - shiftLocalY * sin;
+      const cy1 = cy0 + shiftLocalX * sin + shiftLocalY * cos;
+      const nx = Math.round(cx1 - w1 / 2);
+      const ny = Math.round(cy1 - h1 / 2);
+
+      setLocalTableSize((prev) => ({ ...prev, [table.id]: { w: w1, h: h1 } }));
+      setLocalTablePos((prev) => ({ ...prev, [table.id]: { x: nx, y: ny } }));
+    }
+    function onUp() {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
     }
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
@@ -388,12 +477,24 @@ export default function AdminTables() {
   async function saveLayout() {
     try {
       const batch = writeBatch(db);
-      for (const [id, pos] of Object.entries(localTablePos)) {
-        batch.update(doc(db, 'tables', id), {
-          x: pos.x,
-          y: pos.y,
-          updatedAt: serverTimestamp(),
-        });
+      // Aynı masaya ait pozisyon + boyut değişikliklerini tek update'te birleştir
+      const tableIds = new Set([
+        ...Object.keys(localTablePos),
+        ...Object.keys(localTableSize),
+      ]);
+      for (const id of tableIds) {
+        const update = { updatedAt: serverTimestamp() };
+        const pos = localTablePos[id];
+        if (pos) {
+          update.x = pos.x;
+          update.y = pos.y;
+        }
+        const size = localTableSize[id];
+        if (size) {
+          update.customW = size.w;
+          update.customH = size.h;
+        }
+        batch.update(doc(db, 'tables', id), update);
       }
       for (const [id, pos] of Object.entries(localDecorPos)) {
         batch.update(doc(db, 'decorations', id), {
@@ -404,6 +505,7 @@ export default function AdminTables() {
       }
       await batch.commit();
       setLocalTablePos({});
+      setLocalTableSize({});
       setLocalDecorPos({});
       toast.success('Yerleşim kaydedildi');
     } catch (err) {
@@ -522,6 +624,7 @@ export default function AdminTables() {
                   <button
                     onClick={() => {
                       setLocalTablePos({});
+                      setLocalTableSize({});
                       setLocalDecorPos({});
                     }}
                     className="btn-secondary"
@@ -622,15 +725,19 @@ export default function AdminTables() {
                 })}
                 {tablesInZone.map((t) => {
                   const pos = localTablePos[t.id] || { x: t.x ?? 0, y: t.y ?? 0 };
+                  const sz = effectiveSizeTable(t);
                   return (
                     <CanvasTable
                       key={t.id}
                       table={t}
                       x={pos.x}
                       y={pos.y}
+                      w={sz.w}
+                      h={sz.h}
                       isOccupied={!!ordersByTable[t.id]}
                       selected={selected?.kind === 'table' && selected.id === t.id}
                       onPointerDown={(e) => handleStartDragTable(e, t)}
+                      onStartResize={(e, dir) => handleStartResizeTable(e, t, dir)}
                     />
                   );
                 })}
@@ -701,6 +808,19 @@ export default function AdminTables() {
                 setModal('edit');
               }}
               onDelete={() => handleDeleteTable(selectedTable)}
+              onUpdate={(patch) => patchDoc('tables', selectedTable.id, patch)}
+              size={effectiveSizeTable(selectedTable)}
+              isCustomSize={
+                selectedTable.customW != null || localTableSize[selectedTable.id] != null
+              }
+              onResetSize={() => {
+                setLocalTableSize((prev) => {
+                  const cp = { ...prev };
+                  delete cp[selectedTable.id];
+                  return cp;
+                });
+                patchDoc('tables', selectedTable.id, { customW: null, customH: null });
+              }}
             />
           ) : (
             <SelectedDecorPanel
@@ -816,25 +936,78 @@ function DecorButton({ tip, onClick }) {
   );
 }
 
-function CanvasTable({ table, x, y, isOccupied, selected, onPointerDown }) {
-  const w = table.w || sizeFor(table.kapasite).w;
-  const h = table.h || sizeFor(table.kapasite).h;
+// Boyutlandırma tutamaçları — köşeler + kenarlar
+const RESIZE_HANDLES = [
+  { dir: 'nw', cls: 'left-0 top-0 -translate-x-1/2 -translate-y-1/2' },
+  { dir: 'n', cls: 'left-1/2 top-0 -translate-x-1/2 -translate-y-1/2' },
+  { dir: 'ne', cls: 'right-0 top-0 translate-x-1/2 -translate-y-1/2' },
+  { dir: 'e', cls: 'right-0 top-1/2 translate-x-1/2 -translate-y-1/2' },
+  { dir: 'se', cls: 'right-0 bottom-0 translate-x-1/2 translate-y-1/2' },
+  { dir: 's', cls: 'left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2' },
+  { dir: 'sw', cls: 'left-0 bottom-0 -translate-x-1/2 translate-y-1/2' },
+  { dir: 'w', cls: 'left-0 top-1/2 -translate-x-1/2 -translate-y-1/2' },
+];
+
+// Tutamacın boyutlandırma ekseni (0=yatay ew, 90=dikey ns, 45/135=çapraz) — masa
+// dönünce ekseni de döner, ekran açısına en yakın cursor'u seç
+const RESIZE_AXIS = { e: 0, w: 0, n: 90, s: 90, ne: 135, sw: 135, nw: 45, se: 45 };
+function resizeCursor(dir, rotation) {
+  const angle = (((RESIZE_AXIS[dir] + rotation) % 180) + 180) % 180;
+  const opts = [
+    [0, 'ew-resize'],
+    [45, 'nwse-resize'],
+    [90, 'ns-resize'],
+    [135, 'nesw-resize'],
+  ];
+  let best = 'ew-resize';
+  let bestDelta = 999;
+  for (const [a, cur] of opts) {
+    const d = Math.min(Math.abs(angle - a), 180 - Math.abs(angle - a));
+    if (d < bestDelta) {
+      bestDelta = d;
+      best = cur;
+    }
+  }
+  return best;
+}
+
+function CanvasTable({ table, x, y, w, h, isOccupied, selected, onPointerDown, onStartResize }) {
   const durum = isOccupied ? 'dolu' : table.durum || 'bos';
   const color = DURUM_COLORS[durum] || DURUM_COLORS.bos;
+  const round = table.sekil === 'yuvarlak' ? 'rounded-full' : 'rounded-lg';
+  const rotation = table.rotation || 0;
 
   return (
     <div
       onPointerDown={onPointerDown}
-      className={`absolute z-10 flex cursor-move select-none flex-col items-center justify-center rounded-xl border-2 text-white shadow-md transition-shadow ${color} ${
+      className={`absolute z-10 flex cursor-move select-none flex-col items-center justify-center border-2 text-white shadow-md transition-shadow ${round} ${color} ${
         selected ? 'ring-4 ring-blue-400 ring-offset-2' : ''
       }`}
-      style={{ left: x, top: y, width: w, height: h, touchAction: 'none', zIndex: selected ? 50 : undefined }}
+      style={{
+        left: x,
+        top: y,
+        width: w,
+        height: h,
+        transform: rotation ? `rotate(${rotation}deg)` : undefined,
+        touchAction: 'none',
+        zIndex: selected ? 50 : undefined,
+      }}
     >
       <span className="text-sm font-bold leading-tight">{table.ad}</span>
       <span className="mt-0.5 flex items-center gap-0.5 text-xs opacity-90">
         <UsersIcon size={11} />
         {table.kapasite}
       </span>
+
+      {selected &&
+        RESIZE_HANDLES.map((handle) => (
+          <div
+            key={handle.dir}
+            onPointerDown={(e) => onStartResize(e, handle.dir)}
+            className={`absolute z-50 h-3 w-3 rounded-full border-2 border-blue-500 bg-white shadow ${handle.cls}`}
+            style={{ touchAction: 'none', cursor: resizeCursor(handle.dir, rotation) }}
+          />
+        ))}
     </div>
   );
 }
@@ -870,9 +1043,14 @@ function CanvasDecoration({ decor, x, y, selected, onPointerDown }) {
   );
 }
 
-function SelectedTablePanel({ table, order, onEdit, onDelete }) {
+function SelectedTablePanel({ table, order, onEdit, onDelete, onUpdate, size, isCustomSize, onResetSize }) {
   const durum = order ? 'dolu' : table.durum || 'bos';
   const durumLabels = { bos: 'Boş', dolu: 'Dolu', rezerve: 'Rezerve' };
+  const rotation = ((table.rotation || 0) % 360 + 360) % 360;
+  const rotateBy = (delta) =>
+    onUpdate?.({ rotation: ((table.rotation || 0) + delta) % 360 });
+  const toggleSekil = () =>
+    onUpdate?.({ sekil: table.sekil === 'yuvarlak' ? 'kare' : 'yuvarlak' });
 
   return (
     <div className="space-y-4">
@@ -910,6 +1088,53 @@ function SelectedTablePanel({ table, order, onEdit, onDelete }) {
           <p className="text-xs">Garson: {order.garsonAd}</p>
         </div>
       )}
+
+      <div>
+        <label className="mb-1 flex items-center justify-between text-xs font-medium text-slate-700">
+          <span>Döndür</span>
+          <span className="tabular-nums text-slate-400">{rotation}°</span>
+        </label>
+        <div className="flex gap-2">
+          <button onClick={() => rotateBy(-15)} className="btn-secondary flex-1" title="15° sola">
+            <RotateCcw size={14} /> -15°
+          </button>
+          <button onClick={() => rotateBy(15)} className="btn-secondary flex-1" title="15° sağa">
+            <RotateCw size={14} /> +15°
+          </button>
+          <button
+            onClick={() => onUpdate?.({ rotation: 0 })}
+            disabled={rotation === 0}
+            className="btn-secondary shrink-0 disabled:opacity-40"
+            title="Sıfırla"
+          >
+            0°
+          </button>
+        </div>
+      </div>
+
+      <button onClick={toggleSekil} className="btn-secondary w-full">
+        {table.sekil === 'yuvarlak' ? <Square size={14} /> : <Circle size={14} />}
+        {table.sekil === 'yuvarlak' ? 'Kare yap' : 'Yuvarlak yap'}
+      </button>
+
+      <div>
+        <label className="mb-1 flex items-center justify-between text-xs font-medium text-slate-700">
+          <span>Boyut</span>
+          <span className="tabular-nums text-slate-400">
+            {size ? `${Math.round(size.w)} × ${Math.round(size.h)} px` : '—'}
+          </span>
+        </label>
+        <p className="mb-2 text-xs text-slate-400">
+          Masayı seçince kenar/köşelerinden tutup sürükleyerek boyutlandır.
+        </p>
+        <button
+          onClick={onResetSize}
+          disabled={!isCustomSize}
+          className="btn-secondary w-full disabled:opacity-40"
+        >
+          <RotateCcw size={14} /> Varsayılan boyuta dön
+        </button>
+      </div>
 
       <div className="flex gap-2">
         <button onClick={onEdit} className="btn-secondary flex-1">
@@ -1034,30 +1259,37 @@ function TableModal({ open, editing, zone, zones, tablesCount, onClose, onSaved 
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(tableSchema),
-    defaultValues: { ad: '', zone: zone || 'ic', kapasite: 4 },
+    defaultValues: { ad: '', zone: zone || 'ic', kapasite: 4, sekil: 'kare' },
   });
 
   useEffect(() => {
     if (open) {
       const defaults = editing
-        ? { ad: editing.ad, zone: editing.zone || 'ic', kapasite: editing.kapasite }
-        : { ad: '', zone: zone || 'ic', kapasite: 4 };
+        ? {
+            ad: editing.ad,
+            zone: editing.zone || 'ic',
+            kapasite: editing.kapasite,
+            sekil: editing.sekil || 'kare',
+          }
+        : { ad: '', zone: zone || 'ic', kapasite: 4, sekil: 'kare' };
       reset(defaults);
       setIsCustomZone(false);
     }
   }, [open, editing, zone, reset]);
 
   const selectedKapasite = Number(watch('kapasite') || 4);
-  const dims = sizeFor(selectedKapasite);
+  const selectedSekil = watch('sekil') || 'kare';
+  const dims = defaultSize(selectedKapasite, selectedSekil);
 
   const onSubmit = async (data) => {
     try {
-      const { w, h } = sizeFor(data.kapasite);
+      const { w, h } = defaultSize(data.kapasite, data.sekil);
       if (isEdit) {
         await patchDoc('tables', editing.id, {
           ad: data.ad,
           zone: data.zone,
           kapasite: data.kapasite,
+          sekil: data.sekil,
           w,
           h,
         });
@@ -1068,10 +1300,12 @@ function TableModal({ open, editing, zone, zones, tablesCount, onClose, onSaved 
           ad: data.ad,
           zone: data.zone,
           kapasite: data.kapasite,
+          sekil: data.sekil,
           x: Math.round(CANVAS_W / 2 - w / 2),
           y: Math.round(CANVAS_H / 2 - h / 2),
           w,
           h,
+          rotation: 0,
           durum: 'bos',
           grupId: null,
           rezervasyonNotu: null,
@@ -1170,8 +1404,8 @@ function TableModal({ open, editing, zone, zones, tablesCount, onClose, onSaved 
 
         <div>
           <label className="mb-2 block text-sm font-medium text-slate-700">Kapasite (kişi)</label>
-          <div className="grid grid-cols-4 gap-2">
-            {[2, 4, 6, 8].map((n) => (
+          <div className="grid grid-cols-5 gap-2">
+            {[1, 2, 4, 6, 8].map((n) => (
               <button
                 key={n}
                 type="button"
@@ -1192,9 +1426,34 @@ function TableModal({ open, editing, zone, zones, tablesCount, onClose, onSaved 
           )}
         </div>
 
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-700">Masa Tipi</label>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { value: 'kare', label: 'Kare', Icon: Square, round: 'rounded-md' },
+              { value: 'yuvarlak', label: 'Yuvarlak', Icon: Circle, round: 'rounded-full' },
+            ].map(({ value, label, Icon, round }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setValue('sekil', value)}
+                className={`flex items-center justify-center gap-2 border-2 py-3 text-sm font-semibold transition ${round} ${
+                  selectedSekil === value
+                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    : 'border-slate-200 text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <Icon size={18} /> {label}
+              </button>
+            ))}
+          </div>
+          <input type="hidden" {...register('sekil')} />
+        </div>
+
         <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-500">
           <p>
-            Boyut otomatik: <strong>{dims.w}×{dims.h}px</strong>. Konum sonradan canvas'tan ayarlanır.
+            Boyut otomatik: <strong>{dims.w}×{dims.h}px</strong> ({selectedSekil === 'yuvarlak' ? 'yuvarlak' : 'kare'}).
+            Konumu ve açısını sonradan canvas'tan ayarlayabilirsiniz.
           </p>
         </div>
       </form>

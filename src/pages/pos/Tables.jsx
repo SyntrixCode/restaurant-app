@@ -105,12 +105,42 @@ const DECOR_PRESETS = {
   },
 };
 
+const TABLE_H = 70; // tüm masalar için sabit yükseklik (px) — admin ile aynı
+
 function sizeFor(kapasite) {
-  // Yükseklik sabit (100); genişlik kapasiteyle sağa doğru artar
-  if (kapasite >= 8) return { w: 250, h: 100 };
-  if (kapasite >= 6) return { w: 200, h: 100 };
-  if (kapasite >= 4) return { w: 150, h: 100 };
-  return { w: 100, h: 100 };
+  // Yükseklik sabit (TABLE_H); genişlik kapasiteyle sağa doğru artar
+  if (kapasite >= 8) return { w: 140, h: TABLE_H };
+  if (kapasite >= 6) return { w: 120, h: TABLE_H };
+  if (kapasite >= 4) return { w: 100, h: TABLE_H };
+  if (kapasite >= 2) return { w: 80, h: TABLE_H };
+  return { w: 70, h: TABLE_H }; // 1 kişilik
+}
+
+// Yuvarlak masa çapı (w=h, kare oranlı) — admin ile aynı
+function roundSizeFor(kapasite) {
+  if (kapasite >= 8) return 100;
+  if (kapasite >= 6) return 90;
+  if (kapasite >= 4) return 80;
+  return 70; // 1-2 kişilik
+}
+
+// Şekle göre varsayılan boyut: yuvarlak → kare oranlı (w=h), kare → sabit yükseklik
+function defaultSize(kapasite, sekil) {
+  if (sekil === 'yuvarlak') {
+    const d = roundSizeFor(kapasite);
+    return { w: d, h: d };
+  }
+  return sizeFor(kapasite);
+}
+
+// Masanın gerçek boyutu: admin'de elle ayarlanmış özel boyut (customW/H) varsa onu,
+// yoksa şekle göre kapasite varsayılanını kullan
+function tableDim(t) {
+  const def = defaultSize(t.kapasite, t.sekil);
+  return {
+    w: t.customW ?? def.w,
+    h: t.customH ?? def.h,
+  };
 }
 
 // Masa taşıma/birleştirme (garson ekranı)
@@ -239,8 +269,7 @@ export default function PosTables() {
   };
 
   function rectFor(t, posOverride) {
-    const w = t.w || sizeFor(t.kapasite).w;
-    const h = t.h || sizeFor(t.kapasite).h;
+    const { w, h } = tableDim(t);
     const x = posOverride?.x ?? t.x ?? 0;
     const y = posOverride?.y ?? t.y ?? 0;
     return { x, y, w, h };
@@ -281,8 +310,7 @@ export default function PosTables() {
   // Eski sürüm hep "sağa" snap'liyordu, sağdan sola sürüklemede layout kayıyordu.
   function computeSnapPosition(target, dragged) {
     const t = rectFor(target, effectivePosition(target));
-    const dw = dragged.w || sizeFor(dragged.kapasite).w;
-    const dh = dragged.h || sizeFor(dragged.kapasite).h;
+    const { w: dw, h: dh } = tableDim(dragged);
     const dPos = { x: dragged.x ?? 0, y: dragged.y ?? 0 };
     const dx = dPos.x - t.x;
     const dy = dPos.y - t.y;
@@ -365,8 +393,7 @@ export default function PosTables() {
       if (members.length === 0 || members.some((m) => m.id === dragged.id)) continue;
       const ps = members.map((t) => ({
         ...effectivePosition(t),
-        w: t.w || sizeFor(t.kapasite).w,
-        h: t.h || sizeFor(t.kapasite).h,
+        ...tableDim(t),
       }));
       const minX = Math.min(...ps.map((p) => p.x));
       const minY = Math.min(...ps.map((p) => p.y));
@@ -427,8 +454,7 @@ export default function PosTables() {
     const startY = e.clientY;
     const origX = table.x ?? 0;
     const origY = table.y ?? 0;
-    const tableW = table.w || sizeFor(table.kapasite).w;
-    const tableH = table.h || sizeFor(table.kapasite).h;
+    const { w: tableW, h: tableH } = tableDim(table);
     const currentScale = scale || 1; // canvas scaled, mouse delta'yı geri çevir
     let armed = false; // long-press tamamlandı mı (masa "kalktı" mı)
     let lastPos = { x: origX, y: origY }; // son sürükleme konumu (yan etkisiz okumak için)
@@ -504,8 +530,7 @@ export default function PosTables() {
         );
         const ps = members.map((t) => ({
           ...effectivePosition(t),
-          w: t.w || sizeFor(t.kapasite).w,
-          h: t.h || sizeFor(t.kapasite).h,
+          ...tableDim(t),
         }));
         const minX = Math.min(...ps.map((p) => p.x));
         const maxX = Math.max(...ps.map((p) => p.x + p.w));
@@ -513,8 +538,7 @@ export default function PosTables() {
         const maxY = Math.max(...ps.map((p) => p.y + p.h));
         const cX = (minX + maxX) / 2;
         const cY = (minY + maxY) / 2;
-        const dW = dragged.w || sizeFor(dragged.kapasite).w;
-        const dH = dragged.h || sizeFor(dragged.kapasite).h;
+        const { w: dW, h: dH } = tableDim(dragged);
         const dxFromCenter = (dragged.x ?? 0) - cX;
         const dyFromCenter = (dragged.y ?? 0) - cY;
         let newPos;
@@ -720,8 +744,7 @@ export default function PosTables() {
                   members.find((t) => t.id === g.mainTableId) || members[0];
                 const positions = members.map((t) => ({
                   ...effectivePosition(t),
-                  w: t.w || sizeFor(t.kapasite).w,
-                  h: t.h || sizeFor(t.kapasite).h,
+                  ...tableDim(t),
                 }));
                 const minX = Math.min(...positions.map((p) => p.x));
                 const minY = Math.min(...positions.map((p) => p.y));
@@ -941,8 +964,7 @@ function CanvasTable({
   isMergeTarget,
   onPointerDown,
 }) {
-  const w = table.w || sizeFor(table.kapasite).w;
-  const h = table.h || sizeFor(table.kapasite).h;
+  const { w, h } = tableDim(table);
   // effective status for grouped tables: mirror group state
   const effectiveDurum = group ? (order ? 'dolu' : 'bos') : table.durum;
   const colors = {
@@ -953,14 +975,23 @@ function CanvasTable({
   const mins = order?.olusturmaZamani ? minutesSince(order.olusturmaZamani) : null;
   // Only boş + non-grouped tables can be dragged
   const canDrag = effectiveDurum === 'bos' && !table.grupId;
+  const round = table.sekil === 'yuvarlak' ? 'rounded-full' : 'rounded-lg';
+  const rotation = table.rotation || 0;
 
   return (
     <div
       onPointerDown={onPointerDown}
-      className={`absolute flex flex-col items-center justify-between rounded-xl border-2 p-2 text-white shadow-md transition active:scale-95 ${colors[effectiveDurum] || colors.bos} ${
+      className={`absolute flex flex-col items-center justify-between border-2 p-2 text-white shadow-md transition active:scale-95 ${round} ${colors[effectiveDurum] || colors.bos} ${
         isDragging ? 'z-30 cursor-grabbing shadow-2xl ring-4 ring-blue-400 ring-offset-2' : canDrag ? 'cursor-grab' : 'cursor-pointer'
       } ${isMergeTarget ? 'z-30 scale-105 ring-4 ring-amber-300 ring-offset-2' : ''} select-none`}
-      style={{ left: x, top: y, width: w, height: h, touchAction: 'none' }}
+      style={{
+        left: x,
+        top: y,
+        width: w,
+        height: h,
+        transform: rotation ? `rotate(${rotation}deg)` : undefined,
+        touchAction: 'none',
+      }}
     >
       <div className="flex w-full justify-between text-[10px]">
         <span className="flex items-center gap-0.5">
