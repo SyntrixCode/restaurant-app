@@ -20,16 +20,21 @@ import jpos.POSPrinterConst;
 import jpos.config.JposEntry;
 
 /**
- * Bixolon (UPOS) network printer plugin — SRP-E300 vb. Ethernet termal yazıcılar.
+ * Bixolon (UPOS) yazıcı plugin'i — SRP-E300 vb. termal yazıcılar.
+ * Hem Ethernet (LAN, IP üstünden) hem USB Host (tablet'in USB-OTG'sine takılı) destekler.
  *
  * Her basım için BXLConfigLoader üzerinden cihazı jpos.xml'e ekler,
  * POSPrinter üzerinden açar, basar, kapatır. ESC|... escape dizileriyle
  * format kontrolü (align/bold/size) yapılır.
  *
+ * `connection`:
+ *   'ethernet' (default) — ip + port (9100) ile TCP/IP
+ *   'usb' — Android USB Host API. Address Bixolon SDK auto-discovery ile (boş string).
+ *
  * JS API:
- *   NetworkPrinter.printReceipt({ ip, port?, model?, lines, cut?, feedLines? })
- *   NetworkPrinter.testPrint({ ip, port?, model? })
- *   NetworkPrinter.openCashDrawer({ ip, model? })
+ *   NetworkPrinter.printReceipt({ ip?, port?, model?, connection?, lines, cut?, feedLines? })
+ *   NetworkPrinter.testPrint({ ip?, port?, model?, connection? })
+ *   NetworkPrinter.openCashDrawer({ ip?, model?, connection? })
  */
 @CapacitorPlugin(name = "NetworkPrinter")
 public class NetworkPrinterPlugin extends Plugin {
@@ -41,12 +46,13 @@ public class NetworkPrinterPlugin extends Plugin {
     public void printReceipt(PluginCall call) {
         final String ip = call.getString("ip");
         final String model = call.getString("model", "SRP-E300");
+        final String connection = call.getString("connection", "ethernet");
         final JSArray lines = call.getArray("lines");
         final boolean cut = Boolean.TRUE.equals(call.getBoolean("cut", Boolean.TRUE));
         final int feedLines = call.getInt("feedLines", 3);
 
-        if (ip == null || ip.isEmpty()) {
-            call.reject("ip parametresi gerekli");
+        if ("ethernet".equalsIgnoreCase(connection) && (ip == null || ip.isEmpty())) {
+            call.reject("Ethernet bağlantısı için ip parametresi gerekli");
             return;
         }
         if (lines == null) {
@@ -57,7 +63,7 @@ public class NetworkPrinterPlugin extends Plugin {
         new Thread(() -> {
             POSPrinter printer = null;
             try {
-                printer = openPrinter(model, ip);
+                printer = openPrinter(model, ip, connection);
                 // Satırları sırayla işle. 'image' satırında biriken metni flush et,
                 // bitmap'i bas, sonra metne devam et (logo en üstte konumlanır).
                 StringBuilder buf = new StringBuilder();
@@ -171,23 +177,27 @@ public class NetworkPrinterPlugin extends Plugin {
     public void testPrint(PluginCall call) {
         final String ip = call.getString("ip");
         final String model = call.getString("model", "SRP-E300");
+        final String connection = call.getString("connection", "ethernet");
 
-        if (ip == null || ip.isEmpty()) {
-            call.reject("ip parametresi gerekli");
+        if ("ethernet".equalsIgnoreCase(connection) && (ip == null || ip.isEmpty())) {
+            call.reject("Ethernet bağlantısı için ip parametresi gerekli");
             return;
         }
 
         new Thread(() -> {
             POSPrinter printer = null;
             try {
-                printer = openPrinter(model, ip);
+                printer = openPrinter(model, ip, connection);
+                String addrLine = "usb".equalsIgnoreCase(connection)
+                        ? "Bağlantı: USB"
+                        : "IP: " + ip;
                 String body =
                         ESC + "cA" + ESC + "bC" + ESC + "2hC" + ESC + "2vC" + "SyntrixPos\n"
                                 + ESC + "!bC" + ESC + "1hC" + ESC + "1vC" + "TEST YAZDIRMA\n"
                                 + dashes() + "\n"
                                 + ESC + "lA" + "Tarih: " + new java.text.SimpleDateFormat("dd.MM.yyyy HH:mm").format(new java.util.Date()) + "\n"
                                 + "Yazıcı: " + model + "\n"
-                                + "IP: " + ip + "\n"
+                                + addrLine + "\n"
                                 + dashes() + "\n"
                                 + ESC + "cA" + "Bağlantı OK ✓\n"
                                 + ESC + "!bC" + "Türkçe: ıİşŞğĞüÜöÖçÇ\n\n\n"
@@ -217,16 +227,17 @@ public class NetworkPrinterPlugin extends Plugin {
     public void openCashDrawer(PluginCall call) {
         final String ip = call.getString("ip");
         final String model = call.getString("model", "SRP-E300");
+        final String connection = call.getString("connection", "ethernet");
 
-        if (ip == null || ip.isEmpty()) {
-            call.reject("ip parametresi gerekli");
+        if ("ethernet".equalsIgnoreCase(connection) && (ip == null || ip.isEmpty())) {
+            call.reject("Ethernet bağlantısı için ip parametresi gerekli");
             return;
         }
 
         new Thread(() -> {
             POSPrinter printer = null;
             try {
-                printer = openPrinter(model, ip);
+                printer = openPrinter(model, ip, connection);
                 // Bixolon ESC dizesi: ESC|1pP → DK pin 1'i tetikle.
                 printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, ESC + "1pP");
 
@@ -241,8 +252,12 @@ public class NetworkPrinterPlugin extends Plugin {
         }, "BxlOpenDrawer").start();
     }
 
-    private POSPrinter openPrinter(String model, String ip) throws Throwable {
+    private POSPrinter openPrinter(String model, String ip, String connection) throws Throwable {
         Context ctx = getContext();
+        boolean isUsb = "usb".equalsIgnoreCase(connection);
+        // USB ve Ethernet için ayrı logical name — aynı modeli iki kez tanımlayabilelim
+        String logicalName = isUsb ? (model + "_USB") : model;
+
         BXLConfigLoader config = new BXLConfigLoader(ctx);
         try {
             config.openFile();
@@ -251,22 +266,23 @@ public class NetworkPrinterPlugin extends Plugin {
         }
         List<?> entries = config.getEntries();
         for (Object entry : entries) {
-            if (((JposEntry) entry).getLogicalName().equals(model)) {
-                config.removeEntry(model);
+            if (((JposEntry) entry).getLogicalName().equals(logicalName)) {
+                config.removeEntry(logicalName);
                 break;
             }
         }
         config.addEntry(
-                model,
+                logicalName,
                 BXLConfigLoader.DEVICE_CATEGORY_POS_PRINTER,
                 productNameFor(model),
-                BXLConfigLoader.DEVICE_BUS_ETHERNET,
-                ip
+                isUsb ? BXLConfigLoader.DEVICE_BUS_USB : BXLConfigLoader.DEVICE_BUS_ETHERNET,
+                // USB için address boş — Bixolon SDK USB Host API ile cihazı kendi bulur.
+                isUsb ? "" : ip
         );
         config.saveFile();
 
         POSPrinter printer = new POSPrinter(ctx);
-        printer.open(model);
+        printer.open(logicalName);
         printer.claim(5000);
         printer.setDeviceEnabled(true);
         return printer;

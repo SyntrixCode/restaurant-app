@@ -33,7 +33,7 @@ export default function Printers() {
   const handleTest = async (p) => {
     const t = toast.loading(`${p.ad} test ediliyor…`);
     try {
-      await testNetworkPrinter({ ip: p.ip, model: p.model || 'SRP-E300' });
+      await testNetworkPrinter({ ip: p.ip, model: p.model || 'SRP-E300', connection: p.baglanti || 'ethernet' });
       toast.success(`${p.ad}: test sayfası gönderildi`, { id: t });
     } catch (err) {
       toast.error(`${p.ad}: ${err?.message || err}`, { id: t, duration: 6000 });
@@ -43,7 +43,7 @@ export default function Printers() {
   const handleOpenDrawer = async (p) => {
     const t = toast.loading(`${p.ad}: kasa açılıyor…`);
     try {
-      await openCashDrawer({ ip: p.ip, model: p.model || 'SRP-E300' });
+      await openCashDrawer({ ip: p.ip, model: p.model || 'SRP-E300', connection: p.baglanti || 'ethernet' });
       toast.success(`${p.ad}: kasa açıldı`, { id: t });
     } catch (err) {
       toast.error(`${p.ad}: ${err?.message || err}`, { id: t, duration: 6000 });
@@ -96,7 +96,9 @@ export default function Printers() {
               />
             </div>
             <p className="font-mono text-sm text-slate-600">
-              {p.ip}:{p.port || 9100}
+              {(p.baglanti || 'ethernet') === 'usb'
+                ? 'USB bağlantısı'
+                : `${p.ip}:${p.port || 9100}`}
             </p>
             {p.kasaBagli && (
               <p className="flex items-center gap-1 text-xs font-medium text-emerald-700">
@@ -153,7 +155,7 @@ function PrinterModal({ open, onClose, editing }) {
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(printerSchema),
-    defaultValues: { ad: '', model: 'SRP-E300', ip: '', port: 9100, varsayilan: false, aktif: true, kasaBagli: false },
+    defaultValues: { ad: '', model: 'SRP-E300', baglanti: 'ethernet', ip: '', port: 9100, varsayilan: false, aktif: true, kasaBagli: false },
   });
 
   useEffect(() => {
@@ -163,7 +165,8 @@ function PrinterModal({ open, onClose, editing }) {
           ? {
               ad: editing.ad,
               model: editing.model || 'SRP-E300',
-              ip: editing.ip,
+              baglanti: editing.baglanti || 'ethernet',
+              ip: editing.ip || '',
               port: editing.port || 9100,
               varsayilan: editing.varsayilan ?? false,
               aktif: editing.aktif ?? true,
@@ -215,7 +218,7 @@ function PrinterModal({ open, onClose, editing }) {
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Model</label>
           <select {...register('model')} className="input">
-            <option value="SRP-E300">Bixolon SRP-E300 (80mm Ethernet)</option>
+            <option value="SRP-E300">Bixolon SRP-E300 (80mm)</option>
             <option value="SRP-E302">Bixolon SRP-E302</option>
             <option value="SRP-QE300">Bixolon SRP-QE300</option>
             <option value="SRP-QE302">Bixolon SRP-QE302</option>
@@ -225,17 +228,38 @@ function PrinterModal({ open, onClose, editing }) {
             <option value="SRP-Q300">Bixolon SRP-Q300</option>
           </select>
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          <div className="col-span-2">
-            <label className="mb-1 block text-sm font-medium text-slate-700">IP Adresi</label>
-            <input {...register('ip')} className="input font-mono" placeholder="192.168.1.50" />
-            {errors.ip && <p className="mt-1 text-xs text-red-600">{errors.ip.message}</p>}
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Port</label>
-            <input type="number" {...register('port')} className="input" />
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Bağlantı</label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 p-3 text-sm font-medium ${watch('baglanti') === 'ethernet' ? 'border-red-500 bg-red-50 text-red-700' : 'border-slate-200 text-slate-600'}`}>
+              <input type="radio" value="ethernet" {...register('baglanti')} className="sr-only" />
+              Ethernet (LAN)
+            </label>
+            <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 p-3 text-sm font-medium ${watch('baglanti') === 'usb' ? 'border-red-500 bg-red-50 text-red-700' : 'border-slate-200 text-slate-600'}`}>
+              <input type="radio" value="usb" {...register('baglanti')} className="sr-only" />
+              USB
+            </label>
           </div>
         </div>
+        {watch('baglanti') === 'ethernet' && (
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-2">
+              <label className="mb-1 block text-sm font-medium text-slate-700">IP Adresi</label>
+              <input {...register('ip')} className="input font-mono" placeholder="192.168.1.50" />
+              {errors.ip && <p className="mt-1 text-xs text-red-600">{errors.ip.message}</p>}
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Port</label>
+              <input type="number" {...register('port')} className="input" />
+            </div>
+          </div>
+        )}
+        {watch('baglanti') === 'usb' && (
+          <div className="rounded-lg bg-blue-50 p-3 text-xs text-blue-700">
+            Yazıcıyı tablete USB kablosuyla bağlayın. İlk kullanımda Android USB izni isteyecektir, onaylayın.
+            Cihaz Bixolon SDK ile otomatik bulunur — IP gerekmez.
+          </div>
+        )}
         <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
           <span className="text-sm font-medium text-slate-700">Varsayılan yazıcı</span>
           <Toggle checked={watch('varsayilan')} onChange={(v) => setValue('varsayilan', v)} />

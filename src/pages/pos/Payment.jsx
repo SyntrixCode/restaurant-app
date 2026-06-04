@@ -84,7 +84,10 @@ export default function Payment() {
   // Network yazıcı tercihi
   const [networkPrinters, setNetworkPrinters] = useState([]);
   useEffect(() => watchCollection('printers', setNetworkPrinters), []);
-  const activePrinter = networkPrinters.find((p) => p.aktif && p.ip);
+  // USB modda IP olmaz — ya ip dolu (Ethernet) ya da baglanti='usb' olan ilk aktif yazıcı.
+  const activePrinter = networkPrinters.find(
+    (p) => p.aktif && (p.ip || p.baglanti === 'usb'),
+  );
   // Liste / Kutular görünüm tercihi (cihaz başına saklı)
   const [itemViewMode, setItemViewMode] = useState(() => {
     if (typeof window === 'undefined') return 'list';
@@ -524,11 +527,15 @@ export default function Payment() {
       // "kasaBagli" toggle'ı işaretli ilk aktif yazıcının DK portuna komut gönderilir.
       const needsDrawer = payments.some((p) => p.yontem === 'nakit' || p.yontem === 'yemekKarti');
       if (needsDrawer) {
-        const drawerPrinter = networkPrinters.find((p) => p.aktif && p.ip && p.kasaBagli);
+        const drawerPrinter = networkPrinters.find(
+          (p) => p.aktif && p.kasaBagli && (p.ip || p.baglanti === 'usb'),
+        );
         if (drawerPrinter) {
-          openCashDrawer({ ip: drawerPrinter.ip, model: drawerPrinter.model || 'SRP-E300' }).catch(
-            (e) => console.warn('Kasa açılamadı:', e?.message || e),
-          );
+          openCashDrawer({
+            ip: drawerPrinter.ip,
+            model: drawerPrinter.model || 'SRP-E300',
+            connection: drawerPrinter.baglanti || 'ethernet',
+          }).catch((e) => console.warn('Kasa açılamadı:', e?.message || e));
         }
       }
 

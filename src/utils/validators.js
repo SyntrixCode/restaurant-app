@@ -204,18 +204,30 @@ export const couponSchema = z.object({
   aktif: z.boolean(),
 });
 
-export const printerSchema = z.object({
-  ad: z.string().min(1).max(50),
-  model: z.string().default('SRP-E300'),
-  ip: z
-    .string()
-    .regex(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/, 'Geçerli IP girin (örn. 192.168.1.50)'),
-  port: z.coerce.number().int().min(1).max(65535).default(9100),
-  varsayilan: z.boolean(),
-  aktif: z.boolean(),
-  // Bu yazıcının DK portuna para kasası takılıysa true. Nakit ödemede otomatik açılır.
-  kasaBagli: z.boolean().optional().default(false),
-});
+export const printerSchema = z
+  .object({
+    ad: z.string().min(1).max(50),
+    model: z.string().default('SRP-E300'),
+    baglanti: z.enum(['ethernet', 'usb']).default('ethernet'),
+    ip: z.string().optional().or(z.literal('')),
+    port: z.coerce.number().int().min(1).max(65535).default(9100),
+    varsayilan: z.boolean(),
+    aktif: z.boolean(),
+    // Bu yazıcının DK portuna para kasası takılıysa true. Nakit ödemede otomatik açılır.
+    kasaBagli: z.boolean().optional().default(false),
+  })
+  // Ethernet'te IP zorunlu ve formatlı, USB'de boş geçilebilir.
+  .superRefine((data, ctx) => {
+    if (data.baglanti === 'ethernet') {
+      if (!data.ip || !/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(data.ip)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['ip'],
+          message: 'Ethernet için geçerli IP girin (örn. 192.168.1.50)',
+        });
+      }
+    }
+  });
 
 export function randomCode4() {
   return String(Math.floor(1000 + Math.random() * 9000));

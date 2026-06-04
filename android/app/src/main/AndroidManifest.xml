@@ -37,4 +37,8 @@
 
     <!-- In-app yazılım güncelleme için: APK indirip kurabilmek -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- USB Bixolon yazıcı (SRP-E300 USB kabloyla bağlı) — required=false:
+         USB Host'u olmayan tablet/telefonlarda da APK kurulabilsin. -->
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 </manifest>
