@@ -42,6 +42,7 @@ import jpos.config.JposEntry;
  *   NetworkPrinter.printReceipt({ ip?, port?, model?, connection?, lines, cut?, feedLines? })
  *   NetworkPrinter.testPrint({ ip?, port?, model?, connection? })
  *   NetworkPrinter.openCashDrawer({ ip?, model?, connection? })
+ *   NetworkPrinter.triggerBuzzer({ ip?, model?, connection?, pulses?, gap? })
  */
 @CapacitorPlugin(name = "NetworkPrinter")
 public class NetworkPrinterPlugin extends Plugin {
@@ -274,6 +275,52 @@ public class NetworkPrinterPlugin extends Plugin {
                 closeQuietly(printer);
             }
         }, "BxlOpenDrawer").start();
+    }
+
+    /**
+     * Mutfak buzzer'ı için pattern darbe — pulses adet kısa bip, aralarında gap ms.
+     * openCashDrawer'dan farklı olarak sadece bir DK pulse pattern'i yollar, ekstra
+     * pin denemesi yapmaz. Sipariş tipine göre farklı pattern'ler için kullanılır:
+     *   - Yeni sipariş: 1 pulse
+     *   - Paket sipariş: 2 pulse, 200ms gap
+     *   - Ek sipariş: 2 pulse, 100ms gap
+     *   - İptal: 3 uzun pulse
+     */
+    @PluginMethod
+    public void triggerBuzzer(PluginCall call) {
+        final String ip = call.getString("ip");
+        final String model = call.getString("model", "SRP-E300");
+        final String connection = call.getString("connection", "ethernet");
+        final int pulses = call.getInt("pulses", 1);
+        final int gap = call.getInt("gap", 200);
+
+        if ("ethernet".equalsIgnoreCase(connection) && (ip == null || ip.isEmpty())) {
+            call.reject("Ethernet bağlantısı için ip parametresi gerekli");
+            return;
+        }
+
+        new Thread(() -> {
+            POSPrinter printer = null;
+            try {
+                printer = openPrinter(model, ip, connection);
+                for (int i = 0; i < Math.max(1, pulses); i++) {
+                    // Drawer 1 kısa pulse (Bixolon ESC|1pP = ~50ms)
+                    printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, ESC + "1pP");
+                    // Yedek olarak Drawer 2 de gönder — buzzer pin 5'e bağlıysa da çalsın
+                    printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, ESC + "2pP");
+                    if (i < pulses - 1) {
+                        try { Thread.sleep(Math.max(80, gap)); } catch (InterruptedException ignored) {}
+                    }
+                }
+                JSObject ret = new JSObject();
+                ret.put("ok", true);
+                call.resolve(ret);
+            } catch (Throwable t) {
+                call.reject("Buzzer tetiklenemedi: " + t.getClass().getSimpleName() + " — " + t.getMessage());
+            } finally {
+                closeQuietly(printer);
+            }
+        }, "BxlBuzzer").start();
     }
 
     /**

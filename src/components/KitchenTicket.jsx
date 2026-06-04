@@ -2,7 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { Printer, X, Check } from 'lucide-react';
 import { formatAdet, formatDate } from '../utils/format';
 import { printReceipt, buildKitchenTicketLines, isIminPrinterAvailable } from '../plugins/iminPrinter';
-import { printNetworkReceipt } from '../plugins/networkPrinter';
+import { printNetworkReceipt, triggerBuzzer } from '../plugins/networkPrinter';
+
+// Sipariş tipine göre buzzer pattern'i (mutfak garsonu bip sayısından tipi anlasın).
+function buzzerPatternFor({ isCancellation, isCorrection, isAddendum, isPackage }) {
+  if (isCancellation) return { pulses: 3, gap: 350 };   // İptal: 3 uzun aralıklı bip
+  if (isCorrection) return { pulses: 2, gap: 400 };      // Düzeltme: 2 uzun aralıklı bip
+  if (isAddendum) return { pulses: 2, gap: 100 };        // Ek sipariş: 2 hızlı bip
+  if (isPackage) return { pulses: 2, gap: 250 };         // Paket: 2 orta bip
+  return { pulses: 1, gap: 0 };                          // Normal yeni sipariş: 1 bip
+}
 import { watchCollection } from '../firebase/firestore';
 import { groupItemsByPrinter } from '../utils/printerRouting';
 
@@ -71,10 +80,27 @@ export default function KitchenTicket({
             await printNetworkReceipt({
               ip: group.printer.ip,
               model: group.printer.model || 'SRP-E300',
+              connection: group.printer.baglanti || 'ethernet',
               lines,
               cut: true,
               feedLines: 3,
             });
+            // Sipariş zili: bu yazıcının DK portunda buzzer varsa, sipariş tipine göre bip pattern'i.
+            if (group.printer.siparisZili) {
+              const pattern = buzzerPatternFor({
+                isCancellation,
+                isCorrection,
+                isAddendum,
+                isPackage: !!order?.paketMi,
+              });
+              triggerBuzzer({
+                ip: group.printer.ip,
+                model: group.printer.model || 'SRP-E300',
+                connection: group.printer.baglanti || 'ethernet',
+                pulses: pattern.pulses,
+                gap: pattern.gap,
+              }).catch((e) => console.warn('Buzzer tetiklenemedi:', e?.message || e));
+            }
           }
           if (!cancelled) {
             setPrinted(true);
@@ -127,10 +153,26 @@ export default function KitchenTicket({
           await printNetworkReceipt({
             ip: group.printer.ip,
             model: group.printer.model || 'SRP-E300',
+            connection: group.printer.baglanti || 'ethernet',
             lines,
             cut: true,
             feedLines: 3,
           });
+          if (group.printer.siparisZili) {
+            const pattern = buzzerPatternFor({
+              isCancellation,
+              isCorrection,
+              isAddendum,
+              isPackage: !!order?.paketMi,
+            });
+            triggerBuzzer({
+              ip: group.printer.ip,
+              model: group.printer.model || 'SRP-E300',
+              connection: group.printer.baglanti || 'ethernet',
+              pulses: pattern.pulses,
+              gap: pattern.gap,
+            }).catch((e) => console.warn('Buzzer tetiklenemedi:', e?.message || e));
+          }
         }
       } else {
         const lines = buildKitchenTicketLines({ order, items, isAddendum, isCancellation, cancellationReason, isCorrection, correctionDiff });

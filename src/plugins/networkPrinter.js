@@ -14,6 +14,7 @@ const NetworkPrinter = registerPlugin('NetworkPrinter', {
     printReceipt: async () => ({ ok: false, mode: 'web-noop' }),
     testPrint: async () => ({ ok: false, mode: 'web-noop' }),
     openCashDrawer: async () => ({ ok: false, mode: 'web-noop' }),
+    triggerBuzzer: async () => ({ ok: false, mode: 'web-noop' }),
   }),
 });
 
@@ -56,4 +57,23 @@ export async function openCashDrawer(opts) {
   const { ip, model = 'SRP-E300', connection = 'ethernet' } = opts || {};
   if (connection === 'ethernet' && !ip) throw new Error('Ethernet bağlantısı için IP gerekli');
   return NetworkPrinter.openCashDrawer({ ip, model, connection });
+}
+
+/**
+ * Mutfak buzzer'ı için pattern darbe. pulses adet, aralarında gap ms.
+ * Pattern presetleri:
+ *   - { pulses: 1, gap: 0 }     — yeni sipariş (tek bip)
+ *   - { pulses: 2, gap: 200 }   — paket sipariş (iki bip)
+ *   - { pulses: 2, gap: 100 }   — ek sipariş (hızlı iki bip)
+ *   - { pulses: 3, gap: 300 }   — sipariş iptali (üç uzun bip)
+ *
+ * @param {{ ip?: string, model?: string, connection?: 'ethernet'|'usb', pulses?: number, gap?: number }} opts
+ */
+export async function triggerBuzzer(opts) {
+  if (!Capacitor.isNativePlatform()) {
+    throw new Error('Buzzer sadece cihazda çalışır');
+  }
+  const { ip, model = 'SRP-E300', connection = 'ethernet', pulses = 1, gap = 200 } = opts || {};
+  if (connection === 'ethernet' && !ip) throw new Error('Ethernet bağlantısı için IP gerekli');
+  return NetworkPrinter.triggerBuzzer({ ip, model, connection, pulses, gap });
 }

@@ -215,6 +215,8 @@ export const printerSchema = z
     aktif: z.boolean(),
     // Bu yazıcının DK portuna para kasası takılıysa true. Nakit ödemede otomatik açılır.
     kasaBagli: z.boolean().optional().default(false),
+    // DK portuna buzzer/zil takılıysa true. Mutfak adisyonu basıldıktan sonra tetiklenir.
+    siparisZili: z.boolean().optional().default(false),
   })
   // Ethernet'te IP zorunlu ve formatlı, USB'de boş geçilebilir.
   .superRefine((data, ctx) => {

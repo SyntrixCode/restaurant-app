@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2, Printer as PrinterIcon, Star, Zap, Wallet } from 'lucide-react';
+import { Plus, Pencil, Trash2, Printer as PrinterIcon, Star, Zap, Wallet, Bell } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import Modal from '../../components/ui/Modal';
 import Toggle from '../../components/ui/Toggle';
 import { watchCollection, createDoc, patchDoc, removeDoc } from '../../firebase/firestore';
 import { printerSchema } from '../../utils/validators';
-import { testNetworkPrinter, openCashDrawer } from '../../plugins/networkPrinter';
+import { testNetworkPrinter, openCashDrawer, triggerBuzzer } from '../../plugins/networkPrinter';
 
 export default function Printers() {
   const [printers, setPrinters] = useState([]);
@@ -45,6 +45,22 @@ export default function Printers() {
     try {
       await openCashDrawer({ ip: p.ip, model: p.model || 'SRP-E300', connection: p.baglanti || 'ethernet' });
       toast.success(`${p.ad}: kasa açıldı`, { id: t });
+    } catch (err) {
+      toast.error(`${p.ad}: ${err?.message || err}`, { id: t, duration: 6000 });
+    }
+  };
+
+  const handleBuzzer = async (p) => {
+    const t = toast.loading(`${p.ad}: zil çalınıyor…`);
+    try {
+      await triggerBuzzer({
+        ip: p.ip,
+        model: p.model || 'SRP-E300',
+        connection: p.baglanti || 'ethernet',
+        pulses: 2,
+        gap: 200,
+      });
+      toast.success(`${p.ad}: zil tetiklendi`, { id: t });
     } catch (err) {
       toast.error(`${p.ad}: ${err?.message || err}`, { id: t, duration: 6000 });
     }
@@ -105,6 +121,11 @@ export default function Printers() {
                 <Wallet size={12} /> Para kasası bağlı
               </p>
             )}
+            {p.siparisZili && (
+              <p className="flex items-center gap-1 text-xs font-medium text-blue-700">
+                <Bell size={12} /> Sipariş zili bağlı
+              </p>
+            )}
             <div className="mt-2 flex flex-wrap gap-2">
               <button onClick={() => handleTest(p)} className="btn-ghost flex-1 text-xs text-emerald-700 hover:bg-emerald-50">
                 <Zap size={14} /> Test Yazdır
@@ -112,6 +133,11 @@ export default function Printers() {
               {p.kasaBagli && (
                 <button onClick={() => handleOpenDrawer(p)} className="btn-ghost flex-1 text-xs text-amber-700 hover:bg-amber-50">
                   <Wallet size={14} /> Kasayı Aç
+                </button>
+              )}
+              {p.siparisZili && (
+                <button onClick={() => handleBuzzer(p)} className="btn-ghost flex-1 text-xs text-blue-700 hover:bg-blue-50">
+                  <Bell size={14} /> Zili Çal
                 </button>
               )}
               {!p.varsayilan && (
@@ -155,7 +181,7 @@ function PrinterModal({ open, onClose, editing }) {
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(printerSchema),
-    defaultValues: { ad: '', model: 'SRP-E300', baglanti: 'ethernet', ip: '', port: 9100, varsayilan: false, aktif: true, kasaBagli: false },
+    defaultValues: { ad: '', model: 'SRP-E300', baglanti: 'ethernet', ip: '', port: 9100, varsayilan: false, aktif: true, kasaBagli: false, siparisZili: false },
   });
 
   useEffect(() => {
@@ -171,6 +197,7 @@ function PrinterModal({ open, onClose, editing }) {
               varsayilan: editing.varsayilan ?? false,
               aktif: editing.aktif ?? true,
               kasaBagli: editing.kasaBagli ?? false,
+              siparisZili: editing.siparisZili ?? false,
             }
           : { ad: '', model: 'SRP-E300', ip: '', port: 9100, varsayilan: false, aktif: true, kasaBagli: false },
       );
@@ -274,6 +301,16 @@ function PrinterModal({ open, onClose, editing }) {
             <p className="text-xs text-slate-500">Yazıcının DK portunda bir para kasası varsa nakit ödemede otomatik açılır.</p>
           </div>
           <Toggle checked={watch('kasaBagli')} onChange={(v) => setValue('kasaBagli', v)} />
+        </div>
+        <div className="flex items-center justify-between rounded-lg bg-blue-50 p-3">
+          <div>
+            <span className="text-sm font-medium text-slate-700">Sipariş zili (buzzer) bağlı</span>
+            <p className="text-xs text-slate-500">
+              DK portuna bir buzzer takılıysa mutfak adisyonu basıldıktan sonra otomatik çalar.
+              Sipariş tipine göre farklı pattern: yeni 1 bip, paket 2 bip, ek sipariş 2 hızlı bip, iptal 3 uzun bip.
+            </p>
+          </div>
+          <Toggle checked={watch('siparisZili')} onChange={(v) => setValue('siparisZili', v)} />
         </div>
         <p className="text-xs text-slate-500">
           Bu yazıcıya yönlendirilen kategorilerin siparişleri buradan ESC/POS protokolü ile basılır.
