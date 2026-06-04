@@ -12,6 +12,7 @@ const NetworkPrinter = registerPlugin('NetworkPrinter', {
   web: () => ({
     printReceipt: async () => ({ ok: false, mode: 'web-noop' }),
     testPrint: async () => ({ ok: false, mode: 'web-noop' }),
+    openCashDrawer: async () => ({ ok: false, mode: 'web-noop' }),
   }),
 });
 
@@ -40,4 +41,18 @@ export async function testNetworkPrinter(opts) {
   const { ip, model = 'SRP-E300' } = opts || {};
   if (!ip) throw new Error('Yazıcı IP adresi gerekli');
   return NetworkPrinter.testPrint({ ip, model });
+}
+
+/**
+ * Para kasasını açar — yazıcının DK portuna 24V darbe.
+ * Yazıcı bağlı olan tek bir kasa varsa (HP VB400 vb.) onu açar.
+ * @param {{ ip: string, model?: string }} opts
+ */
+export async function openCashDrawer(opts) {
+  if (!Capacitor.isNativePlatform()) {
+    throw new Error('Kasa sadece cihazda açılabilir');
+  }
+  const { ip, model = 'SRP-E300' } = opts || {};
+  if (!ip) throw new Error('Yazıcı IP adresi gerekli');
+  return NetworkPrinter.openCashDrawer({ ip, model });
 }

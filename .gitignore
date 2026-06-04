@@ -23,3 +23,9 @@ dist-apk/
 
 # Geçici servis hesabı anahtarı (asla commit etme)
 service-account*.json
+
+# Demo / sunum dosyaları (yerel kalır, push'lanmaz)
+SyntrixCode-Demo*.mp4
+SyntrixPos-Demo*.pdf
+*-Demo-Sunum.pdf
+*-Demo-Sunum.mp4

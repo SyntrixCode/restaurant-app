@@ -213,6 +213,8 @@ export const printerSchema = z.object({
   port: z.coerce.number().int().min(1).max(65535).default(9100),
   varsayilan: z.boolean(),
   aktif: z.boolean(),
+  // Bu yazıcının DK portuna para kasası takılıysa true. Nakit ödemede otomatik açılır.
+  kasaBagli: z.boolean().optional().default(false),
 });
 
 export function randomCode4() {

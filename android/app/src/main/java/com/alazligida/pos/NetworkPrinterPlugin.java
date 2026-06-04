@@ -15,6 +15,7 @@ import org.json.JSONObject;
 
 import java.util.List;
 
+import jpos.CashDrawer;
 import jpos.POSPrinter;
 import jpos.POSPrinterConst;
 import jpos.config.JposEntry;
@@ -29,6 +30,7 @@ import jpos.config.JposEntry;
  * JS API:
  *   NetworkPrinter.printReceipt({ ip, port?, model?, lines, cut?, feedLines? })
  *   NetworkPrinter.testPrint({ ip, port?, model? })
+ *   NetworkPrinter.openCashDrawer({ ip, model? })
  */
 @CapacitorPlugin(name = "NetworkPrinter")
 public class NetworkPrinterPlugin extends Plugin {
@@ -202,6 +204,79 @@ public class NetworkPrinterPlugin extends Plugin {
                 closeQuietly(printer);
             }
         }, "BxlNetworkTest").start();
+    }
+
+    /**
+     * Para kasasını açar — yazıcının DK portuna 24V solenoid darbesi gönderir.
+     * UPOS jpos.CashDrawer üzerinden Bixolon SDK ile.
+     *
+     * Bağlantı: Tablet → (LAN/USB) → Bixolon SRP-E300 → (RJ12/DK) → HP VB400 vb.
+     */
+    @PluginMethod
+    public void openCashDrawer(PluginCall call) {
+        final String ip = call.getString("ip");
+        final String model = call.getString("model", "SRP-E300");
+
+        if (ip == null || ip.isEmpty()) {
+            call.reject("ip parametresi gerekli");
+            return;
+        }
+
+        new Thread(() -> {
+            CashDrawer drawer = null;
+            try {
+                drawer = openDrawer(model, ip);
+                drawer.openDrawer();
+
+                JSObject ret = new JSObject();
+                ret.put("ok", true);
+                call.resolve(ret);
+            } catch (Throwable t) {
+                call.reject("Kasa açılamadı: " + t.getClass().getSimpleName() + " — " + t.getMessage());
+            } finally {
+                closeDrawerQuietly(drawer);
+            }
+        }, "BxlOpenDrawer").start();
+    }
+
+    /**
+     * UPOS jpos.CashDrawer cihazını yazıcının üstünden açar.
+     * Logical name yazıcıyla çakışmasın diye "_DRAWER" suffix'i eklenir.
+     */
+    private CashDrawer openDrawer(String model, String ip) throws Throwable {
+        Context ctx = getContext();
+        String drawerName = model + "_DRAWER";
+
+        BXLConfigLoader config = new BXLConfigLoader(ctx);
+        try { config.openFile(); } catch (Exception e) { config.newFile(); }
+        List<?> entries = config.getEntries();
+        for (Object entry : entries) {
+            if (((JposEntry) entry).getLogicalName().equals(drawerName)) {
+                config.removeEntry(drawerName);
+                break;
+            }
+        }
+        config.addEntry(
+                drawerName,
+                BXLConfigLoader.DEVICE_CATEGORY_CASH_DRAWER,
+                productNameFor(model),
+                BXLConfigLoader.DEVICE_BUS_ETHERNET,
+                ip
+        );
+        config.saveFile();
+
+        CashDrawer drawer = new CashDrawer(ctx);
+        drawer.open(drawerName);
+        drawer.claim(5000);
+        drawer.setDeviceEnabled(true);
+        return drawer;
+    }
+
+    private void closeDrawerQuietly(CashDrawer drawer) {
+        if (drawer == null) return;
+        try { if (drawer.getClaimed()) drawer.setDeviceEnabled(false); } catch (Throwable ignored) {}
+        try { if (drawer.getClaimed()) drawer.release(); } catch (Throwable ignored) {}
+        try { drawer.close(); } catch (Throwable ignored) {}
     }
 
     private POSPrinter openPrinter(String model, String ip) throws Throwable {

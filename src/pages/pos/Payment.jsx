@@ -44,6 +44,7 @@ import CardPaymentModal from '../../components/CardPaymentModal';
 import SplitReceiptModal from '../../components/SplitReceiptModal';
 import PaymentSummaryModal from '../../components/PaymentSummaryModal';
 import { pushToCustomerDisplay } from '../../plugins/customerDisplay';
+import { openCashDrawer } from '../../plugins/networkPrinter';
 
 const YEMEK_KARTI_TIPLERI = ['Multinet', 'Sodexo', 'Ticket', 'Setcard', 'Edenred', 'Metropol', 'Diğer'];
 
@@ -518,6 +519,18 @@ export default function Payment() {
       });
       setChange(result.change);
       toast.success('Ödeme tamamlandı');
+
+      // Nakit veya yemek kartı ödemesi varsa para kasasını aç.
+      // "kasaBagli" toggle'ı işaretli ilk aktif yazıcının DK portuna komut gönderilir.
+      const needsDrawer = payments.some((p) => p.yontem === 'nakit' || p.yontem === 'yemekKarti');
+      if (needsDrawer) {
+        const drawerPrinter = networkPrinters.find((p) => p.aktif && p.ip && p.kasaBagli);
+        if (drawerPrinter) {
+          openCashDrawer({ ip: drawerPrinter.ip, model: drawerPrinter.model || 'SRP-E300' }).catch(
+            (e) => console.warn('Kasa açılamadı:', e?.message || e),
+          );
+        }
+      }
 
       // Sadakat: kullanılan puanı düş + yeni puan kazandır (sessiz, akışı bozmaz)
       if (settings?.sadakatAktif && order.paketMi && order.musteriTel) {

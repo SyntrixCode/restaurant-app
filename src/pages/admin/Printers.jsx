@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2, Printer as PrinterIcon, Star, Zap } from 'lucide-react';
+import { Plus, Pencil, Trash2, Printer as PrinterIcon, Star, Zap, Wallet } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import Modal from '../../components/ui/Modal';
 import Toggle from '../../components/ui/Toggle';
 import { watchCollection, createDoc, patchDoc, removeDoc } from '../../firebase/firestore';
 import { printerSchema } from '../../utils/validators';
-import { testNetworkPrinter } from '../../plugins/networkPrinter';
+import { testNetworkPrinter, openCashDrawer } from '../../plugins/networkPrinter';
 
 export default function Printers() {
   const [printers, setPrinters] = useState([]);
@@ -35,6 +35,16 @@ export default function Printers() {
     try {
       await testNetworkPrinter({ ip: p.ip, model: p.model || 'SRP-E300' });
       toast.success(`${p.ad}: test sayfası gönderildi`, { id: t });
+    } catch (err) {
+      toast.error(`${p.ad}: ${err?.message || err}`, { id: t, duration: 6000 });
+    }
+  };
+
+  const handleOpenDrawer = async (p) => {
+    const t = toast.loading(`${p.ad}: kasa açılıyor…`);
+    try {
+      await openCashDrawer({ ip: p.ip, model: p.model || 'SRP-E300' });
+      toast.success(`${p.ad}: kasa açıldı`, { id: t });
     } catch (err) {
       toast.error(`${p.ad}: ${err?.message || err}`, { id: t, duration: 6000 });
     }
@@ -88,10 +98,20 @@ export default function Printers() {
             <p className="font-mono text-sm text-slate-600">
               {p.ip}:{p.port || 9100}
             </p>
+            {p.kasaBagli && (
+              <p className="flex items-center gap-1 text-xs font-medium text-emerald-700">
+                <Wallet size={12} /> Para kasası bağlı
+              </p>
+            )}
             <div className="mt-2 flex flex-wrap gap-2">
               <button onClick={() => handleTest(p)} className="btn-ghost flex-1 text-xs text-emerald-700 hover:bg-emerald-50">
                 <Zap size={14} /> Test Yazdır
               </button>
+              {p.kasaBagli && (
+                <button onClick={() => handleOpenDrawer(p)} className="btn-ghost flex-1 text-xs text-amber-700 hover:bg-amber-50">
+                  <Wallet size={14} /> Kasayı Aç
+                </button>
+              )}
               {!p.varsayilan && (
                 <button onClick={() => setDefault(p)} className="btn-ghost flex-1 text-xs">
                   <Star size={14} /> Varsayılan Yap
@@ -133,7 +153,7 @@ function PrinterModal({ open, onClose, editing }) {
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(printerSchema),
-    defaultValues: { ad: '', model: 'SRP-E300', ip: '', port: 9100, varsayilan: false, aktif: true },
+    defaultValues: { ad: '', model: 'SRP-E300', ip: '', port: 9100, varsayilan: false, aktif: true, kasaBagli: false },
   });
 
   useEffect(() => {
@@ -147,8 +167,9 @@ function PrinterModal({ open, onClose, editing }) {
               port: editing.port || 9100,
               varsayilan: editing.varsayilan ?? false,
               aktif: editing.aktif ?? true,
+              kasaBagli: editing.kasaBagli ?? false,
             }
-          : { ad: '', model: 'SRP-E300', ip: '', port: 9100, varsayilan: false, aktif: true },
+          : { ad: '', model: 'SRP-E300', ip: '', port: 9100, varsayilan: false, aktif: true, kasaBagli: false },
       );
     }
   }, [open, editing, reset]);
@@ -222,6 +243,13 @@ function PrinterModal({ open, onClose, editing }) {
         <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
           <span className="text-sm font-medium text-slate-700">Aktif</span>
           <Toggle checked={watch('aktif')} onChange={(v) => setValue('aktif', v)} />
+        </div>
+        <div className="flex items-center justify-between rounded-lg bg-amber-50 p-3">
+          <div>
+            <span className="text-sm font-medium text-slate-700">Para kasası bağlı</span>
+            <p className="text-xs text-slate-500">Yazıcının DK portunda bir para kasası varsa nakit ödemede otomatik açılır.</p>
+          </div>
+          <Toggle checked={watch('kasaBagli')} onChange={(v) => setValue('kasaBagli', v)} />
         </div>
         <p className="text-xs text-slate-500">
           Bu yazıcıya yönlendirilen kategorilerin siparişleri buradan ESC/POS protokolü ile basılır.
