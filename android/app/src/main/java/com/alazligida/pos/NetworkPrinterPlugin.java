@@ -247,8 +247,11 @@ public class NetworkPrinterPlugin extends Plugin {
             POSPrinter printer = null;
             try {
                 printer = openPrinter(model, ip, connection);
-                // Bixolon ESC dizesi: ESC|1pP → DK pin 1'i tetikle.
+                // Bixolon ESC dizesi: ESC|1pP → DK pin 1, ESC|2pP → DK pin 2.
+                // İkisini de tetikle: hangi pin'e kasa/buzzer bağlıysa çalışsın.
                 printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, ESC + "1pP");
+                try { Thread.sleep(300); } catch (InterruptedException ignored) {}
+                printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, ESC + "2pP");
 
                 JSObject ret = new JSObject();
                 ret.put("ok", true);
