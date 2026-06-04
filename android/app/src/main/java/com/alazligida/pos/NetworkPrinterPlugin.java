@@ -303,13 +303,22 @@ public class NetworkPrinterPlugin extends Plugin {
             POSPrinter printer = null;
             try {
                 printer = openPrinter(model, ip, connection);
+                // Raw ESC/POS uzun pulse: 500ms ON Drawer 1 (24V solenoid sürer).
+                // Bixolon ESC|1pP'den (50ms) ~10x daha uzun → buzzer çok daha duyulur.
+                // 0x1B 0x70 m t1 t2 — m=0 drawer 1, t1=0xFA (250×2ms=500ms ON), t2=0xFA OFF.
+                String longD1 = new String(new byte[]{0x1B, 0x70, 0x00, (byte) 0xFA, (byte) 0xFA});
+                String longD2 = new String(new byte[]{0x1B, 0x70, 0x01, (byte) 0xFA, (byte) 0xFA});
+
                 for (int i = 0; i < Math.max(1, pulses); i++) {
-                    // Drawer 1 kısa pulse (Bixolon ESC|1pP = ~50ms)
+                    // Önce kısa Bixolon ESC darbe (yedek)
                     printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, ESC + "1pP");
-                    // Yedek olarak Drawer 2 de gönder — buzzer pin 5'e bağlıysa da çalsın
                     printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, ESC + "2pP");
+                    // Sonra raw uzun pulse — ana "yüksek ses" kaynağı
+                    printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, longD1);
+                    printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, longD2);
                     if (i < pulses - 1) {
-                        try { Thread.sleep(Math.max(80, gap)); } catch (InterruptedException ignored) {}
+                        // Pulse uzun olduğu için gap'i de kısalt — sürekli ses etkisi
+                        try { Thread.sleep(Math.max(100, gap)); } catch (InterruptedException ignored) {}
                     }
                 }
                 JSObject ret = new JSObject();
