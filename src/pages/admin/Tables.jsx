@@ -177,6 +177,9 @@ export default function AdminTables() {
   const [modal, setModal] = useState(null);
   const [editing, setEditing] = useState(null);
   const [guides, setGuides] = useState(null); // { v: [x...], h: [y...] }
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const canvasRef = useRef(null);
 
   // Sürüklenenin GÜNCEL pozisyonu (lokal değişiklikler dahil)
@@ -409,6 +412,32 @@ export default function AdminTables() {
     }
   }
 
+  async function handleDeleteAll() {
+    const activeIds = Object.keys(ordersByTable);
+    if (activeIds.length > 0) {
+      toast.error(`${activeIds.length} masada aktif sipariş var, önce ödemelerini alın.`);
+      return;
+    }
+    setDeleting(true);
+    try {
+      const batch = writeBatch(db);
+      for (const t of tables) {
+        batch.delete(doc(db, 'tables', t.id));
+      }
+      await batch.commit();
+      toast.success(`${tables.length} masa silindi`);
+      setDeleteAllOpen(false);
+      setDeleteConfirmText('');
+      setSelected(null);
+      setLocalTablePos({});
+    } catch (err) {
+      console.error(err);
+      toast.error('Silme hatası: ' + (err?.message || err));
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   async function handleDeleteTable(table) {
     if (ordersByTable[table.id]) {
       toast.error(`${table.ad} masasında aktif sipariş var, önce ödemeyi al.`);
@@ -479,6 +508,15 @@ export default function AdminTables() {
           subtitle="Salon yerleşimini sürükle-bırak ile düzenle"
           actions={
             <>
+              {tables.length > 0 && (
+                <button
+                  onClick={() => setDeleteAllOpen(true)}
+                  className="btn-ghost text-red-600 hover:bg-red-50"
+                  title="Tüm masaları sil (yeniden kurulum için)"
+                >
+                  <Trash2 size={16} /> Tümünü Sil
+                </button>
+              )}
               {dirty && (
                 <>
                   <button
@@ -699,6 +737,63 @@ export default function AdminTables() {
           setModal(null);
         }}
       />
+
+      <Modal
+        open={deleteAllOpen}
+        onClose={() => {
+          if (deleting) return;
+          setDeleteAllOpen(false);
+          setDeleteConfirmText('');
+        }}
+        title="Tüm masaları sil"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                setDeleteAllOpen(false);
+                setDeleteConfirmText('');
+              }}
+              disabled={deleting}
+              className="btn-secondary"
+            >
+              İptal
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteAll}
+              disabled={deleting || deleteConfirmText.trim().toUpperCase() !== 'SİL'}
+              className="btn-primary bg-red-600 hover:bg-red-700 disabled:opacity-50"
+            >
+              {deleting ? 'Siliniyor…' : `${tables.length} masayı sil`}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+            <strong>{tables.length} masa</strong> kalıcı olarak silinecek. Geri alınamaz.
+            Aktif siparişi olan masalar varsa işlem iptal edilir.
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Onaylamak için <strong>SİL</strong> yazın
+            </label>
+            <input
+              autoFocus
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              className="input font-mono uppercase tracking-widest"
+              placeholder="SİL"
+              disabled={deleting}
+            />
+          </div>
+          <p className="text-xs text-slate-500">
+            Not: Bu işlem dekorları (BAR, MUTFAK, KASA vb.) silmez — sadece masaları siler.
+          </p>
+        </div>
+      </Modal>
     </div>
   );
 }
