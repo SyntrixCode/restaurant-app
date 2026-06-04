@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Bixolon USB cihaz filtresi.
+  Vendor ID 0x1504 (= 5380) Bixolon'a aittir; SRP-E300, SRP-350, SRP-380 ve
+  diğer modeller bu VID altında çalışır. PID belirtilmedi: bütün Bixolon
+  yazıcıları kapsasın.
+-->
+<resources>
+    <usb-device vendor-id="5380" />
+</resources>
