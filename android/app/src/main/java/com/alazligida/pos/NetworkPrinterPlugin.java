@@ -247,11 +247,23 @@ public class NetworkPrinterPlugin extends Plugin {
             POSPrinter printer = null;
             try {
                 printer = openPrinter(model, ip, connection);
-                // Bixolon ESC dizesi: ESC|1pP → DK pin 1, ESC|2pP → DK pin 2.
-                // İkisini de tetikle: hangi pin'e kasa/buzzer bağlıysa çalışsın.
+                // Standart kasa: Bixolon ESC|1pP (50ms pulse) — yeterli.
                 printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, ESC + "1pP");
-                try { Thread.sleep(300); } catch (InterruptedException ignored) {}
+                try { Thread.sleep(200); } catch (InterruptedException ignored) {}
                 printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, ESC + "2pP");
+                try { Thread.sleep(200); } catch (InterruptedException ignored) {}
+
+                // Buzzer veya yavaş solenoid için: raw ESC/POS uzun pulse
+                // ESC p m t1 t2 — m=drawer (0/1), t1/t2 = pulse süresi × 2ms.
+                // t1=0xFA (250) → 500ms ON, t2=0xFA → 500ms OFF.
+                // Drawer 1 (pin 2) — uzun pulse
+                String longDrawer1 = new String(new byte[]{0x1B, 0x70, 0x00, (byte) 0xFA, (byte) 0xFA});
+                printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, longDrawer1);
+                try { Thread.sleep(800); } catch (InterruptedException ignored) {}
+
+                // Drawer 2 (pin 5) — uzun pulse (yedek, başka pin'e bağlıysa)
+                String longDrawer2 = new String(new byte[]{0x1B, 0x70, 0x01, (byte) 0xFA, (byte) 0xFA});
+                printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, longDrawer2);
 
                 JSObject ret = new JSObject();
                 ret.put("ok", true);
