@@ -26,6 +26,7 @@ function hashCode(kod) {
   return crypto.createHash('sha256').update(String(kod)).digest('hex');
 }
 
+
 const rateLimits = new Map();
 function rateLimitKey(req) {
   return req.rawRequest?.ip || req.app?.appId || 'unknown';
