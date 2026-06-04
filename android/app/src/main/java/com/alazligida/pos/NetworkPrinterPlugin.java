@@ -1,6 +1,13 @@
 package com.alazligida.pos;
 
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbManager;
+import android.os.Build;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -41,6 +48,8 @@ public class NetworkPrinterPlugin extends Plugin {
 
     private static final int LINE_WIDTH = 42;
     private static final String ESC = new String(new byte[]{0x1b, 0x7c});
+    private static final String ACTION_USB_PERMISSION = "com.alazligida.pos.USB_PERMISSION";
+    private static final int BIXOLON_VID = 0x1504;
 
     @PluginMethod
     public void printReceipt(PluginCall call) {
@@ -252,9 +261,78 @@ public class NetworkPrinterPlugin extends Plugin {
         }, "BxlOpenDrawer").start();
     }
 
+    /**
+     * USB cihazına erişim izni — Bixolon (VID 0x1504) yazıcısını bulup, izin yoksa
+     * UsbManager.requestPermission ile kullanıcıdan iste, sonucu blocking bekle.
+     * Intent filter sadece "tanıma" sağlar; gerçek exclusive access bunun üstüne
+     * runtime permission gerektirir.
+     */
+    private void ensureUsbPermission() throws Exception {
+        Context ctx = getContext();
+        UsbManager um = (UsbManager) ctx.getSystemService(Context.USB_SERVICE);
+        if (um == null) throw new Exception("USB Manager kullanılamıyor");
+
+        UsbDevice device = null;
+        for (UsbDevice d : um.getDeviceList().values()) {
+            if (d.getVendorId() == BIXOLON_VID) {
+                device = d;
+                break;
+            }
+        }
+        if (device == null) {
+            throw new Exception("Bixolon USB yazıcı bulunamadı. Kabloyu kontrol edin.");
+        }
+
+        if (um.hasPermission(device)) return;
+
+        final Object lock = new Object();
+        final boolean[] granted = { false };
+        final boolean[] received = { false };
+
+        BroadcastReceiver receiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context c, Intent intent) {
+                if (!ACTION_USB_PERMISSION.equals(intent.getAction())) return;
+                synchronized (lock) {
+                    granted[0] = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
+                    received[0] = true;
+                    lock.notifyAll();
+                }
+            }
+        };
+
+        IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ctx.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            ctx.registerReceiver(receiver, filter);
+        }
+
+        int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) piFlags |= PendingIntent.FLAG_MUTABLE;
+        Intent intent = new Intent(ACTION_USB_PERMISSION).setPackage(ctx.getPackageName());
+        PendingIntent pi = PendingIntent.getBroadcast(ctx, 0, intent, piFlags);
+        um.requestPermission(device, pi);
+
+        synchronized (lock) {
+            long deadline = System.currentTimeMillis() + 15000;
+            while (!received[0]) {
+                long left = deadline - System.currentTimeMillis();
+                if (left <= 0) break;
+                try { lock.wait(left); } catch (InterruptedException ignored) {}
+            }
+        }
+        try { ctx.unregisterReceiver(receiver); } catch (Throwable ignored) {}
+
+        if (!granted[0]) {
+            throw new Exception("USB izni verilmedi (popup'ı reddettiyseniz Ayarlar'dan iznini sıfırlayın)");
+        }
+    }
+
     private POSPrinter openPrinter(String model, String ip, String connection) throws Throwable {
         Context ctx = getContext();
         boolean isUsb = "usb".equalsIgnoreCase(connection);
+        if (isUsb) ensureUsbPermission();
         // USB ve Ethernet için ayrı logical name — aynı modeli iki kez tanımlayabilelim
         String logicalName = isUsb ? (model + "_USB") : model;
 
