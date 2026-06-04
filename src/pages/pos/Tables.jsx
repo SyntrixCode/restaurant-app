@@ -41,7 +41,7 @@ const ZONE_LABELS = {
   dis: 'Dış Mekan',
   teras: 'Teras',
   bahce: 'Bahçe',
-  bar: 'Bar',
+  bar: 'Meşrubat',
   kapali: 'Kapalı Alan',
 };
 
@@ -52,6 +52,7 @@ const DECOR_PRESETS = {
   bar: {
     icon: Wine,
     iconColor: 'text-amber-100',
+    label: 'MEŞRUBAT',
     className:
       'bg-gradient-to-b from-amber-900 to-amber-700 text-amber-50 border-amber-950 tracking-widest font-bold uppercase',
   },
