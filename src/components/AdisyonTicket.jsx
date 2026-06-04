@@ -19,7 +19,9 @@ export default function AdisyonTicket({ open, onClose, order, settings }) {
   const printStartedRef = useRef(false);
 
   useEffect(() => watchCollection('printers', setNetworkPrinters), []);
-  const activePrinter = networkPrinters.find((p) => p.aktif && p.ip);
+  const activePrinter = networkPrinters.find(
+    (p) => p.aktif && (p.ip || p.baglanti === 'usb'),
+  );
 
   useEffect(() => {
     if (!open) {
@@ -64,6 +66,7 @@ export default function AdisyonTicket({ open, onClose, order, settings }) {
           await printNetworkReceipt({
             ip: activePrinter.ip,
             model: activePrinter.model || 'SRP-E300',
+            connection: activePrinter.baglanti || 'ethernet',
             lines,
             cut: true,
             feedLines: 3,
@@ -116,6 +119,7 @@ export default function AdisyonTicket({ open, onClose, order, settings }) {
         await printNetworkReceipt({
           ip: activePrinter.ip,
           model: activePrinter.model || 'SRP-E300',
+          connection: activePrinter.baglanti || 'ethernet',
           lines,
           cut: true,
           feedLines: 3,

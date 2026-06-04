@@ -44,14 +44,15 @@ export default function SplitReceiptModal({
     (async () => {
       const lines = buildSplitReceiptLines({ order, items, payment, settings });
 
-      // 1. Network yazıcı (Bixolon vs)
-      if (activePrinter?.ip) {
+      // 1. Network yazıcı (Bixolon vs) — Ethernet ya da USB
+      if (activePrinter && (activePrinter.ip || activePrinter.baglanti === 'usb')) {
         setPrinting(true);
         setMode('network');
         try {
           await printNetworkReceipt({
             ip: activePrinter.ip,
             model: activePrinter.model || 'SRP-E300',
+            connection: activePrinter.baglanti || 'ethernet',
             lines,
             cut: true,
             feedLines: 3,

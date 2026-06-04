@@ -33,7 +33,9 @@ export default function ReceiptPreview({ open, onClose, order, payments, setting
 
   // Aktif ağ yazıcılarını dinle
   useEffect(() => watchCollection('printers', setNetworkPrinters), []);
-  const activePrinter = networkPrinters.find((p) => p.aktif && p.ip);
+  const activePrinter = networkPrinters.find(
+    (p) => p.aktif && (p.ip || p.baglanti === 'usb'),
+  );
 
   // Modal açılır açılmaz yazıcı varsa otomatik bas
   useEffect(() => {
@@ -55,6 +57,7 @@ export default function ReceiptPreview({ open, onClose, order, payments, setting
           await printNetworkReceipt({
             ip: activePrinter.ip,
             model: activePrinter.model || 'SRP-E300',
+            connection: activePrinter.baglanti || 'ethernet',
             lines,
             cut: true,
             feedLines: 4,
@@ -104,6 +107,7 @@ export default function ReceiptPreview({ open, onClose, order, payments, setting
         await printNetworkReceipt({
           ip: activePrinter.ip,
           model: activePrinter.model || 'SRP-E300',
+          connection: activePrinter.baglanti || 'ethernet',
           lines,
           cut: true,
           feedLines: 4,
