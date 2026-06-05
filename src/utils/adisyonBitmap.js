@@ -7,10 +7,11 @@
  * yazıcıya gönderilir.
  */
 
-// Yerleşim 576 nokta üzerinde tasarlandı, en sonda hedef yazıcı genişliğine
-// (58mm yerleşik iMin: 384 nokta) indirgenir → kağıda sığar, soldan kayma olmaz.
+// 80mm kağıda sıfır-sıfır basmak için: tasarım canvas'ı 576 nokta (80mm @ 203dpi),
+// downscale yapılmaz — hedef de 576. Eski 58mm iMin için 384 değeri kullanılırdı,
+// artık Bixolon 80mm yazıcılar için tam genişlik.
 const WIDTH = 576;
-const TARGET_WIDTH = 384; // 58mm @ 203dpi (iMin Swan 1 Pro yerleşik yazıcı)
+const TARGET_WIDTH = 576; // 80mm @ 203dpi (Bixolon SRP-E300 vb.)
 const PAD = 18;
 const RIGHT = WIDTH - PAD;
 
@@ -205,60 +206,40 @@ export async function renderAdisyonBitmap({ order, settings = {} }) {
   ctx.fillText('AFİYET OLSUN YİNE BEKLERİZ', WIDTH / 2, y + bannerH / 2);
   y += bannerH + 22;
 
-  // ── Hesabı Paylaşın (2/3/4/5 kişi) ──
+  // ── Hesabı Paylaşın (2-12 kişi, 2 satır × 6 hücre) ──
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
   ctx.font = '22px Arial';
   ctx.fillText('Hesabı Paylaşın', PAD, y + 18);
   y += 32;
-  const splitN = [2, 3, 4, 5];
-  const cellW = (RIGHT - PAD) / 4;
-  const cellHeadH = 34;
-  const cellValH = 40;
-  ctx.lineWidth = 2;
-  splitN.forEach((n, i) => {
-    const x = PAD + i * cellW;
-    // başlık hücresi (gri dolgu)
-    ctx.fillStyle = '#d9d9d9';
-    ctx.fillRect(x, y, cellW, cellHeadH);
-    ctx.fillStyle = '#000';
-    ctx.strokeRect(x, y, cellW, cellHeadH);
-    ctx.strokeRect(x, y + cellHeadH, cellW, cellValH);
-    ctx.font = 'bold 20px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`${n} Kişi`, x + cellW / 2, y + cellHeadH / 2);
-    ctx.font = '22px Arial';
-    ctx.fillText(fmt(toplam / n), x + cellW / 2, y + cellHeadH + cellValH / 2);
-  });
-  y += cellHeadH + cellValH + 26;
-
-  // ── Bahşiş Hesapla (%10 / %15 / %20 + yüzler) ──
-  ctx.textBaseline = 'alphabetic';
-  ctx.textAlign = 'left';
-  ctx.font = '22px Arial';
-  ctx.fillText('Bahşiş Hesapla', PAD, y + 18);
-  y += 36;
-  const tips = [
-    { pct: 10, mood: 'neutral' },
-    { pct: 15, mood: 'smile' },
-    { pct: 20, mood: 'grin' },
+  const splitRows = [
+    [2, 3, 4, 5, 6, 7],
+    [8, 9, 10, 11, 12],
   ];
-  const tipW = (RIGHT - PAD) / 3;
-  const faceR = 24;
-  tips.forEach((t, i) => {
-    const cx = PAD + i * tipW + 38;
-    const cy = y + faceR + 6;
-    drawFace(ctx, cx, cy, faceR, t.mood);
-    ctx.fillStyle = '#000';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.font = 'bold 22px Arial';
-    ctx.fillText(`%${t.pct}`, cx + faceR + 12, cy - 10);
-    ctx.font = '22px Arial';
-    ctx.fillText(fmt((toplam * t.pct) / 100), cx + faceR + 12, cy + 16);
-  });
-  y += faceR * 2 + 28;
+  const cellsPerRow = 6;
+  const cellW = (RIGHT - PAD) / cellsPerRow;
+  const cellHeadH = 30;
+  const cellValH = 34;
+  ctx.lineWidth = 2;
+  for (const row of splitRows) {
+    row.forEach((n, i) => {
+      const x = PAD + i * cellW;
+      // başlık hücresi (gri dolgu)
+      ctx.fillStyle = '#d9d9d9';
+      ctx.fillRect(x, y, cellW, cellHeadH);
+      ctx.fillStyle = '#000';
+      ctx.strokeRect(x, y, cellW, cellHeadH);
+      ctx.strokeRect(x, y + cellHeadH, cellW, cellValH);
+      ctx.font = 'bold 18px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${n} Kişi`, x + cellW / 2, y + cellHeadH / 2);
+      ctx.font = '20px Arial';
+      ctx.fillText(fmt(toplam / n), x + cellW / 2, y + cellHeadH + cellValH / 2);
+    });
+    y += cellHeadH + cellValH;
+  }
+  y += 26;
 
   // ── Alt notlar ──
   ctx.textAlign = 'center';
@@ -301,34 +282,3 @@ export async function renderAdisyonBitmap({ order, settings = {} }) {
   return { dataUrl, base64 };
 }
 
-/**
- * Basit çizgi-yüz: nötr / gülümseme / büyük gülümseme.
- */
-function drawFace(ctx, cx, cy, r, mood) {
-  ctx.strokeStyle = '#000';
-  ctx.fillStyle = '#000';
-  ctx.lineWidth = 2.5;
-  // yüz
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.stroke();
-  // gözler
-  const ex = r * 0.42;
-  const ey = r * 0.28;
-  ctx.beginPath();
-  ctx.arc(cx - ex, cy - ey, 2.8, 0, Math.PI * 2);
-  ctx.arc(cx + ex, cy - ey, 2.8, 0, Math.PI * 2);
-  ctx.fill();
-  // ağız
-  ctx.beginPath();
-  if (mood === 'neutral') {
-    ctx.moveTo(cx - r * 0.45, cy + r * 0.35);
-    ctx.lineTo(cx + r * 0.45, cy + r * 0.35);
-  } else if (mood === 'smile') {
-    ctx.arc(cx, cy + r * 0.1, r * 0.5, 0.15 * Math.PI, 0.85 * Math.PI);
-  } else {
-    // grin — daha geniş
-    ctx.arc(cx, cy, r * 0.6, 0.1 * Math.PI, 0.9 * Math.PI);
-  }
-  ctx.stroke();
-}
