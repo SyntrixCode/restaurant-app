@@ -1,12 +1,13 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, useNavigate, NavLink } from 'react-router-dom';
-import { LogOut, ShoppingCart, Truck, Grid3x3, ClipboardList } from 'lucide-react';
+import { LogOut, ShoppingCart, Truck, Grid3x3, ClipboardList, Settings as SettingsIcon } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import PoweredBy from '../PoweredBy';
 import WaiterCallAlert from '../WaiterCallAlert';
 import ShiftButton from '../ShiftButton';
 import OfflineBanner from '../OfflineBanner';
+import PosDeviceSettingsModal from '../PosDeviceSettingsModal';
 import {
   checkCustomerDisplayAvailable,
   startCustomerDisplay,
@@ -22,6 +23,7 @@ export default function PosLayout() {
   const { settings } = useSettingsStore();
   const isKasiyer = rol === 'kasiyer' || rol === 'admin';
   const isKurye = rol === 'kurye';
+  const [deviceSettingsOpen, setDeviceSettingsOpen] = useState(false);
 
   // Yeni sipariş ses bildirimi (mutfak/kasa için)
   useNewOrderAlert();
@@ -72,11 +74,19 @@ export default function PosLayout() {
             <PosNavLink to="/pos/packages" icon={Truck} label="Paket Servis" />
           )}
           <ShiftButton />
+          <button
+            onClick={() => setDeviceSettingsOpen(true)}
+            className="btn-ghost"
+            title="Bu cihazın yazıcı ayarları"
+          >
+            <SettingsIcon size={16} />
+          </button>
           <button onClick={handleLogout} className="btn-ghost">
             <LogOut size={16} /> Çıkış
           </button>
         </nav>
       </header>
+      <PosDeviceSettingsModal open={deviceSettingsOpen} onClose={() => setDeviceSettingsOpen(false)} />
       <main className="flex-1 overflow-y-auto">
         <Outlet />
       </main>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2, Printer as PrinterIcon, Star, Zap, Wallet, Bell } from 'lucide-react';
+import { Plus, Pencil, Trash2, Printer as PrinterIcon, Star, Zap, Wallet, Bell, Receipt } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import Modal from '../../components/ui/Modal';
 import Toggle from '../../components/ui/Toggle';
@@ -126,6 +126,11 @@ export default function Printers() {
                 <Bell size={12} /> Sipariş zili bağlı
               </p>
             )}
+            {p.adisyonBas && (
+              <p className="flex items-center gap-1 text-xs font-medium text-purple-700">
+                <Receipt size={12} /> Adisyon basıcı
+              </p>
+            )}
             <div className="mt-2 flex flex-wrap gap-2">
               <button onClick={() => handleTest(p)} className="btn-ghost flex-1 text-xs text-emerald-700 hover:bg-emerald-50">
                 <Zap size={14} /> Test Yazdır
@@ -181,7 +186,7 @@ function PrinterModal({ open, onClose, editing }) {
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(printerSchema),
-    defaultValues: { ad: '', model: 'SRP-E300', baglanti: 'ethernet', ip: '', port: 9100, varsayilan: false, aktif: true, kasaBagli: false, siparisZili: false },
+    defaultValues: { ad: '', model: 'SRP-E300', baglanti: 'ethernet', ip: '', port: 9100, varsayilan: false, aktif: true, kasaBagli: false, siparisZili: false, adisyonBas: false },
   });
 
   useEffect(() => {
@@ -198,6 +203,7 @@ function PrinterModal({ open, onClose, editing }) {
               aktif: editing.aktif ?? true,
               kasaBagli: editing.kasaBagli ?? false,
               siparisZili: editing.siparisZili ?? false,
+              adisyonBas: editing.adisyonBas ?? false,
             }
           : { ad: '', model: 'SRP-E300', ip: '', port: 9100, varsayilan: false, aktif: true, kasaBagli: false },
       );
@@ -311,6 +317,17 @@ function PrinterModal({ open, onClose, editing }) {
             </p>
           </div>
           <Toggle checked={watch('siparisZili')} onChange={(v) => setValue('siparisZili', v)} />
+        </div>
+        <div className="flex items-center justify-between rounded-lg bg-purple-50 p-3">
+          <div>
+            <span className="text-sm font-medium text-slate-700">Adisyon basabilir</span>
+            <p className="text-xs text-slate-500">
+              Müşteriye verilen hesap fişi (adisyon) ve ödeme fişi bu yazıcıdan basılır.
+              Birden fazla işaretli yazıcı varsa her POS tableti kendi adisyon yazıcısını
+              POS &rarr; Ayarlar'dan seçer.
+            </p>
+          </div>
+          <Toggle checked={watch('adisyonBas')} onChange={(v) => setValue('adisyonBas', v)} />
         </div>
         <p className="text-xs text-slate-500">
           Bu yazıcıya yönlendirilen kategorilerin siparişleri buradan ESC/POS protokolü ile basılır.

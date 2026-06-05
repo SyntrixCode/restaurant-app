@@ -9,6 +9,7 @@ import {
 } from '../plugins/iminPrinter';
 import { printNetworkReceipt } from '../plugins/networkPrinter';
 import { watchCollection } from '../firebase/firestore';
+import { pickAdisyonPrinter } from '../utils/posDeviceSettings';
 
 const YONTEM_LABEL = {
   nakit: 'NAKİT',
@@ -33,9 +34,7 @@ export default function ReceiptPreview({ open, onClose, order, payments, setting
 
   // Aktif ağ yazıcılarını dinle
   useEffect(() => watchCollection('printers', setNetworkPrinters), []);
-  const activePrinter = networkPrinters.find(
-    (p) => p.aktif && (p.ip || p.baglanti === 'usb'),
-  );
+  const activePrinter = pickAdisyonPrinter(networkPrinters);
 
   // Modal açılır açılmaz yazıcı varsa otomatik bas
   useEffect(() => {

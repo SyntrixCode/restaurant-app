@@ -220,6 +220,9 @@ export const printerSchema = z
     kasaBagli: z.boolean().optional().default(false),
     // DK portuna buzzer/zil takılıysa true. Mutfak adisyonu basıldıktan sonra tetiklenir.
     siparisZili: z.boolean().optional().default(false),
+    // Bu yazıcı adisyon/hesap fişi basabilir mi? Birden fazla işaretliyse cihaz
+    // ayarı (localStorage posDeviceAdisyonPrinterId) ile tercih belirlenir.
+    adisyonBas: z.boolean().optional().default(false),
   })
   // Ethernet'te IP zorunlu ve formatlı, USB'de boş geçilebilir.
   .superRefine((data, ctx) => {

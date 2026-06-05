@@ -45,6 +45,7 @@ import SplitReceiptModal from '../../components/SplitReceiptModal';
 import PaymentSummaryModal from '../../components/PaymentSummaryModal';
 import { pushToCustomerDisplay } from '../../plugins/customerDisplay';
 import { openCashDrawer } from '../../plugins/networkPrinter';
+import { pickAdisyonPrinter } from '../../utils/posDeviceSettings';
 
 const YEMEK_KARTI_TIPLERI = ['Multinet', 'Sodexo', 'Ticket', 'Setcard', 'Edenred', 'Metropol', 'Diğer'];
 
@@ -84,10 +85,8 @@ export default function Payment() {
   // Network yazıcı tercihi
   const [networkPrinters, setNetworkPrinters] = useState([]);
   useEffect(() => watchCollection('printers', setNetworkPrinters), []);
-  // USB modda IP olmaz — ya ip dolu (Ethernet) ya da baglanti='usb' olan ilk aktif yazıcı.
-  const activePrinter = networkPrinters.find(
-    (p) => p.aktif && (p.ip || p.baglanti === 'usb'),
-  );
+  // Bu cihazın adisyon yazıcısı — localStorage tercihi + adisyonBas flag + varsayilan.
+  const activePrinter = pickAdisyonPrinter(networkPrinters);
   // Liste / Kutular görünüm tercihi (cihaz başına saklı)
   const [itemViewMode, setItemViewMode] = useState(() => {
     if (typeof window === 'undefined') return 'list';

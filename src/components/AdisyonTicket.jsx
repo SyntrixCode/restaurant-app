@@ -4,6 +4,7 @@ import { printReceipt as iminPrintReceipt, isIminPrinterAvailable } from '../plu
 import { printNetworkReceipt } from '../plugins/networkPrinter';
 import { watchCollection } from '../firebase/firestore';
 import { renderAdisyonBitmap } from '../utils/adisyonBitmap';
+import { pickAdisyonPrinter } from '../utils/posDeviceSettings';
 
 /**
  * Adisyon (hesap fişi) — ödemeden ÖNCE müşteriye verilen hesap.
@@ -19,9 +20,7 @@ export default function AdisyonTicket({ open, onClose, order, settings }) {
   const printStartedRef = useRef(false);
 
   useEffect(() => watchCollection('printers', setNetworkPrinters), []);
-  const activePrinter = networkPrinters.find(
-    (p) => p.aktif && (p.ip || p.baglanti === 'usb'),
-  );
+  const activePrinter = pickAdisyonPrinter(networkPrinters);
 
   useEffect(() => {
     if (!open) {
