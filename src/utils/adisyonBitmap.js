@@ -7,12 +7,12 @@
  * yazıcıya gönderilir.
  */
 
-// 80mm kağıda sıfır-sıfır basmak için: tasarım canvas'ı 576 nokta (80mm @ 203dpi),
-// downscale yapılmaz — hedef de 576. Eski 58mm iMin için 384 değeri kullanılırdı,
-// artık Bixolon 80mm yazıcılar için tam genişlik.
-const WIDTH = 576;
-const TARGET_WIDTH = 576; // 80mm @ 203dpi (Bixolon SRP-E300 vb.)
-const PAD = 18;
+// 80mm kağıda basmak için: SRP-E300'ün gerçek baskı alanı modele göre 512 nokta
+// (64mm). Daha büyük (576) verince sağ taraf kesiliyor. Tasarımı 512'de yapıp
+// downscale yapmıyoruz; PTR_BM_CENTER native tarafta ortalar.
+const WIDTH = 512;
+const TARGET_WIDTH = 512;
+const PAD = 16;
 const RIGHT = WIDTH - PAD;
 
 function fmt(n) {
@@ -71,8 +71,8 @@ export async function renderAdisyonBitmap({ order, settings = {} }) {
   const now = new Date();
   const tarih = `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()}  ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
   const fisNo = String(order.id || '').slice(0, 8).toUpperCase();
-  const labelX = PAD + 10;
-  const valX = PAD + 168;
+  const labelX = PAD + 8;
+  const valX = PAD + 150;
   const rows = [
     { l: 'ADİSYON NO:', v: fisNo, big: false },
     { l: 'GARSON:', v: order.garsonAd || '-', big: false },
@@ -112,9 +112,9 @@ export async function renderAdisyonBitmap({ order, settings = {} }) {
   y = ry + 14;
 
   // ── Ürün tablosu ──
-  // başlık satırı
-  const colMik = PAD + 300;
-  const colFiyat = PAD + 390;
+  // başlık satırı — 512 nokta genişlikte düzen
+  const colMik = PAD + 260;
+  const colFiyat = PAD + 340;
   const colTutar = RIGHT;
   const itemsTop = y;
   ctx.lineWidth = 2;
