@@ -18,6 +18,7 @@ import { importMenu } from '../../firebase/menuImport';
 export default function Products() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [printers, setPrinters] = useState([]);
   const { settings } = useSettingsStore();
   const [filter, setFilter] = useState({ categoryId: 'all', stock: 'all', search: '' });
   const [open, setOpen] = useState(false);
@@ -70,6 +71,7 @@ export default function Products() {
 
   useEffect(() => watchCollection('products', setProducts), []);
   useEffect(() => watchCollection('categories', setCategories, orderBy('sira', 'asc')), []);
+  useEffect(() => watchCollection('printers', setPrinters), []);
 
   const globalEsigi = settings.dusukStokEsigi || 5;
 
@@ -253,13 +255,16 @@ export default function Products() {
         </table>
       </div>
 
-      <ProductModal open={open} onClose={() => setOpen(false)} editing={editing} categories={categories} />
+      <ProductModal open={open} onClose={() => setOpen(false)} editing={editing} categories={categories} printers={printers} />
     </div>
   );
 }
 
-function ProductModal({ open, onClose, editing, categories }) {
+function ProductModal({ open, onClose, editing, categories, printers = [] }) {
   const isEdit = !!editing;
+  // Mutfak yönlendirmesi için sadece IP'li (ethernet) yazıcılar seçilebilir —
+  // USB adisyon yazıcıları (Kasa) mutfak hedefi değildir.
+  const kitchenPrinters = printers.filter((p) => p.ip);
   const [uploading, setUploading] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
 
@@ -273,7 +278,7 @@ function ProductModal({ open, onClose, editing, categories }) {
   } = useForm({
     resolver: zodResolver(productSchema),
     defaultValues: {
-      ad: '', categoryId: '', fiyat: 0, stokTakipli: false, stok: 0, aciklama: '', opsiyonlar: [],
+      ad: '', categoryId: '', yaziciIds: [], fiyat: 0, stokTakipli: false, stok: 0, aciklama: '', opsiyonlar: [],
       ceviri: { en: { ad: '', aciklama: '' }, ar: { ad: '', aciklama: '' } },
       aktif: true,
     },
@@ -286,6 +291,7 @@ function ProductModal({ open, onClose, editing, categories }) {
           ? {
               ad: editing.ad,
               categoryId: editing.categoryId,
+              yaziciIds: Array.isArray(editing.yaziciIds) ? editing.yaziciIds : [],
               fiyat: editing.fiyat,
               // Mevcut ürünlerde undefined ise eski davranış (takipli) korunur
               stokTakipli: editing.stokTakipli !== false,
@@ -302,6 +308,7 @@ function ProductModal({ open, onClose, editing, categories }) {
           : {
               ad: '',
               categoryId: categories[0]?.id || '',
+              yaziciIds: [],
               fiyat: 0,
               stokTakipli: false, // Yeni ürünlerde default: stoksuz
               stok: 0,
@@ -400,6 +407,47 @@ function ProductModal({ open, onClose, editing, categories }) {
             ))}
           </select>
           {errors.categoryId && <p className="mt-1 text-xs text-red-600">{errors.categoryId.message}</p>}
+        </div>
+
+        {/* Mutfak yazıcı yönlendirmesi — ürün-bazlı, çoklu seçim */}
+        <div className="col-span-2">
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Mutfak Yazıcısı (hangi istasyon[lar]da bassın)
+          </label>
+          {kitchenPrinters.length === 0 ? (
+            <p className="text-xs text-slate-400">Henüz IP'li mutfak yazıcısı yok.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {kitchenPrinters.map((p) => {
+                const sel = (watch('yaziciIds') || []).includes(p.id);
+                return (
+                  <button
+                    type="button"
+                    key={p.id}
+                    onClick={() => {
+                      const cur = watch('yaziciIds') || [];
+                      const next = cur.includes(p.id)
+                        ? cur.filter((x) => x !== p.id)
+                        : [...cur, p.id];
+                      setValue('yaziciIds', next, { shouldDirty: true });
+                    }}
+                    className={`rounded-lg border-2 px-3 py-2 text-sm font-medium transition ${
+                      sel
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {sel ? '✓ ' : ''}
+                    {p.ad}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <p className="mt-1 text-xs text-slate-500">
+            Boş bırakılırsa kategorinin yazıcısına gider. Birden fazla seçilirse ürün her
+            istasyondan basılır (ör. Köy Kahvaltısı → Kahvaltı + Çorba-Salata + Fırın).
+          </p>
         </div>
 
         <div>

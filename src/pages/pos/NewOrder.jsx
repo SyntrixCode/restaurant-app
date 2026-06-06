@@ -180,6 +180,9 @@ export default function NewOrder() {
         ad: it.ad,
         adet: it.adet,
         notlar: it.notlar,
+        // Mutfak yazıcı yönlendirmesi (anlık fiş kategoriye/ürüne göre bölünsün)
+        categoryId: it.categoryId || null,
+        yaziciIds: Array.isArray(it.yaziciIds) ? it.yaziciIds : [],
       }));
       if (orderId) {
         // Düzenleme diff'i (varsa)

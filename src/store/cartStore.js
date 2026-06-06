@@ -20,6 +20,9 @@ export const useCartStore = create((set, get) => ({
         fiyat: product.fiyat,
         adet: 1,
         notlar: initialNotes || '',
+        // Mutfak yazıcı yönlendirmesi için (anlık fiş + grup bölme)
+        categoryId: product.categoryId || null,
+        yaziciIds: Array.isArray(product.yaziciIds) ? product.yaziciIds : [],
       });
     }
     set({ items });

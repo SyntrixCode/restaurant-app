@@ -72,4 +72,43 @@ describe('groupItemsByPrinter', () => {
     expect(groups).toHaveLength(1);
     expect(groups[0].items).toHaveLength(2);
   });
+
+  it('ürün yaziciIds (çoklu) → kalem her istasyona basılır', () => {
+    const items = [{ ad: 'Köy Kahvaltısı', categoryId: 'c1', yaziciIds: ['p1', 'p2'] }];
+    const groups = groupItemsByPrinter(items, categories, printers);
+    expect(groups).toHaveLength(2);
+    const byPrinter = Object.fromEntries(groups.map((g) => [g.printer.id, g.items.map((i) => i.ad)]));
+    expect(byPrinter.p1).toEqual(['Köy Kahvaltısı']);
+    expect(byPrinter.p2).toEqual(['Köy Kahvaltısı']);
+  });
+
+  it('ürün yaziciIds kategoriyi ezer (override)', () => {
+    // Kategori c1 → varsayılan (p1) ama ürün yaziciIds=[p2] → p2'ye gider
+    const items = [{ ad: 'Sahanda', categoryId: 'c1', yaziciIds: ['p2'] }];
+    const groups = groupItemsByPrinter(items, categories, printers);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].printer.id).toBe('p2');
+  });
+
+  it('yaziciIds boşsa kategori kuralına düşer (geriye uyumlu)', () => {
+    const items = [{ ad: 'Ayran', categoryId: 'c2', yaziciIds: [] }];
+    const groups = groupItemsByPrinter(items, categories, printers);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].printer.id).toBe('p2');
+  });
+
+  it('yaziciIds pasif/bilinmeyen yazıcıya işaret ediyorsa kategori/varsayılana düşer', () => {
+    const items = [{ ad: 'X', categoryId: 'c2', yaziciIds: ['silinmis'] }];
+    const groups = groupItemsByPrinter(items, categories, printers);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].printer.id).toBe('p2'); // c2 → p2
+  });
+
+  it('çoklu yazıcıdan biri pasifse sadece aktif olana basılır', () => {
+    const items = [{ ad: 'Köy Kahvaltısı', yaziciIds: ['p1', 'p2'] }];
+    const onlyMutfak = [mutfak, { ...bar, aktif: false }];
+    const groups = groupItemsByPrinter(items, [], onlyMutfak);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].printer.id).toBe('p1');
+  });
 });
