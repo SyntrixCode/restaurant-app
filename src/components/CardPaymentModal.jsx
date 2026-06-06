@@ -39,6 +39,11 @@ export default function CardPaymentModal({
 
   const handleStart = async () => {
     if (amountNum <= 0) return;
+    // Manuel mod: tahsilat T650p'de elle yapılır; sahte akış yok, kasiyer sonucu işaretler
+    if (provider === 'manual') {
+      setStage('manual-confirm');
+      return;
+    }
     setStage('connecting');
     const result = await chargeCard({
       amount: amountNum,
@@ -95,6 +100,23 @@ export default function CardPaymentModal({
             />
           )}
 
+          {stage === 'manual-confirm' && (
+            <ManualConfirmView
+              amount={amountNum}
+              onApprove={() => {
+                setStage('approved');
+                const result = { ok: true, mode: 'manual' };
+                setDetail(result);
+                setTimeout(() => onApproved(Math.min(amountNum, remaining), result), 900);
+              }}
+              onDecline={() => {
+                setStage('declined');
+                setDetail({ reason: 'Tahsilat alınamadı / iptal edildi' });
+              }}
+              onBack={reset}
+            />
+          )}
+
           {(stage === 'connecting' || stage === 'sending' || stage === 'waiting' || stage === 'processing') && (
             <ProcessingView amount={amountNum} stage={stage} detail={detail} provider={provider} />
           )}
@@ -145,9 +167,15 @@ function InputView({ amount, setAmount, remaining, onCancel, onStart, provider }
       <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
         <div className="mb-1 flex items-center gap-1.5 font-semibold">
           <Smartphone size={12} />
-          {provider === 'simulation' ? 'T650p simülasyon modu' : 'T650p (canlı)'}
+          {provider === 'manual'
+            ? 'Manuel kart tahsilatı'
+            : provider === 'simulation'
+              ? 'T650p simülasyon modu'
+              : 'T650p (canlı)'}
         </div>
-        {provider === 'simulation' ? (
+        {provider === 'manual' ? (
+          <p>Bu tutarı T650p cihazına elle girip kartı okutun, sonra sonucu işaretleyin.</p>
+        ) : provider === 'simulation' ? (
           <p>
             Banka entegrasyonu hazır olana kadar simülasyon modu çalışır.
             Müşteri kartı okutmuş gibi akış gösterilir, gerçek tahsilat yapılmaz.
@@ -166,10 +194,45 @@ function InputView({ amount, setAmount, remaining, onCancel, onStart, provider }
           disabled={amountNum <= 0}
           className="btn-primary flex-1 disabled:opacity-50"
         >
-          <Smartphone size={14} /> POS'a Gönder
+          <Smartphone size={14} /> {provider === 'manual' ? 'Devam' : "POS'a Gönder"}
         </button>
       </div>
     </>
+  );
+}
+
+function ManualConfirmView({ amount, onApprove, onDecline, onBack }) {
+  return (
+    <div className="space-y-5">
+      {/* Tutar ekranı — kasiyere hatırlatma */}
+      <div className="rounded-xl border-2 border-slate-900 bg-slate-900 p-6 text-white">
+        <div className="mb-1 text-center text-xs uppercase tracking-widest text-slate-400">
+          T650p'ye girilecek tutar
+        </div>
+        <div className="text-center text-4xl font-bold tabular-nums">{formatTL(amount)}</div>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+        <p className="font-semibold text-slate-700">Adımlar</p>
+        <ol className="mt-1 list-decimal space-y-0.5 pl-4">
+          <li>Tutarı T650p cihazına girin</li>
+          <li>Müşteriye kartı okutturun</li>
+          <li>Sonuca göre aşağıdan işaretleyin</li>
+        </ol>
+      </div>
+
+      <div className="flex gap-2">
+        <button onClick={onDecline} className="btn-secondary flex-1 !text-red-600">
+          <AlertCircle size={14} /> Reddedildi / İptal
+        </button>
+        <button onClick={onApprove} className="btn-primary flex-1 !bg-emerald-600 hover:!bg-emerald-700">
+          <Check size={14} /> Tahsilat Onaylandı
+        </button>
+      </div>
+      <button onClick={onBack} className="w-full text-center text-xs text-slate-400 hover:text-slate-600">
+        ← Tutarı değiştir
+      </button>
+    </div>
   );
 }
 
@@ -247,7 +310,7 @@ function ApprovedView({ amount, detail }) {
       </div>
       <h4 className="text-xl font-bold text-emerald-700">Ödeme Onaylandı</h4>
       <p className="mt-1 text-2xl font-bold tabular-nums">{formatTL(amount)}</p>
-      {detail && (
+      {detail && (detail.cardType || detail.approvalCode || detail.mode === 'simulation') && (
         <div className="mt-4 rounded-lg bg-slate-50 p-3 text-left text-xs">
           {detail.cardType && (
             <div className="flex justify-between">

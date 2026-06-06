@@ -24,7 +24,7 @@ const DEFAULTS = {
     rezervasyon: true,
     sesliUyari: true,
   },
-  cardPaymentProvider: 'simulation',
+  cardPaymentProvider: 'manual',
   cardTerminalIp: '',
   cardTerminalPort: 9100,
 };

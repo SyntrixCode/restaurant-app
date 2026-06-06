@@ -108,7 +108,7 @@ export const settingsSchema = z.object({
     sesliUyari: z.boolean(),
   }),
   // Kart POS (ECR) — Payment.jsx bu alanları okur; canlı entegrasyon banka onayı sonrası
-  cardPaymentProvider: z.enum(['simulation', 'verifone-tcp']).default('simulation'),
+  cardPaymentProvider: z.enum(['manual', 'simulation', 'verifone-tcp']).default('manual'),
   cardTerminalIp: z
     .string()
     .regex(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/, 'Geçerli IP girin (örn. 192.168.1.50)')

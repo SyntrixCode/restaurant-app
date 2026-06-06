@@ -41,7 +41,7 @@ const DEFAULT_VALUES = {
     rezervasyon: true,
     sesliUyari: true,
   },
-  cardPaymentProvider: 'simulation',
+  cardPaymentProvider: 'manual',
   cardTerminalIp: '',
   cardTerminalPort: 9100,
 };
@@ -227,6 +227,7 @@ export default function AdminSettings() {
           <Section title="Kart POS" icon={CreditCard}>
             <Field label="Kart Ödeme Modu" error={errors.cardPaymentProvider}>
               <select {...register('cardPaymentProvider')} className="input">
+                <option value="manual">Manuel Kart (T650p'de elle tahsilat — önerilen)</option>
                 <option value="simulation">Simülasyon (demo — gerçek tahsilat yok)</option>
                 <option value="verifone-tcp">Verifone T650p (ECR — canlı)</option>
               </select>
@@ -258,11 +259,16 @@ export default function AdminSettings() {
                   Simülasyon'da kalın — bu modda gerçek tahsilat denemesi başarısız olur.
                 </div>
               </>
-            ) : (
+            ) : cardProvider === 'simulation' ? (
               <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
                 Simülasyon modunda kart akışı taklit edilir, <strong>gerçek tahsilat yapılmaz</strong>.
-                Banka/PF ECR entegrasyonu hazır olunca "Verifone T650p" moduna geçip terminal IP'sini
-                girin — başka bir değişiklik gerekmez.
+                Sadece demo/eğitim içindir. Canlı kullanımda <strong>Manuel Kart</strong> modunu seçin.
+              </div>
+            ) : (
+              <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-800">
+                Manuel modda tahsilatı <strong>T650p cihazından elle</strong> alırsınız; uygulama tutarı
+                gösterir, onayı siz işaretlersiniz. Sahte onay/animasyon yoktur. Halkbank ECR
+                entegrasyonu tamamlanınca "Verifone T650p" moduna geçerek otomatik tahsilata geçebilirsiniz.
               </div>
             )}
           </Section>
