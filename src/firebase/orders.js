@@ -559,6 +559,63 @@ export async function cancelActiveOrder({ orderId, sebep, kullaniciId, kullanici
 }
 
 /**
+ * Aktif bir siparişi bir masadan başka BOŞ masaya taşır/aktarır.
+ * - Sipariş.masaId ve masaAd hedef masaya güncellenir (tüm sipariş bilgisi taşınır)
+ * - Kaynak masa 'bos', hedef masa 'dolu' olur
+ * - Birleşik (gruplu) masalar desteklenmez — önce grup çözülmeli
+ *
+ * @param {{ orderId:string, sourceTableId:string, targetTableId:string, kullaniciId?:string, kullaniciAd?:string }}
+ */
+export async function transferOrder({ orderId, sourceTableId, targetTableId, kullaniciId, kullaniciAd }) {
+  if (!orderId || !sourceTableId || !targetTableId) {
+    throw new Error('orderId, kaynak ve hedef masa zorunlu');
+  }
+  if (sourceTableId === targetTableId) {
+    throw new Error('Aynı masaya taşıma yapılamaz');
+  }
+
+  const orderRef = doc(db, 'orders', orderId);
+  const sourceRef = doc(db, 'tables', sourceTableId);
+  const targetRef = doc(db, 'tables', targetTableId);
+
+  return runTransaction(db, async (txn) => {
+    // === READS ===
+    const orderSnap = await txn.get(orderRef);
+    if (!orderSnap.exists()) throw new Error('Sipariş bulunamadı');
+    const order = orderSnap.data();
+    if (!['aktif', 'hazirlandi', 'masayaGitti'].includes(order.durum)) {
+      throw new Error('Sadece aktif sipariş taşınabilir');
+    }
+
+    const targetSnap = await txn.get(targetRef);
+    if (!targetSnap.exists()) throw new Error('Hedef masa bulunamadı');
+    const target = targetSnap.data();
+    if (target.grupId) throw new Error('Hedef masa birleşik bir grubun üyesi');
+    if ((target.durum || 'bos') !== 'bos') throw new Error('Hedef masa boş değil');
+
+    const sourceSnap = await txn.get(sourceRef);
+    if (sourceSnap.exists() && sourceSnap.data().grupId) {
+      throw new Error('Birleşik masa taşınamaz, önce grubu çözün');
+    }
+
+    // === WRITES ===
+    // Sipariş hedef masaya bağlanır
+    txn.update(orderRef, {
+      masaId: targetTableId,
+      masaAd: target.ad,
+      tasimaZamani: serverTimestamp(),
+      tasiyanId: kullaniciId || null,
+      tasiyanAd: kullaniciAd || null,
+    });
+    // Kaynak masa boşalır, hedef masa dolar
+    if (sourceSnap.exists()) txn.update(sourceRef, { durum: 'bos' });
+    txn.update(targetRef, { durum: 'dolu' });
+
+    return { ok: true };
+  });
+}
+
+/**
  * Arşivlenmiş (ödenmiş) bir siparişi iptal eder. Veri silinmez,
  * iptal damgası bırakılır. Raporlama bu damgaya bakıp toplamlardan
  * düşer.

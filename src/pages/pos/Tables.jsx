@@ -20,6 +20,7 @@ import {
   Trash2,
   Ban,
   Printer,
+  ArrowLeftRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useForm } from 'react-hook-form';
@@ -30,7 +31,7 @@ import { useAuthStore } from '../../store/authStore';
 import Modal from '../../components/ui/Modal';
 import { createTableGroup, addTableToGroup, dissolveTableGroup } from '../../firebase/tableGroups';
 import { createReservation, cancelReservation } from '../../firebase/reservations';
-import { cancelActiveOrder } from '../../firebase/orders';
+import { cancelActiveOrder, transferOrder } from '../../firebase/orders';
 import { reservationSchema } from '../../utils/validators';
 import KitchenTicket from '../../components/KitchenTicket';
 import AdisyonTicket from '../../components/AdisyonTicket';
@@ -856,6 +857,7 @@ export default function PosTables() {
         open={!!selectedTable}
         onClose={() => setSelectedTable(null)}
         table={selectedTable}
+        tables={tables}
         rol={rol}
         navigate={navigate}
         onDissolve={handleDissolve}
@@ -1399,17 +1401,32 @@ function CanvasDecoration({ decor }) {
   );
 }
 
-function FullTableModal({ open, onClose, table, rol, navigate, onDissolve }) {
+function FullTableModal({ open, onClose, table, tables = [], rol, navigate, onDissolve }) {
   const { user, profile } = useAuthStore();
   const { settings } = useSettingsStore();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancellingTicket, setCancellingTicket] = useState(null);
   const [adisyonOpen, setAdisyonOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   if (!open || !table) return null;
   const order = table.order;
   const group = table.group;
   const canPay = ['kasiyer', 'admin'].includes(rol);
   const canCancel = ['kasiyer', 'admin'].includes(rol);
+
+  const handleTransfer = async (targetTableId) => {
+    // hata fırlatırsa alt modal yakalar ve toast gösterir, açık kalır
+    await transferOrder({
+      orderId: order.id,
+      sourceTableId: table.id,
+      targetTableId,
+      kullaniciId: user?.uid,
+      kullaniciAd: profile?.ad || null,
+    });
+    toast.success('Masa taşındı');
+    setTransferOpen(false);
+    onClose();
+  };
 
   const handleCancelConfirm = async (sebep) => {
     try {
@@ -1525,6 +1542,16 @@ function FullTableModal({ open, onClose, table, rol, navigate, onDissolve }) {
             )}
           </div>
 
+          {/* Masayı Taşı / Aktar — siparişi başka boş masaya taşır (birleşik masada gizli) */}
+          {!group && (
+            <button
+              onClick={() => setTransferOpen(true)}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100"
+            >
+              <ArrowLeftRight size={16} /> Masayı Taşı / Aktar
+            </button>
+          )}
+
           {/* Hesap Fişi (Adisyon) — ödemeden önce müşteriye verilir */}
           <button
             onClick={() => setAdisyonOpen(true)}
@@ -1552,6 +1579,14 @@ function FullTableModal({ open, onClose, table, rol, navigate, onDissolve }) {
         orderTotal={order?.toplam}
       />
 
+      <TransferTableModal
+        open={transferOpen}
+        onClose={() => setTransferOpen(false)}
+        sourceTable={table}
+        tables={tables}
+        onConfirm={handleTransfer}
+      />
+
       {/* İptal fişi mutfağa otomatik basar (modal açılınca KitchenTicket akışı) */}
       <KitchenTicket
         open={!!cancellingTicket}
@@ -1569,6 +1604,97 @@ function FullTableModal({ open, onClose, table, rol, navigate, onDissolve }) {
         order={order}
         settings={settings}
       />
+    </Modal>
+  );
+}
+
+function TransferTableModal({ open, onClose, sourceTable, tables = [], onConfirm }) {
+  const [targetId, setTargetId] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setTargetId(null);
+      setSubmitting(false);
+    }
+  }, [open]);
+
+  if (!open || !sourceTable) return null;
+
+  // Uygun hedefler: boş + gruplu olmayan + kaynak masa değil (tüm bölgeler)
+  const candidates = tables
+    .filter(
+      (t) => t.id !== sourceTable.id && (t.durum || 'bos') === 'bos' && !t.grupId,
+    )
+    .sort(
+      (a, b) =>
+        String(a.zone || '').localeCompare(String(b.zone || '')) ||
+        String(a.ad).localeCompare(String(b.ad), 'tr', { numeric: true }),
+    );
+
+  const handleConfirm = async () => {
+    if (!targetId) return;
+    setSubmitting(true);
+    try {
+      await onConfirm(targetId);
+    } catch (err) {
+      console.error(err);
+      toast.error(err?.message || 'Taşıma başarısız');
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={`${sourceTable.ad} → Masayı Taşı`}
+      size="md"
+      footer={
+        <>
+          <button onClick={onClose} disabled={submitting} className="btn-secondary">
+            İptal
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={!targetId || submitting}
+            className="btn-primary disabled:opacity-50"
+          >
+            <ArrowLeftRight size={14} /> {submitting ? 'Taşınıyor…' : 'Taşı'}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <p className="text-sm text-slate-600">
+          <strong>{sourceTable.ad}</strong> masasındaki siparişin tamamı seçeceğin boş masaya
+          aktarılacak.
+        </p>
+        {candidates.length === 0 ? (
+          <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+            Aktarılabilecek boş masa yok.
+          </p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            {candidates.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTargetId(t.id)}
+                className={`rounded-lg border-2 p-2 text-center transition ${
+                  targetId === t.id
+                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    : 'border-slate-200 text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <div className="text-sm font-semibold">{t.ad}</div>
+                <div className="text-[10px] text-slate-400">
+                  {ZONE_LABELS[t.zone] || t.zone || 'İç Salon'} · {t.kapasite}k
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </Modal>
   );
 }
