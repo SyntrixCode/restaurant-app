@@ -7,11 +7,12 @@
  * yazıcıya gönderilir.
  */
 
-// 80mm kağıda sıfır-sıfır basmak için: tasarım canvas'ı 576 nokta (80mm @ 203dpi),
-// downscale yapılmaz — hedef de 576. Eski 58mm iMin için 384 değeri kullanılırdı,
-// artık Bixolon 80mm yazıcılar için tam genişlik.
+// Tasarım canvas'ı 576 nokta (80mm @ 203dpi) genişliğinde çizilir, ardından
+// yazıcının GÜVENLİ basılabilir genişliğine küçültülür. Bazı 80mm yazıcılar
+// 576 noktanın tamamını basamayıp sağ kenarı kırpıyor; 512 güvenli değer.
+// Hâlâ sağ taraf taşarsa bu değeri düşür (ör. 384 = 58mm), tamamı sığarsa 576 yap.
 const WIDTH = 576;
-const TARGET_WIDTH = 576; // 80mm @ 203dpi (Bixolon SRP-E300 vb.)
+const TARGET_WIDTH = 512; // güvenli basılabilir genişlik (sağ kenar kırpılmasını önler)
 const PAD = 18;
 const RIGHT = WIDTH - PAD;
 
@@ -253,7 +254,7 @@ export async function renderAdisyonBitmap({ order, settings = {} }) {
 
   const contentH = Math.ceil(y);
 
-  // Hedef yazıcı genişliğine indirge (576 → 384) ve içerik yüksekliğine kırp
+  // Hedef yazıcı genişliğine indirge (WIDTH → TARGET_WIDTH) ve içerik yüksekliğine kırp
   const scale = TARGET_WIDTH / WIDTH;
   const targetH = Math.max(1, Math.round(contentH * scale));
   const out = document.createElement('canvas');
