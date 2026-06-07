@@ -10,9 +10,12 @@ import {
   openInstallSourcesSetting,
   downloadAndInstall,
 } from '../../plugins/appUpdater';
+import { approveDistribution } from '../../firebase/distribution';
+import { useAuthStore } from '../../store/authStore';
 
 export default function UpdateCard() {
   const isNative = Capacitor.isNativePlatform();
+  const { user, profile, rol } = useAuthStore();
   const [checking, setChecking] = useState(false);
   const [info, setInfo] = useState(null); // { hasUpdate, current, latest }
   const [lastChecked, setLastChecked] = useState(null);
@@ -42,6 +45,19 @@ export default function UpdateCard() {
 
   const handleDownload = async () => {
     if (!info?.latest?.apkUrl) return;
+
+    // Admin onayı → settings/dagitim yazılır → diğer tabletlerin auto-update
+    // hook'u (useAutoUpdate) bunu yakalayıp sessizce indirir/kurar.
+    if (rol === 'admin') {
+      approveDistribution({
+        version: info.latest.version,
+        apkUrl: info.latest.apkUrl,
+        onaylayanId: user?.uid,
+        onaylayanAd: profile?.ad || 'Admin',
+      })
+        .then(() => toast.success('Diğer cihazlara dağıtım onaylandı', { duration: 4000 }))
+        .catch((e) => console.warn('Dağıtım yazılamadı:', e));
+    }
 
     // Native ortamda otomatik indir + yükle
     if (isNative && isAppUpdaterNative()) {

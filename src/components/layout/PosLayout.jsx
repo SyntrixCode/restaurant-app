@@ -8,6 +8,7 @@ import WaiterCallAlert from '../WaiterCallAlert';
 import ShiftButton from '../ShiftButton';
 import OfflineBanner from '../OfflineBanner';
 import PosDeviceSettingsModal from '../PosDeviceSettingsModal';
+import UpdateBanner from '../UpdateBanner';
 import {
   checkCustomerDisplayAvailable,
   startCustomerDisplay,
@@ -87,6 +88,11 @@ export default function PosLayout() {
         </nav>
       </header>
       <PosDeviceSettingsModal open={deviceSettingsOpen} onClose={() => setDeviceSettingsOpen(false)} />
+      {/* Yeni sürüm uyarısı — garson/kasiyer de kendi tabletini güncelleyebilsin
+          (admin'e gerek kalmadan). Güncelleme yoksa null döner, boşluk yapmaz. */}
+      <div className="px-4 pt-3 [&:empty]:hidden">
+        <UpdateBanner to="/pos/tables" />
+      </div>
       <main className="flex-1 overflow-y-auto">
         <Outlet />
       </main>
