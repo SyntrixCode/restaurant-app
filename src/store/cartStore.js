@@ -14,13 +14,19 @@ export const useCartStore = create((set, get) => ({
 
   addItem: (product, initialNotes = '', opsiyonProductIds = []) => {
     const items = [...get().items];
-    // Aynı üründen TAM SAYILI (kesirsiz) bir satır varsa onu arttır; yoksa yeni satır aç.
-    // Böylece 1,5 (yarım) satır varken ürüne tekrar dokunmak onu 2,5 yapmaz — ayrı satır olur.
-    const whole = items.find(
-      (it) => it.productId === product.id && Number.isInteger(it.adet),
+    const notlar = initialNotes || '';
+    // Aynı üründen TAM SAYILI (kesirsiz) ve AYNI NOTLU satır varsa onu arttır; yoksa
+    // yeni satır aç. Böylece ÖZELLEŞTİRİLMİŞ satırlar (ör. "sade"/"acılı" kahve) ve
+    // yarım porsiyon (1,5) satırlar ayrı kalır — yeni ekleme onlara yapışmaz.
+    // (Düz kahve eklenince "sade kahve" satırını 2 yapmaz, ayrı düz satır açar.)
+    const merge = items.find(
+      (it) =>
+        it.productId === product.id &&
+        Number.isInteger(it.adet) &&
+        (it.notlar || '') === notlar,
     );
-    if (whole) {
-      whole.adet += 1;
+    if (merge) {
+      merge.adet += 1;
     } else {
       items.push({
         lineId: newLineId(),
@@ -28,7 +34,7 @@ export const useCartStore = create((set, get) => ({
         ad: product.ad,
         fiyat: product.fiyat,
         adet: 1,
-        notlar: initialNotes || '',
+        notlar,
         // Opsiyondan seçilen, stoktan otomatik düşecek ürünler (ör. menü içeceği)
         opsiyonProductIds: Array.isArray(opsiyonProductIds) ? opsiyonProductIds : [],
         // Mutfak yazıcı yönlendirmesi için (anlık fiş + grup bölme)

@@ -22,7 +22,7 @@ import { watchDoc, watchCollection, patchDoc } from '../../firebase/firestore';
 import { formatTL, minutesSince, formatAdet } from '../../utils/format';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
-import { recordPayment } from '../../firebase/payments';
+import { recordPayment, closeAsPatron } from '../../firebase/payments';
 import {
   awardLoyaltyPoints,
   adjustLoyaltyPoints,
@@ -143,6 +143,23 @@ export default function Payment() {
       }
       next[i] = { ...s, selectedQty: newSel };
       return next;
+    });
+  };
+
+  /**
+   * Tüm siparişi tek seferde seç / seçimi temizle (çoklu siparişte kolaylık).
+   * Bir şey seçiliyse hepsini bırakır, değilse her kalemin kalan adedini seçer.
+   */
+  const toggleSelectAll = () => {
+    const anySelected = itemStates.some((s) => (s?.selectedQty || 0) > 0);
+    setItemStates((arr) => {
+      if (anySelected) return arr.map((s) => ({ ...s, selectedQty: 0 }));
+      return (order.items || []).map((it, i) => {
+        const s = arr[i] || { selectedQty: 0, ikramQty: 0, paidQty: 0 };
+        const total = Number(it.adet) || 0;
+        const rem = total - (s.ikramQty || 0) - (s.paidQty || 0);
+        return { ...s, selectedQty: Math.max(0, rem) };
+      });
     });
   };
 
@@ -584,6 +601,38 @@ export default function Payment() {
     }
   };
 
+  // Patron / ücretsiz kapatma — tüm hesap bedelsiz, ciroya yazılmaz, "İkram/Patron" eksi.
+  const handlePatronClose = async () => {
+    if (finalized || submitting) return;
+    if (
+      !confirm(
+        `Bu masa PATRON olarak ÜCRETSİZ kapatılsın mı?\n\n` +
+          `Tutar (${formatTL(subtotal)}) ciroya YAZILMAZ; gün sonu ve raporlarda ` +
+          `"İkram/Patron" olarak EKSİ (-) görünür.`,
+      )
+    )
+      return;
+    setSubmitting(true);
+    setFinalized(true);
+    try {
+      await closeAsPatron({
+        orderId: order.id,
+        kasiyerId: user.uid,
+        kasiyerAd: profile?.ad || 'Kasiyer',
+        sebep: 'Patron',
+      });
+      setChange(0);
+      toast.success('Patron masası — ücretsiz kapatıldı');
+      pushToCustomerDisplay({ mode: 'thanks', payment: { paraUstu: 0 } });
+      setSummaryOpen(true);
+    } catch (err) {
+      toast.error(err?.message || 'Kapatılamadı');
+      setFinalized(false);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const closeReceipt = () => {
     setReceiptOpen(false);
     navigate('/pos/tables');
@@ -623,6 +672,12 @@ export default function Payment() {
               <p className="text-xs text-slate-500">
                 Müşterinin yediklerine dokun → ödeme yöntemini seç
               </p>
+              <button
+                onClick={toggleSelectAll}
+                className="mt-1.5 rounded-lg border-2 border-blue-500 px-3 py-1.5 text-sm font-bold text-blue-700 transition hover:bg-blue-50 active:scale-95"
+              >
+                {itemStates.some((s) => (s?.selectedQty || 0) > 0) ? '✕ Seçimi Temizle' : '✓ Tümünü Seç'}
+              </button>
             </div>
             <div className="inline-flex overflow-hidden rounded-lg border border-slate-300 bg-white">
               <button
@@ -1009,6 +1064,15 @@ export default function Payment() {
           disabled={isFullyPaid}
         />
 
+        <button
+          onClick={handlePatronClose}
+          disabled={submitting || finalized}
+          title="Tüm hesabı patron/ikram olarak ücretsiz kapat (ciroya yazılmaz, gün sonunda eksi)"
+          className="flex items-center justify-center gap-2 rounded-xl border-2 border-rose-300 bg-rose-50 py-3 text-base font-bold text-rose-700 transition hover:bg-rose-100 active:scale-95 disabled:opacity-50"
+        >
+          <Gift size={18} /> PATRON / ÜCRETSİZ
+        </button>
+
         <div className="mt-auto rounded-lg bg-white p-3 text-xs text-slate-500">
           <p className="font-semibold text-slate-700">Bölünmüş Ödeme</p>
           <p>Önce ürünleri seç → ödeme yöntemini seç. Diğer müşteri için tekrarla.</p>
@@ -1273,11 +1337,8 @@ function ItemRowList({ item, state, onAdjustSelect, onIkram, onUnpay }) {
         : 'border-slate-200 bg-white hover:bg-slate-50';
 
   const handleRowClick = () => {
-    if (d.isAtomic) {
-      onAdjustSelect?.('toggle');
-    } else if (d.remainingQty > 0) {
-      onAdjustSelect?.('inc');
-    }
+    // Satıra dokun → tüm kalemi seç/bırak (kolaylık). İnce ayar +/- ile.
+    onAdjustSelect?.('toggle');
   };
 
   const stop = (e) => e.stopPropagation();
@@ -1415,8 +1476,8 @@ function ItemCard({ item, state, onAdjustSelect, onIkram, onUnpay }) {
 
   const stop = (e) => e.stopPropagation();
   const handleAreaClick = () => {
-    // Atomik (yarım porsiyon) → tek tıkla toggle. Çoklu adette sadece +/- ile.
-    if (d.isAtomic) onAdjustSelect?.('toggle');
+    // Karta dokun → tüm kalemi seç/bırak. İnce ayar sağdaki +/- ile.
+    onAdjustSelect?.('toggle');
   };
 
   return (

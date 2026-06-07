@@ -105,12 +105,12 @@ export default function NewOrder() {
     (e) => e.adet !== e.originalAdet || e.removed,
   );
 
-  // Ürüne tıklayınca: opsiyonu varsa ve sepete ilk kez ekleniyorsa modal,
-  // yoksa veya zaten ekliyse direkt adet arttır.
+  // Ürüne tıklayınca: opsiyonu varsa HER eklemede opsiyon modalı çıkar (her porsiyon
+  // kendi notunu/opsiyonunu alsın — 2. kahve otomatik 1.'nin "sade"sini almasın).
+  // Opsiyonsuz ürünlerde direkt eklenir; aynı notlu/tam satır varsa adet artar.
   const handleProductClick = (product) => {
     const hasOptions = (product.opsiyonlar || []).length > 0;
-    const alreadyInCart = items.some((it) => it.productId === product.id);
-    if (hasOptions && !alreadyInCart) {
+    if (hasOptions) {
       setOptionsFor(product);
     } else {
       addItem(product);

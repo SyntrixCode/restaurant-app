@@ -75,6 +75,7 @@ export function buildKitchenTicketLines({
   cancellationReason = '',
   isCorrection = false,
   correctionDiff = null,
+  printerAd = '',
 }) {
   const lines = [];
   const heading = isCancellation
@@ -91,6 +92,16 @@ export function buildKitchenTicketLines({
     size: isCancellation || isCorrection ? 42 : 36,
     bold: true,
   });
+  // İstasyon (yazıcı) adı — mutfaktaki kişi fişin kendisine ait olduğunu anlasın
+  if (printerAd) {
+    lines.push({
+      type: 'text',
+      text: `» ${String(printerAd).toLocaleUpperCase('tr-TR')} «`,
+      align: 'center',
+      size: 40,
+      bold: true,
+    });
+  }
   if (isCancellation && cancellationReason) {
     lines.push({
       type: 'text',

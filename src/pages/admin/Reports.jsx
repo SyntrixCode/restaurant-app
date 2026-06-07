@@ -8,6 +8,7 @@ import {
   Calendar,
   ShoppingBag,
   Wallet,
+  Gift,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -74,6 +75,11 @@ export default function AdminReports() {
   const totals = useMemo(() => {
     const sumToplam = orders.reduce((s, o) => s + (o.toplam || 0), 0);
     const sumKisi = orders.reduce((s, o) => s + (o.kisiSayisi || 0), 0);
+    // Patron/ücretsiz kapatılan masalar — ciroya dahil değil (toplam=0), ayrı izlenir
+    const sumPatron = orders.reduce(
+      (s, o) => s + (o.patronMasasi ? Number(o.patronTutar || 0) : 0),
+      0,
+    );
     const count = orders.length;
     return {
       ciro: sumToplam,
@@ -81,6 +87,7 @@ export default function AdminReports() {
       ortalama: count > 0 ? sumToplam / count : 0,
       kisi: sumKisi,
       kisiBasi: sumKisi > 0 ? sumToplam / sumKisi : 0,
+      patron: sumPatron,
     };
   }, [orders]);
 
@@ -291,12 +298,13 @@ export default function AdminReports() {
       </div>
 
       {/* KPI'lar */}
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-5">
+      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-6">
         <StatCard label="Ciro" value={formatTL(totals.ciro)} color="green" icon={TrendingUp} />
         <StatCard label="Sipariş" value={totals.siparis} color="blue" icon={Receipt} />
         <StatCard label="Ortalama Sepet" value={formatTL(totals.ortalama)} color="amber" icon={ShoppingBag} />
         <StatCard label="Toplam Kişi" value={totals.kisi} color="blue" icon={UsersIcon} />
         <StatCard label="Kişi Başı" value={formatTL(totals.kisiBasi)} color="green" icon={Wallet} />
+        <StatCard label="İkram / Patron" value={`- ${formatTL(totals.patron)}`} color="red" icon={Gift} />
       </div>
 
       {orders.length === 0 ? (
