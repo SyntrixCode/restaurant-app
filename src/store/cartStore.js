@@ -12,7 +12,7 @@ export const useCartStore = create((set, get) => ({
 
   start: (masaId, masaAd) => set({ masaId, masaAd, items: [] }),
 
-  addItem: (product, initialNotes = '') => {
+  addItem: (product, initialNotes = '', opsiyonProductIds = []) => {
     const items = [...get().items];
     // Aynı üründen TAM SAYILI (kesirsiz) bir satır varsa onu arttır; yoksa yeni satır aç.
     // Böylece 1,5 (yarım) satır varken ürüne tekrar dokunmak onu 2,5 yapmaz — ayrı satır olur.
@@ -29,6 +29,8 @@ export const useCartStore = create((set, get) => ({
         fiyat: product.fiyat,
         adet: 1,
         notlar: initialNotes || '',
+        // Opsiyondan seçilen, stoktan otomatik düşecek ürünler (ör. menü içeceği)
+        opsiyonProductIds: Array.isArray(opsiyonProductIds) ? opsiyonProductIds : [],
         // Mutfak yazıcı yönlendirmesi için (anlık fiş + grup bölme)
         categoryId: product.categoryId || null,
         yaziciIds: Array.isArray(product.yaziciIds) ? product.yaziciIds : [],

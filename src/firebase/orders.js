@@ -99,9 +99,62 @@ export async function createOrder({
         notlar: it.notlar || '',
         categoryId: data.categoryId || null, // yazıcı yönlendirmesi (mutfak/bar) için
         yaziciIds: Array.isArray(data.yaziciIds) ? data.yaziciIds : [], // ürün-bazlı çoklu yazıcı
+        opsiyonProductIds: Array.isArray(it.opsiyonProductIds) ? it.opsiyonProductIds : [],
         eklenmeZamani: new Date(),
       };
     });
+
+    // Opsiyondan seçilen stoklu ürünleri (örn. menü içeceği) otomatik düş
+    const opsiyonDeductMap = new Map(); // productId → toplam düşülecek adet
+    items.forEach((it) => {
+      (it.opsiyonProductIds || []).forEach((pid) => {
+        if (!pid) return;
+        opsiyonDeductMap.set(pid, (opsiyonDeductMap.get(pid) || 0) + Number(it.adet || 0));
+      });
+    });
+    if (opsiyonDeductMap.size > 0) {
+      const mainIds = new Set(items.map((i) => i.productId));
+      const extraIds = [...opsiyonDeductMap.keys()].filter((id) => !mainIds.has(id));
+      const opsiyonSnaps = await Promise.all(
+        extraIds.map((id) => txn.get(doc(db, 'products', id))),
+      );
+      const opsiyonSnapById = {};
+      extraIds.forEach((id, idx) => {
+        opsiyonSnapById[id] = opsiyonSnaps[idx];
+      });
+      opsiyonDeductMap.forEach((adet, pid) => {
+        if (mainIds.has(pid)) {
+          // Aynı ürün hem ana item hem opsiyon olarak — mevcut stockUpdate'e ekle
+          const upd = stockUpdates.find((u) => u.productId === pid);
+          if (upd) {
+            const yeniMiktar = upd.miktar + adet;
+            if (upd.oncekiStok < yeniMiktar) {
+              throw new Error(`Yetersiz stok: ${upd.productAd} (gereken ${yeniMiktar}, mevcut ${upd.oncekiStok})`);
+            }
+            upd.miktar = yeniMiktar;
+            upd.yeniStok = upd.oncekiStok - yeniMiktar;
+          }
+          // Stoksuz ürünse (stockUpdates'te yok) sessizce geç
+        } else {
+          const snap = opsiyonSnapById[pid];
+          if (!snap || !snap.exists()) return; // ürün silinmiş, atla
+          const data = snap.data();
+          if (data.stokTakipli === false) return;
+          const oncekiStok = Number(data.stok || 0);
+          if (oncekiStok < adet) {
+            throw new Error(`Yetersiz stok (opsiyon): ${data.ad} (gereken ${adet}, mevcut ${oncekiStok})`);
+          }
+          stockUpdates.push({
+            ref: snap.ref,
+            productId: snap.id,
+            productAd: data.ad,
+            oncekiStok,
+            yeniStok: oncekiStok - adet,
+            miktar: adet,
+          });
+        }
+      });
+    }
 
     let tableData = null;
     if (tableRef) {
@@ -212,9 +265,60 @@ export async function addItemsToOrder({ orderId, garsonId, newItems }) {
         notlar: it.notlar || '',
         categoryId: data.categoryId || null,
         yaziciIds: Array.isArray(data.yaziciIds) ? data.yaziciIds : [], // ürün-bazlı çoklu yazıcı
+        opsiyonProductIds: Array.isArray(it.opsiyonProductIds) ? it.opsiyonProductIds : [],
         eklenmeZamani: new Date(),
       };
     });
+
+    // Opsiyondan seçilen stoklu ürünleri (örn. menü içeceği) otomatik düş
+    const opsiyonDeductMap = new Map();
+    newItems.forEach((it) => {
+      (it.opsiyonProductIds || []).forEach((pid) => {
+        if (!pid) return;
+        opsiyonDeductMap.set(pid, (opsiyonDeductMap.get(pid) || 0) + Number(it.adet || 0));
+      });
+    });
+    if (opsiyonDeductMap.size > 0) {
+      const mainIds = new Set(newItems.map((i) => i.productId));
+      const extraIds = [...opsiyonDeductMap.keys()].filter((id) => !mainIds.has(id));
+      const opsiyonSnaps = await Promise.all(
+        extraIds.map((id) => txn.get(doc(db, 'products', id))),
+      );
+      const opsiyonSnapById = {};
+      extraIds.forEach((id, idx) => {
+        opsiyonSnapById[id] = opsiyonSnaps[idx];
+      });
+      opsiyonDeductMap.forEach((adet, pid) => {
+        if (mainIds.has(pid)) {
+          const upd = stockUpdates.find((u) => u.productId === pid);
+          if (upd) {
+            const yeniMiktar = upd.miktar + adet;
+            if (upd.oncekiStok < yeniMiktar) {
+              throw new Error(`Yetersiz stok: ${upd.productAd} (gereken ${yeniMiktar}, mevcut ${upd.oncekiStok})`);
+            }
+            upd.miktar = yeniMiktar;
+            upd.yeniStok = upd.oncekiStok - yeniMiktar;
+          }
+        } else {
+          const snap = opsiyonSnapById[pid];
+          if (!snap || !snap.exists()) return;
+          const data = snap.data();
+          if (data.stokTakipli === false) return;
+          const oncekiStok = Number(data.stok || 0);
+          if (oncekiStok < adet) {
+            throw new Error(`Yetersiz stok (opsiyon): ${data.ad} (gereken ${adet}, mevcut ${oncekiStok})`);
+          }
+          stockUpdates.push({
+            ref: snap.ref,
+            productId: snap.id,
+            productAd: data.ad,
+            oncekiStok,
+            yeniStok: oncekiStok - adet,
+            miktar: adet,
+          });
+        }
+      });
+    }
 
     const allItems = [...order.items, ...enrichedNew];
     const araToplam = allItems.reduce((sum, it) => sum + it.fiyat * it.adet, 0);

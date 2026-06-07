@@ -38,7 +38,8 @@ export default function ProductOptionsModal({ open, product, onClose, onConfirm 
   const handleConfirm = () => {
     const parts = [...selected];
     if (customNote.trim()) parts.push(customNote.trim());
-    onConfirm(parts.join(', '));
+    // (notlar string, selectedOptions array) — caller opsiyon→ürün eşleştirmesi yapabilsin diye
+    onConfirm(parts.join(', '), [...selected]);
   };
 
   return (
@@ -99,7 +100,7 @@ export default function ProductOptionsModal({ open, product, onClose, onConfirm 
             İptal
           </button>
           <button
-            onClick={() => onConfirm('')}
+            onClick={() => onConfirm('', [])}
             className="btn-ghost flex-1"
             title="Not eklemeden ekle"
           >

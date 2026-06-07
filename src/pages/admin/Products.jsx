@@ -714,7 +714,12 @@ function ProductModal({ open, onClose, editing, categories, printers = [] }) {
 
 function OptionTagsInput({ value, onChange, placeholder }) {
   const [input, setInput] = useState('');
+  const [editingIdx, setEditingIdx] = useState(null);
   const tags = Array.isArray(value) ? value : [];
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
 
   const commit = () => {
     const trimmed = input.trim();
@@ -730,23 +735,52 @@ function OptionTagsInput({ value, onChange, placeholder }) {
     onChange(tags.filter((_, i) => i !== idx));
   };
 
+  const updateAt = (idx, newText) => {
+    const trimmed = newText.trim();
+    if (!trimmed) {
+      remove(idx);
+      return;
+    }
+    // Başka bir tag aynı isimdeyse çakışmasın
+    if (tags.some((t, i) => i !== idx && t === trimmed)) return;
+    const next = [...tags];
+    next[idx] = trimmed;
+    onChange(next);
+  };
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIdx = tags.indexOf(active.id);
+    const newIdx = tags.indexOf(over.id);
+    if (oldIdx < 0 || newIdx < 0) return;
+    onChange(arrayMove(tags, oldIdx, newIdx));
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-slate-300 bg-white p-2 focus-within:border-blue-500">
-      {tags.map((t, i) => (
-        <span
-          key={i}
-          className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-800"
-        >
-          {t}
-          <button
-            type="button"
-            onClick={() => remove(i)}
-            className="rounded-full p-0.5 hover:bg-blue-200"
-          >
-            <X size={11} />
-          </button>
-        </span>
-      ))}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={tags}>
+          {tags.map((t, i) => (
+            <SortableOptionTag
+              key={t}
+              id={t}
+              value={t}
+              editing={editingIdx === i}
+              onStartEdit={() => setEditingIdx(i)}
+              onSaveEdit={(newText) => {
+                updateAt(i, newText);
+                setEditingIdx(null);
+              }}
+              onCancelEdit={() => setEditingIdx(null)}
+              onRemove={() => {
+                setEditingIdx(null);
+                remove(i);
+              }}
+            />
+          ))}
+        </SortableContext>
+      </DndContext>
       <input
         type="text"
         value={input}
@@ -755,7 +789,12 @@ function OptionTagsInput({ value, onChange, placeholder }) {
           if (e.key === 'Enter' || e.key === ',') {
             e.preventDefault();
             commit();
-          } else if (e.key === 'Backspace' && !input && tags.length > 0) {
+          } else if (
+            e.key === 'Backspace' &&
+            !input &&
+            tags.length > 0 &&
+            editingIdx === null
+          ) {
             remove(tags.length - 1);
           }
         }}
@@ -764,5 +803,97 @@ function OptionTagsInput({ value, onChange, placeholder }) {
         className="flex-1 min-w-[120px] bg-transparent text-sm outline-none"
       />
     </div>
+  );
+}
+
+function SortableOptionTag({
+  id,
+  value,
+  editing,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit,
+  onRemove,
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const [text, setText] = useState(value);
+
+  useEffect(() => {
+    setText(value);
+  }, [value]);
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
+  if (editing) {
+    return (
+      <span
+        ref={setNodeRef}
+        style={style}
+        className="inline-flex items-center gap-1 rounded-full bg-white px-1.5 py-0.5 text-xs font-medium ring-2 ring-blue-400"
+      >
+        <input
+          autoFocus
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={() => onSaveEdit(text)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              onSaveEdit(text);
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              setText(value);
+              onCancelEdit();
+            }
+          }}
+          className="w-24 bg-transparent text-blue-900 outline-none"
+        />
+        <button
+          type="button"
+          onClick={onRemove}
+          className="rounded-full p-0.5 text-blue-800 hover:bg-blue-200"
+          title="Kaldır"
+        >
+          <X size={11} />
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <span
+      ref={setNodeRef}
+      style={style}
+      className="inline-flex items-center gap-0.5 rounded-full bg-blue-100 px-1.5 py-1 text-xs font-medium text-blue-800"
+    >
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        className="cursor-grab touch-none text-blue-500 hover:text-blue-700 active:cursor-grabbing"
+        title="Sıralamak için sürükle"
+      >
+        <GripVertical size={11} />
+      </button>
+      <span
+        onClick={onStartEdit}
+        className="cursor-text rounded px-1 hover:bg-blue-200"
+        title="Düzenlemek için tıkla"
+      >
+        {value}
+      </span>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="rounded-full p-0.5 hover:bg-blue-200"
+        title="Kaldır"
+      >
+        <X size={11} />
+      </button>
+    </span>
   );
 }

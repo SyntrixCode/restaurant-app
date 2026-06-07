@@ -243,6 +243,7 @@ export default function NewOrder() {
               productId: it.productId,
               adet: it.adet,
               notlar: it.notlar,
+              opsiyonProductIds: it.opsiyonProductIds || [],
             })),
           });
           addedCount = result.added;
@@ -281,6 +282,7 @@ export default function NewOrder() {
             productId: it.productId,
             adet: it.adet,
             notlar: it.notlar,
+            opsiyonProductIds: it.opsiyonProductIds || [],
           })),
         });
         toast.success(`Sipariş alındı (${formatTL(result.araToplam)})`);
@@ -660,8 +662,22 @@ export default function NewOrder() {
         open={!!optionsFor}
         product={optionsFor}
         onClose={() => setOptionsFor(null)}
-        onConfirm={(joinedNotes) => {
-          if (optionsFor) addItem(optionsFor, joinedNotes);
+        onConfirm={(joinedNotes, selectedOptions) => {
+          if (optionsFor) {
+            // Opsiyon adlarını aktif + stoklu ürünlere eşleştir → stoktan otomatik düşsün
+            const opsiyonProductIds = (selectedOptions || [])
+              .map((opt) => {
+                const p = products.find(
+                  (pr) =>
+                    pr.aktif !== false &&
+                    pr.stokTakipli !== false &&
+                    pr.ad === opt,
+                );
+                return p?.id;
+              })
+              .filter(Boolean);
+            addItem(optionsFor, joinedNotes, opsiyonProductIds);
+          }
           setOptionsFor(null);
         }}
       />
