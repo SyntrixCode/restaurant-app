@@ -458,7 +458,8 @@ export default function PosPackages() {
 }
 
 function ProductCard({ product, onAdd }) {
-  const outOfStock = product.stok <= 0;
+  const tracked = product.stokTakipli !== false; // pide/kebap takipsiz → tükendi olmaz
+  const outOfStock = tracked && product.stok <= 0;
   return (
     <button
       onClick={onAdd}
@@ -481,17 +482,19 @@ function ProductCard({ product, onAdd }) {
       </p>
       <div className="mt-2 flex items-center justify-between">
         <span className="text-xl font-bold text-blue-700">{formatTL(product.fiyat)}</span>
-        <span
-          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-            outOfStock
-              ? 'bg-red-100 text-red-700'
-              : product.stok <= 5
-                ? 'bg-amber-100 text-amber-700'
-                : 'bg-emerald-100 text-emerald-700'
-          }`}
-        >
-          {outOfStock ? 'Tükendi' : product.stok}
-        </span>
+        {tracked && (
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+              outOfStock
+                ? 'bg-red-100 text-red-700'
+                : product.stok <= 5
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-emerald-100 text-emerald-700'
+            }`}
+          >
+            {outOfStock ? 'Tükendi' : product.stok}
+          </span>
+        )}
       </div>
     </button>
   );

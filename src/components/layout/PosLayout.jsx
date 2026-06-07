@@ -56,7 +56,7 @@ export default function PosLayout() {
         <div className="flex items-center gap-4">
           <img
             src="/branding/alazli-logo.svg"
-            alt={settings.restoranAd || 'Alazlı Konya Mutfağı'}
+            alt={settings.restoranAd || 'Alâ Santral Restaurant'}
             className="h-[3.75rem] w-auto"
           />
           <span className="text-sm text-slate-500">

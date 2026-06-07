@@ -98,6 +98,7 @@ export async function createOrder({
         adet: it.adet,
         notlar: it.notlar || '',
         categoryId: data.categoryId || null, // yazıcı yönlendirmesi (mutfak/bar) için
+        yaziciIds: Array.isArray(data.yaziciIds) ? data.yaziciIds : [], // ürün-bazlı çoklu yazıcı
         eklenmeZamani: new Date(),
       };
     });
@@ -210,6 +211,7 @@ export async function addItemsToOrder({ orderId, garsonId, newItems }) {
         adet: it.adet,
         notlar: it.notlar || '',
         categoryId: data.categoryId || null,
+        yaziciIds: Array.isArray(data.yaziciIds) ? data.yaziciIds : [], // ürün-bazlı çoklu yazıcı
         eklenmeZamani: new Date(),
       };
     });

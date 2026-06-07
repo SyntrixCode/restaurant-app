@@ -115,6 +115,7 @@ export default function ActiveOrders() {
           adet: it.adet,
           notlar: it.notlar,
           categoryId: it.categoryId || null,
+          yaziciIds: Array.isArray(it.yaziciIds) ? it.yaziciIds : [],
         })),
       });
     } catch (err) {

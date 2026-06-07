@@ -150,7 +150,8 @@ public class NetworkPrinterPlugin extends Plugin {
             try (java.io.InputStream is = getContext().getAssets().open(assetName)) {
                 bmp = android.graphics.BitmapFactory.decodeStream(is);
             }
-            printBitmapCentered(printer, bmp);
+            // Standalone logo asset: ortalı bas.
+            printBitmap(printer, bmp, POSPrinterConst.PTR_BM_CENTER);
         } catch (Throwable t) {
             // Logo basılamadı — fişin geri kalanı yine çıksın
         }
@@ -165,13 +166,20 @@ public class NetworkPrinterPlugin extends Plugin {
             byte[] bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
             android.graphics.Bitmap bmp =
                     android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-            printBitmapCentered(printer, bmp);
+            // Adisyon canvas'ı: sola yasla (sağ kenar kesilmesin).
+            printBitmap(printer, bmp, POSPrinterConst.PTR_BM_LEFT);
         } catch (Throwable t) {
             // Bitmap basılamadı — sessizce geç
         }
     }
 
-    private void printBitmapCentered(POSPrinter printer, android.graphics.Bitmap bmp) throws Exception {
+    /**
+     * Bitmap'i verilen hizalama ile basar.
+     * alignment = PTR_BM_LEFT  → içerik fiziksel sol kenardan başlar; 512px < 576 kafa
+     *   genişliği olduğundan tamamı sığar, sağ TUTAR kolonu kesilmez. (Adisyon canvas'ı.)
+     * alignment = PTR_BM_CENTER → printhead ortasına koyar. (Standalone logo asset'i.)
+     */
+    private void printBitmap(POSPrinter printer, android.graphics.Bitmap bmp, int alignment) throws Exception {
         if (bmp == null) return;
         // Station + parlaklık/sıkıştırma/dither paketlenmiş int (sample'dan)
         java.nio.ByteBuffer bb = java.nio.ByteBuffer.allocate(4);
@@ -179,8 +187,8 @@ public class NetworkPrinterPlugin extends Plugin {
         bb.put((byte) 0); // brightness (default)
         bb.put((byte) 0); // compress
         bb.put((byte) 0); // dither
-        // width: PTR_BM_ASIS (orijinal genişlik), ortala
-        printer.printBitmap(bb.getInt(0), bmp, POSPrinterConst.PTR_BM_ASIS, POSPrinterConst.PTR_BM_CENTER);
+        // width: PTR_BM_ASIS (orijinal genişlik, ölçekleme yok)
+        printer.printBitmap(bb.getInt(0), bmp, POSPrinterConst.PTR_BM_ASIS, alignment);
     }
 
     @PluginMethod
@@ -248,21 +256,14 @@ public class NetworkPrinterPlugin extends Plugin {
             POSPrinter printer = null;
             try {
                 printer = openPrinter(model, ip, connection);
-                // Standart kasa: Bixolon ESC|1pP (50ms pulse) — yeterli.
-                printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, ESC + "1pP");
-                try { Thread.sleep(200); } catch (InterruptedException ignored) {}
-                printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, ESC + "2pP");
-                try { Thread.sleep(200); } catch (InterruptedException ignored) {}
-
-                // Buzzer veya yavaş solenoid için: raw ESC/POS uzun pulse
-                // ESC p m t1 t2 — m=drawer (0/1), t1/t2 = pulse süresi × 2ms.
-                // t1=0xFA (250) → 500ms ON, t2=0xFA → 500ms OFF.
-                // Drawer 1 (pin 2) — uzun pulse
+                // Raw ESC/POS DK pulse — ESC p m t1 t2.
+                // m=0 drawer 1 (pin 2), m=1 drawer 2 (pin 5).
+                // t1=0xFA (250×2ms=500ms ON), t2=0xFA OFF — buzzer için yeterli.
+                // NOT: Bixolon ESC|1pP düz text olarak basılıyor (SDK tanımıyor).
                 String longDrawer1 = new String(new byte[]{0x1B, 0x70, 0x00, (byte) 0xFA, (byte) 0xFA});
                 printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, longDrawer1);
                 try { Thread.sleep(800); } catch (InterruptedException ignored) {}
 
-                // Drawer 2 (pin 5) — uzun pulse (yedek, başka pin'e bağlıysa)
                 String longDrawer2 = new String(new byte[]{0x1B, 0x70, 0x01, (byte) 0xFA, (byte) 0xFA});
                 printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, longDrawer2);
 

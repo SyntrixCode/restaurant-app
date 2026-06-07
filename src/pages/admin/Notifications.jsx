@@ -56,6 +56,7 @@ export default function AdminNotifications() {
     if (!ayarlar.dusukStok) return [];
     return products
       .filter((p) => p.aktif)
+      .filter((p) => p.stokTakipli !== false) // takipsiz ürünler (pide/kebap) uyarı vermez
       .filter((p) => {
         const esik = p.dusukStokEsigi ?? dusukStokEsigi;
         return p.stok <= esik;

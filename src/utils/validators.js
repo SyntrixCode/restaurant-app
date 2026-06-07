@@ -33,6 +33,10 @@ export const categorySchema = z.object({
 export const productSchema = z.object({
   ad: z.string().min(1, 'Ürün adı zorunlu').max(200),
   categoryId: z.string().min(1, 'Kategori seçin'),
+  // Ürün-bazlı mutfak yazıcısı yönlendirmesi. Boşsa kategorinin yaziciId'sine
+  // (geriye uyumlu) düşer. Birden fazla seçilirse ürün her istasyondan basılır
+  // (ör. Köy Kahvaltısı → Kahvaltı + Çorba-Salata + Fırın).
+  yaziciIds: z.array(z.string()).optional().default([]),
   fiyat: z.coerce.number().positive('Fiyat 0 dan büyük olmalı'),
   // Stok takibi yapılan ürünler (kola, su, paketli içecekler vb.) için.
   // Mutfak ürünlerinde (menemen, pide, kebap) genelde stok takibi yapılmaz.

@@ -80,7 +80,7 @@ export default function AdminLayout() {
           <p className="text-xs uppercase tracking-wide text-slate-400">Yönetim Paneli</p>
           <img
             src="/branding/alazli-logo.svg"
-            alt={settings.restoranAd || 'Alazlı Konya Mutfağı'}
+            alt={settings.restoranAd || 'Alâ Santral Restaurant'}
             className="mt-1 h-[4.5rem] w-auto"
           />
         </div>

@@ -22,10 +22,31 @@ export default function ShiftButton() {
   const [busy, setBusy] = useState(false);
   const [, setTick] = useState(0);
 
+  // POS personeli (garson/kasiyer/kurye) giriş yapınca mesai OTOMATİK başlar.
+  // clockIn gün-duyarlı: dünden kalan açık mesaiyi gece sıfırlaması olarak kapatır,
+  // bugün açık varsa onu sürdürür, yoksa yeni açar. Admin için otomatik yok (manuel).
+  const AUTO_ROLES = ['garson', 'kasiyer', 'kurye'];
   useEffect(() => {
-    if (!user?.uid) return;
-    getOpenShift(user.uid).then(setShift).catch(console.error);
-  }, [user?.uid]);
+    if (!user?.uid || !rol) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (AUTO_ROLES.includes(rol)) {
+          const s = await clockIn({ personelId: user.uid, personelAd: profile?.ad, rol });
+          if (!cancelled) setShift({ ...s, giris: s.giris || new Date() });
+        } else {
+          const open = await getOpenShift(user.uid);
+          if (!cancelled) setShift(open);
+        }
+      } catch (e) {
+        console.error('Mesai otomatik başlatma:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid, rol]);
 
   // Açık mesaide geçen süreyi her dakika güncelle
   useEffect(() => {

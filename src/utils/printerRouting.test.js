@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pickDefaultPrinter, groupItemsByPrinter } from './printerRouting';
+import { pickDefaultPrinter, groupItemsByPrinter, groupTicketByPrinter } from './printerRouting';
 
 const mutfak = { id: 'p1', ad: 'Mutfak', ip: '192.168.1.50', aktif: true, varsayilan: true };
 const bar = { id: 'p2', ad: 'Bar', ip: '192.168.1.51', aktif: true, varsayilan: false };
@@ -71,5 +71,104 @@ describe('groupItemsByPrinter', () => {
     );
     expect(groups).toHaveLength(1);
     expect(groups[0].items).toHaveLength(2);
+  });
+
+  it('ürün yaziciIds (çoklu) → kalem her istasyona basılır', () => {
+    const items = [{ ad: 'Köy Kahvaltısı', categoryId: 'c1', yaziciIds: ['p1', 'p2'] }];
+    const groups = groupItemsByPrinter(items, categories, printers);
+    expect(groups).toHaveLength(2);
+    const byPrinter = Object.fromEntries(groups.map((g) => [g.printer.id, g.items.map((i) => i.ad)]));
+    expect(byPrinter.p1).toEqual(['Köy Kahvaltısı']);
+    expect(byPrinter.p2).toEqual(['Köy Kahvaltısı']);
+  });
+
+  it('ürün yaziciIds kategoriyi ezer (override)', () => {
+    // Kategori c1 → varsayılan (p1) ama ürün yaziciIds=[p2] → p2'ye gider
+    const items = [{ ad: 'Sahanda', categoryId: 'c1', yaziciIds: ['p2'] }];
+    const groups = groupItemsByPrinter(items, categories, printers);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].printer.id).toBe('p2');
+  });
+
+  it('yaziciIds boşsa kategori kuralına düşer (geriye uyumlu)', () => {
+    const items = [{ ad: 'Ayran', categoryId: 'c2', yaziciIds: [] }];
+    const groups = groupItemsByPrinter(items, categories, printers);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].printer.id).toBe('p2');
+  });
+
+  it('yaziciIds pasif/bilinmeyen yazıcıya işaret ediyorsa kategori/varsayılana düşer', () => {
+    const items = [{ ad: 'X', categoryId: 'c2', yaziciIds: ['silinmis'] }];
+    const groups = groupItemsByPrinter(items, categories, printers);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].printer.id).toBe('p2'); // c2 → p2
+  });
+
+  it('çoklu yazıcıdan biri pasifse sadece aktif olana basılır', () => {
+    const items = [{ ad: 'Köy Kahvaltısı', yaziciIds: ['p1', 'p2'] }];
+    const onlyMutfak = [mutfak, { ...bar, aktif: false }];
+    const groups = groupItemsByPrinter(items, [], onlyMutfak);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].printer.id).toBe('p1');
+  });
+});
+
+describe('groupTicketByPrinter (düzeltme farkı yönlendirme)', () => {
+  it('silinen kalem ilgili yazıcıya düzeltme olarak gider', () => {
+    const groups = groupTicketByPrinter(
+      { removed: [{ ad: 'Pide', yaziciIds: ['p2'] }] },
+      categories,
+      printers,
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0].printer.id).toBe('p2');
+    expect(groups[0].removed.map((i) => i.ad)).toEqual(['Pide']);
+    expect(groups[0].items).toEqual([]);
+  });
+
+  it('değişen kalem kategori yazıcısına gider', () => {
+    const groups = groupTicketByPrinter(
+      { changed: [{ ad: 'Ayran', categoryId: 'c2', fromAdet: 6, toAdet: 5 }] },
+      categories,
+      printers,
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0].printer.id).toBe('p2');
+    expect(groups[0].changed).toHaveLength(1);
+  });
+
+  it('eklenen + silinen ayrı yazıcılara dağılır', () => {
+    const groups = groupTicketByPrinter(
+      {
+        items: [{ ad: 'Adana', yaziciIds: ['p1'] }],
+        removed: [{ ad: 'Kola', yaziciIds: ['p2'] }],
+      },
+      categories,
+      printers,
+    );
+    const byId = Object.fromEntries(groups.map((g) => [g.printer.id, g]));
+    expect(byId.p1.items.map((i) => i.ad)).toEqual(['Adana']);
+    expect(byId.p1.removed).toEqual([]);
+    expect(byId.p2.removed.map((i) => i.ad)).toEqual(['Kola']);
+    expect(byId.p2.items).toEqual([]);
+  });
+
+  it('çoklu yazıcılı silinen kalem her istasyonun düzeltmesine girer', () => {
+    const groups = groupTicketByPrinter(
+      { removed: [{ ad: 'Köy Kahvaltısı', yaziciIds: ['p1', 'p2'] }] },
+      categories,
+      printers,
+    );
+    expect(groups).toHaveLength(2);
+    for (const g of groups) expect(g.removed.map((i) => i.ad)).toEqual(['Köy Kahvaltısı']);
+  });
+
+  it('aktif yazıcı yoksa boş döner', () => {
+    const groups = groupTicketByPrinter(
+      { removed: [{ ad: 'X', yaziciIds: ['p1'] }] },
+      categories,
+      [{ ...mutfak, aktif: false }],
+    );
+    expect(groups).toEqual([]);
   });
 });

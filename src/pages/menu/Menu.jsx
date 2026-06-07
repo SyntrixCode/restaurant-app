@@ -105,7 +105,7 @@ export default function Menu() {
         <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3">
           <img
             src="/branding/alazli-logo.svg"
-            alt={settings.restoranAd || 'Alazlı Konya Mutfağı'}
+            alt={settings.restoranAd || 'Alâ Santral Restaurant'}
             className="h-[3.75rem] w-auto"
           />
           <div className="ml-auto flex items-center gap-2">
@@ -205,10 +205,12 @@ export default function Menu() {
                     const adTr = p.ad || '';
                     const adLang = localized(p, lang, 'ad');
                     const aciklamaLang = localized(p, lang, 'aciklama');
+                    // Sadece stok takipli ürünler "tükendi" olabilir (pide/kebap takipsiz)
+                    const soldOut = p.stokTakipli !== false && p.stok <= 0;
                     return (
                       <li
                         key={p.id}
-                        className={`relative flex gap-3 border px-3 py-3 shadow-sm ${p.stok <= 0 ? 'opacity-50' : ''}`}
+                        className={`relative flex gap-3 border px-3 py-3 shadow-sm ${soldOut ? 'opacity-50' : ''}`}
                         style={{
                           background: 'rgba(255, 252, 240, 0.6)',
                           borderColor: THEME.divider,
@@ -272,7 +274,7 @@ export default function Menu() {
                               {aciklamaLang}
                             </p>
                           )}
-                          {p.stok <= 0 && (
+                          {soldOut && (
                             <span
                               className="mt-1.5 inline-block px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
                               style={{

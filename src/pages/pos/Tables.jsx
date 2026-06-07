@@ -40,7 +40,6 @@ import { useSettingsStore } from '../../store/settingsStore';
 const ZONE_LABELS = {
   ic: 'İç Salon',
   dis: 'Dış Mekan',
-  teras: 'Teras',
   bahce: 'Bahçe',
   bar: 'Meşrubat',
   kapali: 'Kapalı Alan',
@@ -216,7 +215,7 @@ export default function PosTables() {
 
   const zones = useMemo(() => {
     // Her zaman görünmesini istediğimiz bölgeler (henüz masası olmasa bile)
-    const ALWAYS = ['ic', 'dis', 'teras'];
+    const ALWAYS = ['ic', 'dis'];
     const set = new Set([...ALWAYS, ...tables.map((t) => t.zone || 'ic')]);
     return [...set];
   }, [tables]);
@@ -1075,7 +1074,7 @@ function KisiSayisiModal({ open, masaAd, defaultKisi, groupId, onClose, onConfir
 
   if (!open) return null;
 
-  const quick = [1, 2, 3, 4, 5, 6, 7, 8];
+  const quick = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
   return (
     <Modal
