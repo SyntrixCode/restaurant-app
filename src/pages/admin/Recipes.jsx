@@ -11,7 +11,7 @@ import {
 import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import Modal from '../../components/ui/Modal';
-import { watchCollection, upsertDoc, removeDoc } from '../../firebase/firestore';
+import { watchCollection, upsertDoc, removeDoc, orderBy } from '../../firebase/firestore';
 import { formatTL, formatAdet } from '../../utils/format';
 
 const BIRIM_LABELS = {
@@ -25,12 +25,15 @@ const BIRIM_LABELS = {
 
 export default function AdminRecipes() {
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [ingredients, setIngredients] = useState([]);
   const [recipes, setRecipes] = useState([]);
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState('');
+  const [filterCategory, setFilterCategory] = useState('all');
 
   useEffect(() => watchCollection('products', setProducts), []);
+  useEffect(() => watchCollection('categories', setCategories, orderBy('sira', 'asc')), []);
   useEffect(() => watchCollection('ingredients', setIngredients), []);
   useEffect(() => watchCollection('recipes', setRecipes), []);
 
@@ -40,8 +43,13 @@ export default function AdminRecipes() {
     return map;
   }, [recipes]);
 
+  // Reçete sadece mutfaktan üretilen ürünler için anlamlı — stoklu paket ürünler
+  // (meşrubatlar, kola/su/soda vb.) buraya gelmez; onların stoğu zaten ürün başına tutulur.
   const productList = useMemo(() => {
-    let list = products.filter((p) => p.aktif);
+    let list = products.filter((p) => p.aktif && !p.stokTakipli);
+    if (filterCategory !== 'all') {
+      list = list.filter((p) => p.categoryId === filterCategory);
+    }
     if (search) {
       const q = search.toLowerCase();
       list = list.filter(
@@ -49,7 +57,7 @@ export default function AdminRecipes() {
       );
     }
     return list.sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
-  }, [products, search]);
+  }, [products, search, filterCategory]);
 
   const recetesiOlanSayisi = useMemo(() => {
     let count = 0;
@@ -65,7 +73,7 @@ export default function AdminRecipes() {
       />
 
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-        <StatCard label="Aktif Ürün" value={products.filter((p) => p.aktif).length} icon={ChefHat} />
+        <StatCard label="Aktif Ürün" value={products.filter((p) => p.aktif && !p.stokTakipli).length} icon={ChefHat} />
         <StatCard label="Reçetesi Olan" value={recetesiOlanSayisi} color="green" />
         <StatCard label="Malzeme Sayısı" value={ingredients.length} color="blue" />
       </div>
@@ -76,8 +84,8 @@ export default function AdminRecipes() {
         </div>
       )}
 
-      <div className="mb-4">
-        <div className="relative max-w-xs">
+      <div className="mb-4 flex flex-wrap gap-2">
+        <div className="relative max-w-xs flex-1">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             value={search}
@@ -86,6 +94,20 @@ export default function AdminRecipes() {
             className="input pl-8"
           />
         </div>
+        <select
+          value={filterCategory}
+          onChange={(e) => setFilterCategory(e.target.value)}
+          className="input max-w-[220px]"
+        >
+          <option value="all">Tüm Kategoriler</option>
+          {categories
+            .filter((c) => c.aktif !== false)
+            .map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.ad}
+              </option>
+            ))}
+        </select>
       </div>
 
       <div className="card overflow-hidden p-0">
