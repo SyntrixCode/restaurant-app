@@ -970,9 +970,9 @@ function resizeCursor(dir, rotation) {
   return best;
 }
 
-function CanvasTable({ table, x, y, w, h, isOccupied, selected, onPointerDown, onStartResize }) {
-  const durum = isOccupied ? 'dolu' : table.durum || 'bos';
-  const color = DURUM_COLORS[durum] || DURUM_COLORS.bos;
+function CanvasTable({ table, x, y, w, h, selected, onPointerDown, onStartResize }) {
+  // Admin düzenleme ekranı operasyonel durumu (sipariş/rezerve) göstermez — tüm masalar nötr renkte
+  const color = DURUM_COLORS.bos;
   const round = table.sekil === 'yuvarlak' ? 'rounded-full' : 'rounded-lg';
   const rotation = table.rotation || 0;
 
@@ -1043,8 +1043,7 @@ function CanvasDecoration({ decor, x, y, selected, onPointerDown }) {
 }
 
 function SelectedTablePanel({ table, order, onEdit, onDelete, onUpdate, size, isCustomSize, onResetSize }) {
-  const durum = order ? 'dolu' : table.durum || 'bos';
-  const durumLabels = { bos: 'Boş', dolu: 'Dolu', rezerve: 'Rezerve' };
+  // `order` görsel olarak gösterilmez ama silme butonunu devre dışı bırakmak için kullanılır
   const rotation = ((table.rotation || 0) % 360 + 360) % 360;
   const rotateBy = (delta) =>
     onUpdate?.({ rotation: ((table.rotation || 0) + delta) % 360 });
@@ -1060,33 +1059,10 @@ function SelectedTablePanel({ table, order, onEdit, onDelete, onUpdate, size, is
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 text-sm">
-        <div className="rounded-lg bg-slate-50 p-3">
-          <p className="text-xs text-slate-500">Kapasite</p>
-          <p className="text-lg font-semibold text-slate-900">{table.kapasite}</p>
-        </div>
-        <div className="rounded-lg bg-slate-50 p-3">
-          <p className="text-xs text-slate-500">Durum</p>
-          <p
-            className={`text-lg font-semibold ${
-              durum === 'bos'
-                ? 'text-emerald-600'
-                : durum === 'dolu'
-                  ? 'text-red-600'
-                  : 'text-amber-600'
-            }`}
-          >
-            {durumLabels[durum] || durum}
-          </p>
-        </div>
+      <div className="rounded-lg bg-slate-50 p-3 text-sm">
+        <p className="text-xs text-slate-500">Kapasite</p>
+        <p className="text-lg font-semibold text-slate-900">{table.kapasite}</p>
       </div>
-
-      {order && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          <p className="font-semibold">Aktif sipariş var</p>
-          <p className="text-xs">Garson: {order.garsonAd}</p>
-        </div>
-      )}
 
       <div>
         <label className="mb-1 flex items-center justify-between text-xs font-medium text-slate-700">

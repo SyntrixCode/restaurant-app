@@ -775,28 +775,28 @@ export default function PosTables() {
                       touchAction: 'none',
                     }}
                   >
-                    <div className="flex w-full justify-between text-[10px]">
+                    <div className="flex w-full justify-between text-sm">
                       <span className="flex items-center gap-0.5">
-                        <UsersIcon size={10} />
+                        <UsersIcon size={14} />
                         {g.kapasite}
                       </span>
                       {mins != null && (
                         <span className={`flex items-center gap-0.5 ${mins > 15 ? 'font-bold' : ''}`}>
-                          <Clock size={10} />
+                          <Clock size={14} />
                           {mins}dk
                         </span>
                       )}
                     </div>
                     <div className="flex flex-col items-center leading-tight">
-                      <span className="text-sm font-bold">
+                      <span className="text-base font-bold">
                         {(g.memberAdlari || []).join(' + ') || g.mainTableAd}
                       </span>
                       {order && (
-                        <span className="text-xs font-semibold">{formatTL(order.toplam)}</span>
+                        <span className="text-base font-semibold">{formatTL(order.toplam)}</span>
                       )}
-                      <span className="text-[10px] opacity-90">Birleşik · {g.kapasite} kişilik</span>
+                      <span className="text-sm opacity-90">Birleşik · {g.kapasite} kişilik</span>
                     </div>
-                    <span className="w-full truncate text-center text-[10px] opacity-90">
+                    <span className="w-full truncate text-center text-sm opacity-90">
                       {order ? order.garsonAd : 'Boş'}
                     </span>
                   </div>
@@ -977,7 +977,10 @@ function CanvasTable({
   const mins = order?.olusturmaZamani ? minutesSince(order.olusturmaZamani) : null;
   // Only boş + non-grouped tables can be dragged
   const canDrag = effectiveDurum === 'bos' && !table.grupId;
-  const round = table.sekil === 'yuvarlak' ? 'rounded-full' : 'rounded-lg';
+  const isRound = table.sekil === 'yuvarlak';
+  const round = isRound ? 'rounded-full' : 'rounded-lg';
+  // Yuvarlak masada köşeler eğriyle kırpıldığı için üst/alt etiketleri yatayda içeri çek
+  const edgeInset = isRound ? 'px-[15%]' : '';
   const rotation = table.rotation || 0;
 
   return (
@@ -995,25 +998,25 @@ function CanvasTable({
         touchAction: 'none',
       }}
     >
-      <div className="flex w-full justify-between text-[10px]">
+      <div className={`flex w-full justify-between text-sm ${edgeInset}`}>
         <span className="flex items-center gap-0.5">
-          <UsersIcon size={10} />
+          <UsersIcon size={14} />
           {table.kapasite}
         </span>
         {mins != null && (
           <span className={`flex items-center gap-0.5 ${mins > 15 ? 'font-bold' : ''}`}>
-            <Clock size={10} />
+            <Clock size={14} />
             {mins}dk
           </span>
         )}
       </div>
       <div className="flex flex-col items-center leading-tight">
-        <span className="text-sm font-bold">{table.ad}</span>
+        <span className="text-base font-bold">{table.ad}</span>
         {isMain && order && (
-          <span className="text-xs font-semibold">{formatTL(order.toplam)}</span>
+          <span className="text-base font-semibold">{formatTL(order.toplam)}</span>
         )}
       </div>
-      <span className="w-full truncate text-[10px] opacity-90">
+      <span className={`w-full truncate text-sm opacity-90 ${isRound ? 'text-center px-[15%]' : ''}`}>
         {order
           ? order.garsonAd
           : effectiveDurum === 'rezerve'

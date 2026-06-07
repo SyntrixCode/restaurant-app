@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
@@ -12,6 +12,7 @@ import {
   Download,
   ArrowUpRight,
   ArrowDownRight,
+  ChevronDown,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import PageHeader from '../../components/layout/PageHeader';
@@ -240,6 +241,7 @@ export default function AdminStock() {
           <option value="all">Tüm Ürünler</option>
           {products
             .filter((p) => p.stokTakipli !== false)
+            .sort((a, b) => (a.sira ?? 9999) - (b.sira ?? 9999))
             .map((p) => (
               <option key={p.id} value={p.id}>
                 {p.ad}
@@ -330,6 +332,7 @@ function ManualMovementModal({ open, onClose, products, suppliers }) {
     handleSubmit,
     reset,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(stockMovementManualSchema),
@@ -406,16 +409,14 @@ function ManualMovementModal({ open, onClose, products, suppliers }) {
       <form id="stock-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Ürün</label>
-          <select {...register('productId')} className="input">
-            <option value="">— Ürün seçin —</option>
-            {products
+          <ProductPicker
+            value={watch('productId')}
+            onChange={(id) => setValue('productId', id, { shouldValidate: true, shouldDirty: true })}
+            products={products
               .filter((p) => p.aktif && p.stokTakipli !== false)
-              .map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.ad} (mevcut: {p.stok})
-                </option>
-              ))}
-          </select>
+              .sort((a, b) => (a.sira ?? 9999) - (b.sira ?? 9999))}
+            hasError={!!errors.productId}
+          />
           {errors.productId && <p className="mt-1 text-xs text-red-600">{errors.productId.message}</p>}
         </div>
 
@@ -486,5 +487,116 @@ function ManualMovementModal({ open, onClose, products, suppliers }) {
         </div>
       </form>
     </Modal>
+  );
+}
+
+// Aranabilir ürün seçici (combobox) — uzun listede ürünü hızla bulmak için
+function ProductPicker({ value, onChange, products, hasError }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const ref = useRef(null);
+  const searchRef = useRef(null);
+
+  const selected = products.find((p) => p.id === value);
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? products.filter((p) => p.ad.toLowerCase().includes(q))
+    : products;
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+        setQuery('');
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      // Açılınca arama input'una odaklan
+      setTimeout(() => searchRef.current?.focus(), 0);
+    }
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`input flex w-full items-center justify-between text-left ${
+          hasError ? 'border-red-500' : ''
+        }`}
+      >
+        <span className={selected ? '' : 'text-slate-400'}>
+          {selected
+            ? `${selected.ad} (mevcut: ${selected.stok ?? 0})`
+            : '— Ürün seçin —'}
+        </span>
+        <ChevronDown
+          size={16}
+          className={`text-slate-400 transition ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+          <div className="border-b border-slate-100 p-2">
+            <div className="relative">
+              <Search
+                size={14}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+              <input
+                ref={searchRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Ürün ara..."
+                className="input pl-8"
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setOpen(false);
+                    setQuery('');
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <div className="max-h-64 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <div className="px-4 py-3 text-center text-sm text-slate-400">
+                Eşleşen ürün yok
+              </div>
+            ) : (
+              filtered.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => {
+                    onChange(p.id);
+                    setOpen(false);
+                    setQuery('');
+                  }}
+                  className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition hover:bg-blue-50 ${
+                    p.id === value
+                      ? 'bg-blue-50 font-medium text-blue-700'
+                      : 'text-slate-700'
+                  }`}
+                >
+                  <span className="truncate">{p.ad}</span>
+                  <span className="shrink-0 text-xs text-slate-500">
+                    mevcut: {p.stok ?? 0}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
