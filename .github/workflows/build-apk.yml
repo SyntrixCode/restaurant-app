@@ -81,7 +81,7 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID=${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_USE_FIREBASE_EMULATOR=false
-          VITE_SPARK_MODE=true
+          VITE_SPARK_MODE=false
           EOF
 
       - name: Build web app (vite)
