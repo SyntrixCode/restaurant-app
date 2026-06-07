@@ -18,7 +18,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2, GripVertical, Save, Tags } from 'lucide-react';
+import { Plus, Pencil, Trash2, GripVertical, Tags } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import Modal from '../../components/ui/Modal';
@@ -75,26 +75,26 @@ export default function Categories() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const handleDragEnd = ({ active, over }) => {
+  // Her sürükleme sonunda yeni sırayı anında Firestore'a yazar — manuel kaydet butonu yok
+  const handleDragEnd = async ({ active, over }) => {
     if (!over || active.id === over.id) return;
     const oldIndex = order.indexOf(active.id);
     const newIndex = order.indexOf(over.id);
-    setOrder(arrayMove(order, oldIndex, newIndex));
-    setDirty(true);
-  };
-
-  const saveOrder = async () => {
+    if (oldIndex < 0 || newIndex < 0) return;
+    const newOrder = arrayMove(order, oldIndex, newIndex);
+    setOrder(newOrder);
+    setDirty(true); // listener-bazlı re-sync'i sürtünme süresince engelle
     try {
       const batch = writeBatch(db);
-      order.forEach((id, idx) => {
+      newOrder.forEach((id, idx) => {
         batch.update(doc(db, 'categories', id), { sira: idx, updatedAt: serverTimestamp() });
       });
       await batch.commit();
-      setDirty(false);
-      toast.success('Sıralama kaydedildi');
     } catch (err) {
       toast.error('Sıralama kaydedilemedi');
       console.error(err);
+    } finally {
+      setDirty(false);
     }
   };
 
@@ -118,11 +118,6 @@ export default function Categories() {
         subtitle="Menü kategorilerini sıralayın ve yazıcı atayın"
         actions={
           <>
-            {dirty && (
-              <button onClick={saveOrder} className="btn-primary">
-                <Save size={16} /> Sıralamayı Kaydet
-              </button>
-            )}
             <button
               onClick={() => {
                 setEditing(null);
