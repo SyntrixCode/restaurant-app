@@ -432,14 +432,14 @@ export default function NewOrder() {
           {existingOrder?.items?.length > 0 && (
             <div className={`mb-3 rounded-xl border-2 p-3 ${hasEdits ? 'border-amber-300 bg-amber-50/40' : 'border-slate-200 bg-slate-50'}`}>
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-600">
+                <span className="text-sm font-semibold uppercase tracking-wider text-slate-600">
                   Mevcut Sipariş {hasEdits && <span className="ml-1 text-amber-700">· düzenlendi</span>}
                 </span>
-                <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                <span className="rounded-full bg-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600">
                   {existingOrder.items.length} kalem · {formatTL(existingOrder.toplam || 0)}
                 </span>
               </div>
-              <ul className="space-y-1.5">
+              <ul className="space-y-2">
                 {existingOrder.items.map((it, idx) => {
                   const e = editedExisting[`${idx}`] || {
                     adet: it.adet,
@@ -450,88 +450,97 @@ export default function NewOrder() {
                   return (
                     <li
                       key={idx}
-                      className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${
+                      className={`rounded-lg border-2 p-2.5 shadow-sm transition ${
                         e.removed
-                          ? 'bg-red-50 text-slate-400 line-through'
+                          ? 'border-red-200 bg-red-50'
                           : changed
-                            ? 'bg-amber-50 text-amber-900'
-                            : 'bg-white text-slate-700'
+                            ? 'border-amber-300 bg-amber-50'
+                            : 'border-slate-200 bg-white'
                       }`}
                     >
-                      {/* Sol: adet × ad */}
-                      <span className="min-w-0 flex-1 truncate">
-                        <strong className="mr-1 tabular-nums">{formatAdet(e.adet)}×</strong>
-                        {it.ad}
-                        {it.notlar && (
-                          <em className="ml-1 text-xs text-slate-500">({it.notlar})</em>
-                        )}
-                        {changed && !e.removed && (
-                          <span className="ml-1 text-[10px] text-amber-600">
-                            (eski {formatAdet(e.originalAdet)})
-                          </span>
-                        )}
-                      </span>
-
-                      {/* +/- kontrolleri */}
-                      {!e.removed && (
-                        <div className="inline-flex items-center gap-0.5 rounded-md border border-slate-200 bg-white">
-                          <button
-                            onClick={() => adjustExistingQty(idx, -1)}
-                            className="rounded p-1 text-slate-600 hover:bg-slate-100"
-                            aria-label="Azalt"
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p
+                            className={`text-sm font-bold leading-tight text-slate-900 ${
+                              e.removed ? 'opacity-60 line-through' : ''
+                            }`}
                           >
-                            <Minus size={12} />
-                          </button>
-                          <span className="min-w-[20px] text-center text-xs font-bold tabular-nums">
-                            {formatAdet(e.adet)}
-                          </span>
-                          <button
-                            onClick={() => adjustExistingQty(idx, 1)}
-                            className="rounded p-1 text-slate-600 hover:bg-slate-100"
-                            aria-label="Arttır"
-                          >
-                            <Plus size={12} />
-                          </button>
+                            {it.ad}
+                          </p>
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            {formatTL(it.fiyat)} / adet
+                          </p>
+                          {it.notlar && (
+                            <p className="mt-1 rounded bg-blue-50 px-2 py-0.5 text-xs italic text-blue-700">
+                              {it.notlar}
+                            </p>
+                          )}
+                          {changed && !e.removed && (
+                            <p className="mt-1 text-xs font-medium text-amber-700">
+                              eski adet: {formatAdet(e.originalAdet)}
+                            </p>
+                          )}
                         </div>
-                      )}
-
-                      {/* Sil / Geri al */}
-                      {!changed ? (
-                        <button
-                          onClick={() => removeExistingItem(idx)}
-                          className="rounded p-1 text-red-500 hover:bg-red-100"
-                          title="Bu kalemi sil"
+                        <span
+                          className={`shrink-0 text-base font-bold text-slate-900 ${
+                            e.removed ? 'opacity-60 line-through' : ''
+                          }`}
                         >
-                          <Trash2 size={12} />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => undoExistingChange(idx)}
-                          className="rounded p-1 text-slate-500 hover:bg-slate-200"
-                          title="Değişikliği geri al"
-                        >
-                          <X size={12} />
-                        </button>
-                      )}
+                          {formatTL(it.fiyat * e.adet)}
+                        </span>
+                      </div>
 
-                      <span className="w-16 shrink-0 text-right text-xs tabular-nums text-slate-500">
-                        {formatTL(it.fiyat * e.adet)}
-                      </span>
+                      <div className="mt-2 flex items-center gap-1.5">
+                        {!e.removed && (
+                          <>
+                            <button
+                              onClick={() => adjustExistingQty(idx, -1)}
+                              className="rounded-lg bg-slate-100 p-2 hover:bg-slate-200 active:scale-95"
+                              aria-label="Azalt"
+                            >
+                              <Minus size={16} />
+                            </button>
+                            <span className="w-10 text-center text-lg font-bold tabular-nums">
+                              {formatAdet(e.adet)}
+                            </span>
+                            <button
+                              onClick={() => adjustExistingQty(idx, 1)}
+                              className="rounded-lg bg-slate-100 p-2 hover:bg-slate-200 active:scale-95"
+                              aria-label="Arttır"
+                            >
+                              <Plus size={16} />
+                            </button>
+                          </>
+                        )}
+                        {!changed ? (
+                          <button
+                            onClick={() => removeExistingItem(idx)}
+                            className="ml-auto rounded-lg p-2 text-red-500 hover:bg-red-50 active:scale-95"
+                            title="Bu kalemi sil"
+                            aria-label="Sil"
+                          >
+                            <Trash2 size={20} />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => undoExistingChange(idx)}
+                            className="ml-auto inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200 active:scale-95"
+                            title="Değişikliği geri al"
+                          >
+                            <X size={14} />
+                            Geri al
+                          </button>
+                        )}
+                      </div>
                     </li>
                   );
                 })}
               </ul>
-              <p className="mt-2 text-center text-[10px] italic text-slate-500">
+              <p className="mt-2 text-center text-sm font-medium italic text-red-600">
                 {hasEdits
                   ? '⚠️ Değişiklikler mutfağa düzeltme fişi olarak iletilecek'
                   : 'Aşağıdaki yeni ürünler mevcut siparişe eklenecek'}
               </p>
-            </div>
-          )}
-
-          {existingOrder?.items?.length > 0 && items.length > 0 && (
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-blue-700">
-              + Yeni Eklenenler
             </div>
           )}
 
@@ -542,8 +551,19 @@ export default function NewOrder() {
                 : 'Sepet boş'}
             </p>
           ) : (
-            <ul className="space-y-2.5">
-              {items.map((it) => (
+            <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50/40 p-3">
+              {existingOrder?.items?.length > 0 && (
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm font-semibold uppercase tracking-wider text-emerald-700">
+                    + Yeni Eklenenler
+                  </span>
+                  <span className="rounded-full bg-emerald-200 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                    {items.length} kalem
+                  </span>
+                </div>
+              )}
+              <ul className="space-y-2.5">
+                {[...items].reverse().map((it) => (
                 <li
                   key={it.lineId}
                   className="rounded-xl border-2 border-slate-200 bg-white p-3 shadow-sm"
@@ -600,19 +620,20 @@ export default function NewOrder() {
                       className="ml-auto rounded-lg p-2.5 text-slate-500 hover:bg-slate-100 active:scale-95"
                       aria-label="Not ekle"
                     >
-                      <MessageSquare size={18} />
+                      <MessageSquare size={20} />
                     </button>
                     <button
                       onClick={() => removeItem(it.lineId)}
                       className="rounded-lg p-2.5 text-red-500 hover:bg-red-50 active:scale-95"
                       aria-label="Sil"
                     >
-                      <Trash2 size={18} />
+                      <Trash2 size={20} />
                     </button>
                   </div>
                 </li>
               ))}
-            </ul>
+              </ul>
+            </div>
           )}
         </div>
 
