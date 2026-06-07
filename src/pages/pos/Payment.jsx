@@ -825,7 +825,7 @@ export default function Payment() {
             ) : (
               <button
                 onClick={() => setManualDiscountModal(true)}
-                className="w-full rounded-md border border-dashed border-slate-300 px-2 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700"
+                className="w-full rounded-lg border border-dashed border-slate-300 px-3 py-2.5 text-base font-medium text-slate-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700"
               >
                 + Manuel İndirim Ekle
               </button>
