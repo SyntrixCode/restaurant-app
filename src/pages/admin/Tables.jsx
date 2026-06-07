@@ -47,7 +47,6 @@ const SNAP_THRESHOLD = 8; // px — sürüklerken kenar/merkez hizalama yapışm
 const ZONE_LABELS = {
   ic: 'İç Salon',
   dis: 'Dış Mekan',
-  teras: 'Teras',
   bahce: 'Bahçe',
   bar: 'Meşrubat',
   kapali: 'Kapalı Alan',
@@ -321,7 +320,7 @@ export default function AdminTables() {
 
   const zones = useMemo(() => {
     // Her zaman görünmesini istediğimiz bölgeler (henüz masası olmasa bile)
-    const ALWAYS = ['ic', 'dis', 'teras'];
+    const ALWAYS = ['ic', 'dis'];
     const set = new Set(ALWAYS);
     tables.forEach((t) => set.add(t.zone || 'ic'));
     decorations.forEach((d) => set.add(d.zone || 'ic'));

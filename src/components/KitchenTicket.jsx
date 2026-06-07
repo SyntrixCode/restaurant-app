@@ -13,7 +13,7 @@ function buzzerPatternFor({ isCancellation, isCorrection, isAddendum, isPackage 
   return { pulses: 1, gap: 0 };                          // Normal yeni sipariş: 1 bip
 }
 import { watchCollection } from '../firebase/firestore';
-import { groupItemsByPrinter } from '../utils/printerRouting';
+import { groupTicketByPrinter } from '../utils/printerRouting';
 
 export default function KitchenTicket({
   open,
@@ -43,9 +43,14 @@ export default function KitchenTicket({
   // Aktif ağ yazıcıları + kategoriler (yazıcı yönlendirmesi için)
   useEffect(() => watchCollection('printers', setNetworkPrinters), []);
   useEffect(() => watchCollection('categories', setCategories), []);
-  // Kalemleri hedef yazıcılarına göre grupla (mutfak / bar)
-  const printerGroups = groupItemsByPrinter(items, categories, networkPrinters);
-  const hasNetworkPrinter = printerGroups.length > 0;
+  // Eklenen kalemleri + düzeltme farkını (silinen/azalan) hedef yazıcılara göre
+  // grupla. Böylece bir ürün çıkarılınca/azaltılınca o istasyona düzeltme fişi basılır.
+  const ticketGroups = groupTicketByPrinter(
+    { items: items || [], removed: correctionDiff?.removed || [], changed: correctionDiff?.changed || [] },
+    categories,
+    networkPrinters,
+  );
+  const hasNetworkPrinter = ticketGroups.length > 0;
 
   // Senkron guard — async print başlamadan ÖNCE set edilir.
   // kitchenPrinter referansı her render değiştiği için effect tekrar
@@ -73,9 +78,17 @@ export default function KitchenTicket({
         setNativeAvailable(true);
         setPrinting(true);
         try {
-          for (const group of printerGroups) {
+          for (const group of ticketGroups) {
+            // Bu istasyona düzeltme (silinen/azalan) düşüyor mu?
+            const groupHasCorrection = group.removed.length > 0 || group.changed.length > 0;
             const lines = buildKitchenTicketLines({
-              order, items: group.items, isAddendum, isCancellation, cancellationReason, isCorrection, correctionDiff,
+              order,
+              items: group.items,
+              isAddendum,
+              isCancellation,
+              cancellationReason,
+              isCorrection: groupHasCorrection,
+              correctionDiff: groupHasCorrection ? { removed: group.removed, changed: group.changed } : null,
             });
             await printNetworkReceipt({
               ip: group.printer.ip,
@@ -89,7 +102,7 @@ export default function KitchenTicket({
             if (group.printer.siparisZili) {
               const pattern = buzzerPatternFor({
                 isCancellation,
-                isCorrection,
+                isCorrection: groupHasCorrection,
                 isAddendum,
                 isPackage: !!order?.paketMi,
               });
@@ -146,9 +159,16 @@ export default function KitchenTicket({
     setPrinting(true);
     try {
       if (hasNetworkPrinter) {
-        for (const group of printerGroups) {
+        for (const group of ticketGroups) {
+          const groupHasCorrection = group.removed.length > 0 || group.changed.length > 0;
           const lines = buildKitchenTicketLines({
-            order, items: group.items, isAddendum, isCancellation, cancellationReason, isCorrection, correctionDiff,
+            order,
+            items: group.items,
+            isAddendum,
+            isCancellation,
+            cancellationReason,
+            isCorrection: groupHasCorrection,
+            correctionDiff: groupHasCorrection ? { removed: group.removed, changed: group.changed } : null,
           });
           await printNetworkReceipt({
             ip: group.printer.ip,
@@ -161,7 +181,7 @@ export default function KitchenTicket({
           if (group.printer.siparisZili) {
             const pattern = buzzerPatternFor({
               isCancellation,
-              isCorrection,
+              isCorrection: groupHasCorrection,
               isAddendum,
               isPackage: !!order?.paketMi,
             });
@@ -220,9 +240,9 @@ export default function KitchenTicket({
                   : printing
                     ? 'Basılıyor…'
                     : hasNetworkPrinter
-                      ? printerGroups.length > 1
-                        ? `${printerGroups.length} yazıcı (mutfak/bar)`
-                        : `${printerGroups[0].printer.ad || 'Mutfak'} (${printerGroups[0].printer.ip})`
+                      ? ticketGroups.length > 1
+                        ? `${ticketGroups.length} yazıcı (mutfak/bar)`
+                        : `${ticketGroups[0].printer.ad || 'Mutfak'} (${ticketGroups[0].printer.ip})`
                       : 'iMin yazıcı'}
               </span>
             )}

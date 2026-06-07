@@ -1,5 +1,10 @@
 import { create } from 'zustand';
 
+// Sepet satırlarına benzersiz id — aynı üründen birden fazla satır olabildiği için
+// (ör. 1,5 yarım porsiyon + ayrı 1 tam porsiyon) productId tek başına yetmez.
+let lineCounter = 0;
+const newLineId = () => `L${++lineCounter}`;
+
 export const useCartStore = create((set, get) => ({
   masaId: null,
   masaAd: null,
@@ -9,12 +14,16 @@ export const useCartStore = create((set, get) => ({
 
   addItem: (product, initialNotes = '') => {
     const items = [...get().items];
-    const existing = items.find((it) => it.productId === product.id);
-    if (existing) {
-      existing.adet += 1;
-      // Mevcut notları koru, üzerine yazma. Garson düzenle butonundan değiştirebilir.
+    // Aynı üründen TAM SAYILI (kesirsiz) bir satır varsa onu arttır; yoksa yeni satır aç.
+    // Böylece 1,5 (yarım) satır varken ürüne tekrar dokunmak onu 2,5 yapmaz — ayrı satır olur.
+    const whole = items.find(
+      (it) => it.productId === product.id && Number.isInteger(it.adet),
+    );
+    if (whole) {
+      whole.adet += 1;
     } else {
       items.push({
+        lineId: newLineId(),
         productId: product.id,
         ad: product.ad,
         fiyat: product.fiyat,
@@ -28,20 +37,20 @@ export const useCartStore = create((set, get) => ({
     set({ items });
   },
 
-  changeQuantity: (productId, delta) => {
+  changeQuantity: (lineId, delta) => {
     let items = [...get().items];
-    const item = items.find((it) => it.productId === productId);
+    const item = items.find((it) => it.lineId === lineId);
     if (!item) return;
     item.adet = Math.round((item.adet + delta) * 2) / 2; // 0.5 step'e snap
     if (item.adet <= 0) {
-      items = items.filter((it) => it.productId !== productId);
+      items = items.filter((it) => it.lineId !== lineId);
     }
     set({ items });
   },
 
-  toggleHalf: (productId) => {
+  toggleHalf: (lineId) => {
     let items = get().items.map((it) => {
-      if (it.productId !== productId) return it;
+      if (it.lineId !== lineId) return it;
       const integerPart = Math.floor(it.adet);
       const isHalf = it.adet > integerPart;
       // 1 → 1.5, 1.5 → 1, 2 → 2.5, 2.5 → 2, 0.5 → 0
@@ -52,12 +61,12 @@ export const useCartStore = create((set, get) => ({
     set({ items });
   },
 
-  removeItem: (productId) =>
-    set({ items: get().items.filter((it) => it.productId !== productId) }),
+  removeItem: (lineId) =>
+    set({ items: get().items.filter((it) => it.lineId !== lineId) }),
 
-  setNote: (productId, notlar) => {
+  setNote: (lineId, notlar) => {
     const items = get().items.map((it) =>
-      it.productId === productId ? { ...it, notlar } : it,
+      it.lineId === lineId ? { ...it, notlar } : it,
     );
     set({ items });
   },

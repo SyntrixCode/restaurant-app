@@ -8,7 +8,6 @@ import { useSettingsStore } from '../../store/settingsStore';
 const ZONE_LABELS = {
   ic: 'İç Salon',
   dis: 'Dış Mekan',
-  teras: 'Teras',
   bahce: 'Bahçe',
   bar: 'Meşrubat',
   kapali: 'Kapalı Alan',

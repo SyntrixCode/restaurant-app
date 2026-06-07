@@ -147,8 +147,11 @@ export default function Payment() {
   };
 
   /**
-   * İkram adetini ayarlar. Boş seçim'den (selectedQty) öncelik alır.
-   * Tek tık tüm uygun olanları ikram'a alır; tekrar tık kaldırır.
+   * İkram adetini ayarlar — KISMİ ikram destekli:
+   *  - Seçili adet varsa (selectedQty>0): yalnız o kadarını ikrama taşır
+   *    (ör. 10 çayın 5'ini seç → ikram → 5 ikram, 5 ödemeye kalır).
+   *  - Seçim yok ama ikram varsa: ikramı geri alır (toggle).
+   *  - Seçim yok + ikram yok: kalan tümünü ikram yapar (hızlı yol).
    */
   const toggleItemIkram = (i) => {
     setItemStates((arr) => {
@@ -157,14 +160,20 @@ export default function Payment() {
       if (!it) return arr;
       const totalQty = Number(it.adet) || 0;
       const s = next[i] || { selectedQty: 0, ikramQty: 0, paidQty: 0 };
+      const paidQty = s.paidQty || 0;
+      const ikramQty = s.ikramQty || 0;
 
-      if (s.ikramQty > 0) {
-        // Tümünü kaldır
+      if (s.selectedQty > 0) {
+        // Seçili adedi ikrama ekle (kısmi)
+        const room = totalQty - paidQty - ikramQty;
+        const add = Math.min(s.selectedQty, Math.max(0, room));
+        next[i] = { ...s, ikramQty: ikramQty + add, selectedQty: 0 };
+      } else if (ikramQty > 0) {
+        // Seçim yok → mevcut ikramı kaldır
         next[i] = { ...s, ikramQty: 0 };
       } else {
-        // Henüz ödenmemiş tüm adetleri ikram yap
-        const availableForIkram = totalQty - s.paidQty;
-        next[i] = { ...s, ikramQty: availableForIkram, selectedQty: 0 };
+        // Seçim de ikram da yok → kalan tümünü ikram yap
+        next[i] = { ...s, ikramQty: totalQty - paidQty, selectedQty: 0 };
       }
       return next;
     });
@@ -1364,13 +1373,17 @@ function ItemRowList({ item, state, onAdjustSelect, onIkram, onUnpay }) {
               type="button"
               onClick={onIkram}
               className={`rounded-lg px-3 py-2 text-sm font-semibold transition active:scale-95 ${
-                hasIkram
+                hasIkram || hasSelected
                   ? 'bg-amber-500 text-white hover:bg-amber-600'
                   : 'bg-slate-200 text-slate-700 hover:bg-amber-200 hover:text-amber-900'
               }`}
             >
               <Gift size={14} className="inline" />{' '}
-              {hasIkram ? 'İkramı Kaldır' : '+ İkram'}
+              {hasSelected
+                ? `İkram (${formatAdet(d.selectedQty)})`
+                : hasIkram
+                  ? 'İkramı Kaldır'
+                  : '+ İkram'}
             </button>
           )}
 
@@ -1414,14 +1427,20 @@ function ItemCard({ item, state, onAdjustSelect, onIkram, onUnpay }) {
           type="button"
           onClick={(e) => { stop(e); onIkram?.(); }}
           className={`absolute left-2 top-2 z-20 rounded-lg px-3 py-1.5 text-xs font-bold shadow-sm transition active:scale-95 ${
-            hasIkram
+            hasIkram || hasSelected
               ? 'bg-amber-500 text-white hover:bg-amber-600'
               : 'bg-slate-200 text-slate-700 hover:bg-amber-200 hover:text-amber-900'
           }`}
-          title={hasIkram ? 'İkramı kaldır' : 'İkram olarak işaretle'}
+          title={
+            hasSelected
+              ? `Seçili ${formatAdet(d.selectedQty)} adedi ikram et`
+              : hasIkram
+                ? 'İkramı kaldır'
+                : 'Kalan tümünü ikram et'
+          }
         >
           <Gift size={14} className="inline" />{' '}
-          {hasIkram ? 'İkram' : '+ İkram'}
+          {hasSelected ? `İkram (${formatAdet(d.selectedQty)})` : hasIkram ? 'İkram' : '+ İkram'}
         </button>
       )}
 

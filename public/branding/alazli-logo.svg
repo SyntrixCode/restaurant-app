@@ -1,28 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 200" role="img" aria-label="Alazlı Konya Mutfağı">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 200" role="img" aria-label="Alâ Santral Restaurant">
   <defs>
-    <linearGradient id="alazliGreen" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#9ec73a"/>
-      <stop offset="100%" stop-color="#6fa820"/>
+    <linearGradient id="alaGreen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2e8b57"/>
+      <stop offset="100%" stop-color="#15573a"/>
     </linearGradient>
   </defs>
   <text
     x="240"
-    y="120"
+    y="118"
     text-anchor="middle"
     font-family="'Brush Script MT','Lucida Handwriting','Segoe Script',cursive"
-    font-size="120"
+    font-size="128"
     font-style="italic"
     font-weight="400"
-    fill="url(#alazliGreen)"
-  >alazlı</text>
+    fill="url(#alaGreen)"
+  >Alâ</text>
   <text
     x="240"
-    y="165"
+    y="166"
     text-anchor="middle"
     font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif"
-    font-size="26"
+    font-size="24"
     font-weight="600"
-    letter-spacing="6"
+    letter-spacing="7"
     fill="#6b6b6b"
-  >KONYA MUTFAĞI</text>
+  >SANTRAL RESTAURANT</text>
 </svg>

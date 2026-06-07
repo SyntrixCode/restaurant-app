@@ -1,19 +1,36 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2, Package, Image as ImageIcon, Upload, X, Languages, FileDown } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Image as ImageIcon, Upload, X, Languages, FileDown, GripVertical, Save } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import Modal from '../../components/ui/Modal';
 import Toggle from '../../components/ui/Toggle';
-import { watchCollection, createDoc, patchDoc, removeDoc, orderBy } from '../../firebase/firestore';
+import { watchCollection, createDoc, patchDoc, removeDoc, orderBy, writeBatch, serverTimestamp } from '../../firebase/firestore';
 import { productSchema } from '../../utils/validators';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL } from '../../utils/format';
-import { SPARK_MODE, getStorageRef } from '../../firebase/config';
+import { SPARK_MODE, getStorageRef, db } from '../../firebase/config';
 import { translateMenu } from '../../firebase/translation';
 import { importMenu } from '../../firebase/menuImport';
+import { doc } from 'firebase/firestore';
 
 export default function Products() {
   const [products, setProducts] = useState([]);
@@ -25,6 +42,12 @@ export default function Products() {
   const [editing, setEditing] = useState(null);
   const [translating, setTranslating] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [order, setOrder] = useState([]); // sürükle-sırala için ürün id sırası
+  const [dirty, setDirty] = useState(false);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   const handleImportMenu = async () => {
     if (importing) return;
@@ -76,23 +99,76 @@ export default function Products() {
   const globalEsigi = settings.dusukStokEsigi || 5;
 
   const stockState = (p) => {
+    if (p.stokTakipli === false) return 'untracked'; // pide/kebap — stok yok, takipsiz
     const esik = p.dusukStokEsigi ?? globalEsigi;
     if (p.stok <= 0) return 'out';
     if (p.stok <= esik) return 'low';
     return 'ok';
   };
 
+  // Sürükle-sırala yalnızca tek kategori seçiliyken (arama/stok filtresi yokken) — menü
+  // ürünleri kategori içinde sira'ya göre gösterdiği için sıralama kategori-içidir.
+  const canReorder =
+    filter.categoryId !== 'all' && !filter.search.trim() && filter.stock === 'all';
+
+  const categoryProducts = useMemo(() => {
+    if (!canReorder) return [];
+    return products
+      .filter((p) => p.categoryId === filter.categoryId)
+      .sort((a, b) => (a.sira ?? 9999) - (b.sira ?? 9999));
+  }, [products, filter.categoryId, canReorder]);
+
+  // order'ı kategori ürünlerinden senkronla (düzenleme yapılmadıysa)
+  useEffect(() => {
+    if (!dirty) setOrder(categoryProducts.map((p) => p.id));
+  }, [categoryProducts, dirty]);
+
+  // Filtre değişince düzenleme kilidini sıfırla (kaydedilmemiş sıra iptal)
+  useEffect(() => {
+    setDirty(false);
+  }, [filter.categoryId, filter.search, filter.stock]);
+
   const filtered = useMemo(() => {
-    return products.filter((p) => {
-      if (filter.categoryId !== 'all' && p.categoryId !== filter.categoryId) return false;
-      if (filter.search && !p.ad.toLowerCase().includes(filter.search.toLowerCase())) return false;
-      const s = stockState(p);
-      if (filter.stock === 'in' && s === 'out') return false;
-      if (filter.stock === 'low' && s !== 'low') return false;
-      if (filter.stock === 'out' && s !== 'out') return false;
-      return true;
-    });
-  }, [products, filter]);
+    if (canReorder) {
+      const byId = Object.fromEntries(products.map((p) => [p.id, p]));
+      return order.map((id) => byId[id]).filter(Boolean);
+    }
+    return products
+      .filter((p) => {
+        if (filter.categoryId !== 'all' && p.categoryId !== filter.categoryId) return false;
+        if (filter.search && !p.ad.toLowerCase().includes(filter.search.toLowerCase())) return false;
+        const s = stockState(p);
+        if (filter.stock === 'in' && s === 'out') return false;
+        if (filter.stock === 'low' && s !== 'low') return false;
+        if (filter.stock === 'out' && s !== 'out') return false;
+        return true;
+      })
+      .sort((a, b) => (a.sira ?? 9999) - (b.sira ?? 9999));
+  }, [products, filter, order, canReorder]);
+
+  const handleDragEnd = ({ active, over }) => {
+    if (!over || active.id === over.id) return;
+    const oldIndex = order.indexOf(active.id);
+    const newIndex = order.indexOf(over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    setOrder(arrayMove(order, oldIndex, newIndex));
+    setDirty(true);
+  };
+
+  const saveOrder = async () => {
+    try {
+      const batch = writeBatch(db);
+      order.forEach((id, idx) => {
+        batch.update(doc(db, 'products', id), { sira: idx, updatedAt: serverTimestamp() });
+      });
+      await batch.commit();
+      setDirty(false);
+      toast.success('Sıralama kaydedildi');
+    } catch (err) {
+      toast.error('Sıralama kaydedilemedi');
+      console.error(err);
+    }
+  };
 
   const stats = {
     toplam: products.length,
@@ -116,6 +192,11 @@ export default function Products() {
         subtitle="Menü ürünleri, stok ve fiyat yönetimi"
         actions={
           <div className="flex items-center gap-2">
+            {dirty && (
+              <button onClick={saveOrder} className="btn-primary">
+                <Save size={16} /> Sıralamayı Kaydet
+              </button>
+            )}
             <button
               onClick={handleImportMenu}
               disabled={importing}
@@ -183,79 +264,128 @@ export default function Products() {
         </select>
       </div>
 
+      <p className="mb-2 flex items-center gap-1.5 text-xs text-slate-500">
+        {canReorder ? (
+          <>
+            <GripVertical size={13} className="text-slate-400" />
+            Soldaki tutamaçtan sürükleyerek sırala — bittiğinde <strong>Sıralamayı Kaydet</strong>.
+          </>
+        ) : filter.categoryId === 'all' ? (
+          <>
+            📌 Ürünleri sıralamak için üstten <strong className="mx-1">tek bir kategori</strong> seç
+            (sıralama kategori içindedir).
+          </>
+        ) : (
+          'Sıralamak için arama ve stok filtrelerini temizle (yalnız kategori seçili olsun).'
+        )}
+      </p>
+
       <div className="card overflow-hidden p-0">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-            <tr>
-              <th className="px-3 py-3">Görsel</th>
-              <th className="px-3 py-3">Ad</th>
-              <th className="px-3 py-3">Kategori</th>
-              <th className="px-3 py-3">Fiyat</th>
-              <th className="px-3 py-3">Stok</th>
-              <th className="px-3 py-3">Aktif</th>
-              <th className="px-3 py-3 text-right">İşlem</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan="7" className="py-12 text-center text-slate-500">
-                  {products.length === 0 ? 'Henüz ürün yok.' : 'Filtreyle eşleşen ürün yok.'}
-                </td>
-              </tr>
-            )}
-            {filtered.map((p) => {
-              const cat = categories.find((c) => c.id === p.categoryId);
-              const state = stockState(p);
-              const stockColor =
-                state === 'out' ? 'bg-red-100 text-red-700' : state === 'low' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700';
-              return (
-                <tr key={p.id} className="hover:bg-slate-50">
-                  <td className="px-3 py-2">
-                    {p.gorsel ? (
-                      <img src={p.gorsel} alt={p.ad} className="h-10 w-10 rounded object-cover" />
-                    ) : (
-                      <div className="flex h-10 w-10 items-center justify-center rounded bg-slate-100 text-slate-400">
-                        <ImageIcon size={16} />
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 font-medium text-slate-900">{p.ad}</td>
-                  <td className="px-3 py-2 text-slate-600">{cat?.ad || '-'}</td>
-                  <td className="px-3 py-2 font-semibold text-slate-900">{formatTL(p.fiyat)}</td>
-                  <td className="px-3 py-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${stockColor}`}>{p.stok}</span>
-                  </td>
-                  <td className="px-3 py-2">
-                    <Toggle checked={p.aktif} onChange={() => toggleActive(p)} />
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <div className="inline-flex gap-1">
-                      <button
-                        onClick={() => {
-                          setEditing(p);
-                          setOpen(true);
-                        }}
-                        className="btn-ghost px-2 py-1"
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(p)}
-                        className="btn-ghost px-2 py-1 text-red-600 hover:bg-red-50"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div className="grid grid-cols-12 items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs font-medium uppercase text-slate-500">
+          <div className="col-span-1"></div>
+          <div className="col-span-1">Görsel</div>
+          <div className="col-span-3">Ad</div>
+          <div className="col-span-2">Kategori</div>
+          <div className="col-span-1">Fiyat</div>
+          <div className="col-span-1">Stok</div>
+          <div className="col-span-1">Aktif</div>
+          <div className="col-span-2 text-right">İşlem</div>
+        </div>
+        {filtered.length === 0 ? (
+          <div className="px-4 py-12 text-center text-slate-500">
+            {products.length === 0 ? 'Henüz ürün yok.' : 'Filtreyle eşleşen ürün yok.'}
+          </div>
+        ) : (
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={filtered.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+              {filtered.map((p) => (
+                <SortableProductRow
+                  key={p.id}
+                  product={p}
+                  categoryAd={categories.find((c) => c.id === p.categoryId)?.ad || '-'}
+                  state={stockState(p)}
+                  canReorder={canReorder}
+                  onToggle={() => toggleActive(p)}
+                  onEdit={() => {
+                    setEditing(p);
+                    setOpen(true);
+                  }}
+                  onDelete={() => handleDelete(p)}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+        )}
       </div>
 
       <ProductModal open={open} onClose={() => setOpen(false)} editing={editing} categories={categories} printers={printers} />
+    </div>
+  );
+}
+
+function SortableProductRow({ product: p, categoryAd, state, canReorder, onToggle, onEdit, onDelete }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: p.id,
+    disabled: !canReorder,
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  const stockColor =
+    state === 'out'
+      ? 'bg-red-100 text-red-700'
+      : state === 'low'
+        ? 'bg-amber-100 text-amber-700'
+        : 'bg-emerald-100 text-emerald-700';
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="grid grid-cols-12 items-center gap-2 border-b border-slate-100 px-4 py-2 hover:bg-slate-50"
+    >
+      <div className="col-span-1">
+        {canReorder ? (
+          <button {...attributes} {...listeners} className="cursor-grab text-slate-400 hover:text-slate-700" title="Sürükle">
+            <GripVertical size={18} />
+          </button>
+        ) : (
+          <GripVertical size={18} className="text-slate-200" />
+        )}
+      </div>
+      <div className="col-span-1">
+        {p.gorsel ? (
+          <img src={p.gorsel} alt={p.ad} className="h-10 w-10 rounded object-cover" />
+        ) : (
+          <div className="flex h-10 w-10 items-center justify-center rounded bg-slate-100 text-slate-400">
+            <ImageIcon size={16} />
+          </div>
+        )}
+      </div>
+      <div className="col-span-3 font-medium text-slate-900">{p.ad}</div>
+      <div className="col-span-2 text-sm text-slate-600">{categoryAd}</div>
+      <div className="col-span-1 font-semibold text-slate-900">{formatTL(p.fiyat)}</div>
+      <div className="col-span-1">
+        {state === 'untracked' ? (
+          <span className="text-xs text-slate-400">takipsiz</span>
+        ) : (
+          <span className={`rounded-full px-2 py-0.5 text-xs ${stockColor}`}>{p.stok}</span>
+        )}
+      </div>
+      <div className="col-span-1">
+        <Toggle checked={p.aktif} onChange={onToggle} />
+      </div>
+      <div className="col-span-2 text-right">
+        <div className="inline-flex gap-1">
+          <button onClick={onEdit} className="btn-ghost px-2 py-1">
+            <Pencil size={14} />
+          </button>
+          <button onClick={onDelete} className="btn-ghost px-2 py-1 text-red-600 hover:bg-red-50">
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
