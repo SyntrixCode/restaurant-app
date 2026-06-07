@@ -166,3 +166,73 @@ export async function recordPayment({
     return { paymentIds, totalPaid, change: totalPaid - effectiveTotal, effectiveTotal };
   });
 }
+
+/**
+ * Hesabı PATRON/İKRAM olarak ÜCRETSİZ kapatır (ödeme alınmaz).
+ * Tutar ciroya YAZILMAZ (toplam=0); `patronTutar` olarak izlenir → gün sonu ve
+ * raporlarda "İkram/Patron" eksi (-) kalemi olarak görünür. Masa etiketlenir
+ * (patronMasasi:true) → hangi masanın patron/ikram olduğu bilinir.
+ *
+ * @param {{ orderId, kasiyerId, kasiyerAd, sebep?:string }} params
+ */
+export async function closeAsPatron({ orderId, kasiyerId, kasiyerAd, sebep = 'Patron' }) {
+  if (!orderId) throw new Error('orderId zorunlu');
+  const orderRef = doc(db, 'orders', orderId);
+
+  return runTransaction(db, async (txn) => {
+    const orderSnap = await txn.get(orderRef);
+    if (!orderSnap.exists()) throw new Error('Sipariş bulunamadı');
+    const order = orderSnap.data();
+    if (order.durum === 'tamamlandi') throw new Error('Bu sipariş zaten kapandı');
+    const tutar = Number(order.araToplam || order.toplam || 0);
+
+    // Grup/masa oku (write'lardan ÖNCE)
+    let groupId = null;
+    let groupMemberIds = null;
+    if (order.masaId) {
+      const tableRef = doc(db, 'tables', order.masaId);
+      const tableSnap = await txn.get(tableRef);
+      if (tableSnap.exists() && tableSnap.data().grupId) {
+        groupId = tableSnap.data().grupId;
+        const groupSnap = await txn.get(doc(db, 'tableGroups', groupId));
+        if (groupSnap.exists()) groupMemberIds = groupSnap.data().memberIds || [];
+        else groupId = null;
+      }
+    }
+
+    const gun = gunString();
+    const patch = {
+      durum: 'tamamlandi',
+      tamamlandiZamani: serverTimestamp(),
+      toplam: 0, // ciroya yazılmaz
+      indirim: tutar, // tüm tutar ikram/patron olarak düşüldü
+      patronMasasi: true,
+      bedelsiz: true,
+      bedelsizSebep: sebep,
+      patronTutar: tutar, // gün sonu/rapor "- bakiye" buradan
+      kasiyerId,
+      kasiyerAd,
+    };
+    txn.update(orderRef, patch);
+
+    txn.set(doc(db, 'archivedOrders', orderId), {
+      ...order,
+      ...patch,
+      arsivZamani: serverTimestamp(),
+      gun,
+      odemeYontemleri: ['patron'],
+    });
+
+    if (order.masaId) {
+      txn.update(doc(db, 'tables', order.masaId), { durum: 'bos' });
+    }
+    if (groupId && groupMemberIds) {
+      for (const mid of groupMemberIds) {
+        txn.update(doc(db, 'tables', mid), { grupId: null });
+      }
+      txn.delete(doc(db, 'tableGroups', groupId));
+    }
+
+    return { tutar };
+  });
+}

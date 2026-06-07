@@ -89,6 +89,7 @@ export default function KitchenTicket({
               cancellationReason,
               isCorrection: groupHasCorrection,
               correctionDiff: groupHasCorrection ? { removed: group.removed, changed: group.changed } : null,
+              printerAd: group.printer.ad,
             });
             await printNetworkReceipt({
               ip: group.printer.ip,
@@ -169,6 +170,7 @@ export default function KitchenTicket({
             cancellationReason,
             isCorrection: groupHasCorrection,
             correctionDiff: groupHasCorrection ? { removed: group.removed, changed: group.changed } : null,
+            printerAd: group.printer.ad,
           });
           await printNetworkReceipt({
             ip: group.printer.ip,

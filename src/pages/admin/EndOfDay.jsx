@@ -65,6 +65,12 @@ export default function EndOfDay() {
     );
     return sum + ik;
   }, 0);
+  // Patron/ücretsiz kapatılan masalar — ciroya yazılmaz, eksi (-) gösterilir
+  const patronToplam = validArchived.reduce(
+    (sum, o) => sum + (o.patronMasasi ? Number(o.patronTutar || 0) : 0),
+    0,
+  );
+  const patronSayisi = validArchived.filter((o) => o.patronMasasi).length;
 
   const acilis = parseFloat(acilisKasa) || 0;
   const sayilan = parseFloat(sayilanNakit) || 0;
@@ -90,6 +96,8 @@ export default function EndOfDay() {
         siparisSayisi: validArchived.length,
         iptalSayisi: iptalCount,
         ikramToplam,
+        patronToplam,
+        patronSayisi,
         olusturmaZamani: new Date(),
       });
       toast.success('Z raporu kaydedildi');
@@ -142,7 +150,12 @@ export default function EndOfDay() {
               <Row label="Ödeme adedi" value={totals.count} />
               <Row label="Tamamlanan sipariş" value={validArchived.length} />
               <Row label="İptal edilen" value={iptalCount} danger={iptalCount > 0} />
-              <Row label="Toplam ikram" value={formatTL(ikramToplam)} />
+              <Row label="Toplam ikram (ürün)" value={formatTL(ikramToplam)} />
+              <Row
+                label={`Patron / ücretsiz${patronSayisi ? ` (${patronSayisi} masa)` : ''}`}
+                value={`- ${formatTL(patronToplam)}`}
+                danger={patronToplam > 0}
+              />
               <div className="my-2 border-t border-slate-100" />
               <Row label="Nakit" value={formatTL(totals.nakit)} />
               <Row label="Kart" value={formatTL(totals.kart)} />
