@@ -18,7 +18,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2, Package, Image as ImageIcon, Upload, X, Languages, FileDown, GripVertical, Save } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Image as ImageIcon, Upload, X, Languages, FileDown, GripVertical } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import Modal from '../../components/ui/Modal';
@@ -146,27 +146,26 @@ export default function Products() {
       .sort((a, b) => (a.sira ?? 9999) - (b.sira ?? 9999));
   }, [products, filter, order, canReorder]);
 
-  const handleDragEnd = ({ active, over }) => {
+  // Her sürükleme sonunda yeni sırayı anında Firestore'a yazar — manuel kaydet butonu yok
+  const handleDragEnd = async ({ active, over }) => {
     if (!over || active.id === over.id) return;
     const oldIndex = order.indexOf(active.id);
     const newIndex = order.indexOf(over.id);
     if (oldIndex < 0 || newIndex < 0) return;
-    setOrder(arrayMove(order, oldIndex, newIndex));
-    setDirty(true);
-  };
-
-  const saveOrder = async () => {
+    const newOrder = arrayMove(order, oldIndex, newIndex);
+    setOrder(newOrder);
+    setDirty(true); // listener-bazlı re-sync'i sürtünme süresince engelle
     try {
       const batch = writeBatch(db);
-      order.forEach((id, idx) => {
+      newOrder.forEach((id, idx) => {
         batch.update(doc(db, 'products', id), { sira: idx, updatedAt: serverTimestamp() });
       });
       await batch.commit();
-      setDirty(false);
-      toast.success('Sıralama kaydedildi');
     } catch (err) {
       toast.error('Sıralama kaydedilemedi');
       console.error(err);
+    } finally {
+      setDirty(false);
     }
   };
 
@@ -192,11 +191,6 @@ export default function Products() {
         subtitle="Menü ürünleri, stok ve fiyat yönetimi"
         actions={
           <div className="flex items-center gap-2">
-            {dirty && (
-              <button onClick={saveOrder} className="btn-primary">
-                <Save size={16} /> Sıralamayı Kaydet
-              </button>
-            )}
             <button
               onClick={handleImportMenu}
               disabled={importing}
@@ -268,7 +262,7 @@ export default function Products() {
         {canReorder ? (
           <>
             <GripVertical size={13} className="text-slate-400" />
-            Soldaki tutamaçtan sürükleyerek sırala — bittiğinde <strong>Sıralamayı Kaydet</strong>.
+            Soldaki tutamaçtan sürükleyerek sırala — değişiklikler <strong>otomatik kaydedilir</strong>.
           </>
         ) : filter.categoryId === 'all' ? (
           <>
