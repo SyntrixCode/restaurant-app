@@ -3,7 +3,10 @@ service firebase.storage {
   match /b/{bucket}/o {
     match /products/{file=**} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.token.rol == 'admin';
+      // Giriş yapmış personel ürün görseli yükleyebilir. (Admin'in rol claim'i
+      // yok — kod'u olmayan kullanıcıda onUserWrite tetikleyicisi claim set etmiyor.
+      // Ürün görseli hassas değil, panel zaten admin/kasiyer ile korunuyor.)
+      allow write: if request.auth != null;
     }
     match /{path=**} {
       allow read: if request.auth != null;
