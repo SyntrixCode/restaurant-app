@@ -17,11 +17,21 @@ import * as XLSX from 'xlsx';
 import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import Modal from '../../components/ui/Modal';
-import { watchCollection, orderBy } from '../../firebase/firestore';
+import { watchCollection, orderBy, where } from '../../firebase/firestore';
 import { recordManualStockMovement } from '../../firebase/orders';
 import { useAuthStore } from '../../store/authStore';
 import { formatTL, formatDate, formatAdet } from '../../utils/format';
 import { stockMovementManualSchema } from '../../utils/validators';
+
+// Firebase okuma maliyetini sınırlamak için listener'ı bu pencereyle bağlıyoruz.
+// Daha eski hareketler ekranda görünmez. Eski kayıtların otomatik silinmesi için
+// Firebase Console > Firestore > TTL ayarlarından 'zaman' alanına TTL politikası eklenebilir.
+const STOCK_HISTORY_DAYS = 90;
+const stockHistoryCutoff = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - STOCK_HISTORY_DAYS);
+  return d;
+};
 
 const KAYNAK_LABELS = {
   siparis: 'Sipariş',
@@ -63,14 +73,33 @@ export default function AdminStock() {
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
 
-  useEffect(() => watchCollection('stockMovements', setMovements, orderBy('zaman', 'desc')), []);
+  // Sadece son STOCK_HISTORY_DAYS günlük hareketleri dinle — read maliyeti sabit kalır
+  useEffect(
+    () =>
+      watchCollection(
+        'stockMovements',
+        setMovements,
+        where('zaman', '>=', stockHistoryCutoff()),
+        orderBy('zaman', 'desc'),
+      ),
+    [],
+  );
   useEffect(() => watchCollection('products', setProducts), []);
   useEffect(() => watchCollection('suppliers', setSuppliers), []);
+
+  // Şu an stok takipli olan ürünlerin ID seti — geçmiş hatalı hareketler (artık
+  // takipsiz yapılmış ürünler) listede görünmesin.
+  const trackedProductIds = useMemo(
+    () => new Set(products.filter((p) => p.stokTakipli !== false).map((p) => p.id)),
+    [products],
+  );
 
   const filtered = useMemo(() => {
     const fromTs = new Date(from + 'T00:00:00').getTime();
     const toTs = new Date(to + 'T23:59:59').getTime();
     let list = movements.filter((m) => {
+      // Stoğu takipsiz olan ürünün hareketleri gösterilmesin
+      if (m.productId && !trackedProductIds.has(m.productId)) return false;
       const t = m.zaman?.toDate ? m.zaman.toDate().getTime() : new Date(m.zaman || 0).getTime();
       return t >= fromTs && t <= toTs;
     });
@@ -87,7 +116,7 @@ export default function AdminStock() {
       );
     }
     return list;
-  }, [movements, from, to, filterTip, filterKaynak, filterProduct, search]);
+  }, [movements, from, to, filterTip, filterKaynak, filterProduct, search, trackedProductIds]);
 
   const stats = useMemo(() => {
     let giris = 0;
@@ -101,7 +130,7 @@ export default function AdminStock() {
 
   const lowStockProducts = useMemo(() => {
     return products
-      .filter((p) => p.aktif && p.stok <= (p.dusukStokEsigi ?? 5))
+      .filter((p) => p.aktif && p.stokTakipli !== false && p.stok <= (p.dusukStokEsigi ?? 5))
       .sort((a, b) => a.stok - b.stok)
       .slice(0, 5);
   }, [products]);
@@ -134,7 +163,7 @@ export default function AdminStock() {
     <div className="p-8">
       <PageHeader
         title="Stok Yönetimi"
-        subtitle="Stok hareketleri ve manuel düzeltmeler"
+        subtitle={`Son ${STOCK_HISTORY_DAYS} gün stok hareketleri ve manuel düzeltmeler`}
         actions={
           <>
             <button
@@ -209,11 +238,13 @@ export default function AdminStock() {
           className="input max-w-[200px]"
         >
           <option value="all">Tüm Ürünler</option>
-          {products.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.ad}
-            </option>
-          ))}
+          {products
+            .filter((p) => p.stokTakipli !== false)
+            .map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.ad}
+              </option>
+            ))}
         </select>
         <div className="relative ml-auto">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -378,7 +409,7 @@ function ManualMovementModal({ open, onClose, products, suppliers }) {
           <select {...register('productId')} className="input">
             <option value="">— Ürün seçin —</option>
             {products
-              .filter((p) => p.aktif)
+              .filter((p) => p.aktif && p.stokTakipli !== false)
               .map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.ad} (mevcut: {p.stok})

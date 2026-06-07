@@ -247,16 +247,20 @@ export async function addItemsToOrder({ orderId, garsonId, newItems }) {
       const snap = productSnapshots[idx];
       if (!snap.exists()) throw new Error(`Ürün bulunamadı: ${it.productId}`);
       const data = snap.data();
-      if (data.stok < it.adet)
-        throw new Error(`Yetersiz stok: ${data.ad}`);
-      stockUpdates.push({
-        ref: snap.ref,
-        productId: snap.id,
-        productAd: data.ad,
-        oncekiStok: data.stok,
-        yeniStok: data.stok - it.adet,
-        miktar: it.adet,
-      });
+      // Stok takibi: undefined → eski davranış (true). Açıkça false ise kontrol+düşüş atlanır.
+      const stokTakipli = data.stokTakipli !== false;
+      if (stokTakipli) {
+        if (data.stok < it.adet)
+          throw new Error(`Yetersiz stok: ${data.ad}`);
+        stockUpdates.push({
+          ref: snap.ref,
+          productId: snap.id,
+          productAd: data.ad,
+          oncekiStok: data.stok,
+          yeniStok: data.stok - it.adet,
+          miktar: it.adet,
+        });
+      }
       return {
         productId: it.productId,
         ad: data.ad,

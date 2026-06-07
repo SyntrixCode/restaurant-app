@@ -284,10 +284,9 @@ export default function Products() {
         <div className="grid grid-cols-12 items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs font-medium uppercase text-slate-500">
           <div className="col-span-1"></div>
           <div className="col-span-1">Görsel</div>
-          <div className="col-span-3">Ad</div>
+          <div className="col-span-4">Ad</div>
           <div className="col-span-2">Kategori</div>
           <div className="col-span-1">Fiyat</div>
-          <div className="col-span-1">Stok</div>
           <div className="col-span-1">Aktif</div>
           <div className="col-span-2 text-right">İşlem</div>
         </div>
@@ -333,12 +332,6 @@ function SortableProductRow({ product: p, categoryAd, state, canReorder, onToggl
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
-  const stockColor =
-    state === 'out'
-      ? 'bg-red-100 text-red-700'
-      : state === 'low'
-        ? 'bg-amber-100 text-amber-700'
-        : 'bg-emerald-100 text-emerald-700';
   return (
     <div
       ref={setNodeRef}
@@ -363,16 +356,9 @@ function SortableProductRow({ product: p, categoryAd, state, canReorder, onToggl
           </div>
         )}
       </div>
-      <div className="col-span-3 font-medium text-slate-900">{p.ad}</div>
+      <div className="col-span-4 font-medium text-slate-900">{p.ad}</div>
       <div className="col-span-2 text-sm text-slate-600">{categoryAd}</div>
       <div className="col-span-1 font-semibold text-slate-900">{formatTL(p.fiyat)}</div>
-      <div className="col-span-1">
-        {state === 'untracked' ? (
-          <span className="text-xs text-slate-400">takipsiz</span>
-        ) : (
-          <span className={`rounded-full px-2 py-0.5 text-xs ${stockColor}`}>{p.stok}</span>
-        )}
-      </div>
       <div className="col-span-1">
         <Toggle checked={p.aktif} onChange={onToggle} />
       </div>
@@ -603,25 +589,10 @@ function ProductModal({ open, onClose, editing, categories, printers = [] }) {
         </div>
 
         {watch('stokTakipli') && (
-          <>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Stok</label>
-              <input type="number" {...register('stok')} className="input" />
-              {errors.stok && <p className="mt-1 text-xs text-red-600">{errors.stok.message}</p>}
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Düşük Stok Eşiği (opsiyonel)
-              </label>
-              <input
-                type="number"
-                {...register('dusukStokEsigi')}
-                className="input"
-                placeholder="Boş = global ayar"
-              />
-            </div>
-          </>
+          <div className="col-span-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+            ℹ️ Başlangıç stoğu ve giriş hareketleri <strong>Stok</strong> sayfasından "Manuel Hareket"
+            ile yapılır. Düşük stok eşiği global Ayarlar'dan okunur.
+          </div>
         )}
 
         <div className="col-span-2">
