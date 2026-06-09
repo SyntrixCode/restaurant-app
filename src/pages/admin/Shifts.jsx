@@ -6,6 +6,7 @@ import { watchCollection, where, removeDoc, patchDoc } from '../../firebase/fire
 import { useAuthStore } from '../../store/authStore';
 import { formatDate } from '../../utils/format';
 import { exportExcel } from '../../utils/excelExport';
+import { isMesaiMuafiYet } from '../../components/ShiftButton';
 
 function todayISO() {
   const d = new Date();
@@ -23,12 +24,33 @@ export default function Shifts() {
   const { rol } = useAuthStore();
   const isAdmin = rol === 'admin';
   const [gun, setGun] = useState(todayISO());
-  const [shifts, setShifts] = useState([]);
+  const [rawShifts, setRawShifts] = useState([]);
+  // Açık mesailerin canlı geçen süresi için dakikada bir tick
+  const [nowMs, setNowMs] = useState(Date.now());
 
   useEffect(
-    () => watchCollection('shifts', setShifts, where('gun', '==', gun)),
+    () => watchCollection('shifts', setRawShifts, where('gun', '==', gun)),
     [gun],
   );
+
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Test/demo hesaplarını (Syntrix*) raporda gösterme
+  const shifts = useMemo(
+    () => rawShifts.filter((s) => !isMesaiMuafiYet(s.personelAd)),
+    [rawShifts],
+  );
+
+  // Açık mesai için canlı geçen dk, kapalı için kaydedilmiş sureDk
+  const effectiveDk = (s) => {
+    if (!s.acik) return s.sureDk;
+    const giris = s.giris?.toDate ? s.giris.toDate() : new Date(s.giris);
+    if (!giris || isNaN(giris.getTime())) return 0;
+    return Math.max(0, Math.round((nowMs - giris.getTime()) / 60000));
+  };
 
   const sorted = useMemo(
     () =>
@@ -40,7 +62,7 @@ export default function Shifts() {
     [shifts],
   );
 
-  // Personel bazlı toplam süre (kapanmış mesailer)
+  // Personel bazlı toplam süre — açık mesailer için canlı geçen dakika dahil
   const totals = useMemo(() => {
     const map = new Map();
     for (const s of shifts) {
@@ -49,10 +71,10 @@ export default function Shifts() {
       if (!map.has(id)) map.set(id, { id, ad, toplamDk: 0, acik: 0 });
       const r = map.get(id);
       if (s.acik) r.acik += 1;
-      else r.toplamDk += s.sureDk || 0;
+      r.toplamDk += effectiveDk(s) || 0;
     }
     return [...map.values()].sort((a, b) => b.toplamDk - a.toplamDk);
-  }, [shifts]);
+  }, [shifts, nowMs]);
 
   const handleClose = async (s) => {
     const giris = s.giris?.toDate ? s.giris.toDate() : new Date(s.giris);
@@ -174,7 +196,7 @@ export default function Shifts() {
                         '-'
                       )}
                     </td>
-                    <td className="py-2 text-right font-semibold tabular-nums">{sureLabel(s.sureDk)}</td>
+                    <td className={`py-2 text-right font-semibold tabular-nums ${s.acik ? 'text-amber-700' : ''}`}>{sureLabel(effectiveDk(s))}</td>
                     <td className="py-2 text-right print:hidden">
                       <div className="flex justify-end gap-1">
                         {s.acik && (

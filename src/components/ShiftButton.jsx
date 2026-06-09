@@ -16,18 +16,26 @@ function elapsedLabel(giris) {
 /**
  * POS başlığında mesai başlat/bitir butonu. Açık mesai varsa geçen süreyi gösterir.
  */
+// Mesai takibinden muaf test/demo hesaplar (auto-start yapılmaz, buton görünmez,
+// admin'deki listeden de gizlenir).
+export function isMesaiMuafiYet(ad) {
+  return (ad || '').toLowerCase().startsWith('syntrix');
+}
+
 export default function ShiftButton() {
   const { user, profile, rol } = useAuthStore();
   const [shift, setShift] = useState(null);
   const [busy, setBusy] = useState(false);
   const [, setTick] = useState(0);
+  const muaf = isMesaiMuafiYet(profile?.ad);
 
   // POS personeli (garson/kasiyer/kurye) giriş yapınca mesai OTOMATİK başlar.
   // clockIn gün-duyarlı: dünden kalan açık mesaiyi gece sıfırlaması olarak kapatır,
   // bugün açık varsa onu sürdürür, yoksa yeni açar. Admin için otomatik yok (manuel).
+  // Syntrix* hesapları test amaçlı — mesai takibinden muaf.
   const AUTO_ROLES = ['garson', 'kasiyer', 'kurye'];
   useEffect(() => {
-    if (!user?.uid || !rol) return;
+    if (!user?.uid || !rol || muaf) return;
     let cancelled = false;
     (async () => {
       try {
@@ -46,7 +54,10 @@ export default function ShiftButton() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid, rol]);
+  }, [user?.uid, rol, muaf]);
+
+  // Muaf hesaplar için buton hiç görünmesin
+  if (muaf) return null;
 
   // Açık mesaide geçen süreyi her dakika güncelle
   useEffect(() => {
