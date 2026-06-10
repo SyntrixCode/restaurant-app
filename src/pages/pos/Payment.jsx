@@ -22,7 +22,8 @@ import { watchDoc, watchCollection, patchDoc } from '../../firebase/firestore';
 import { formatTL, minutesSince, formatAdet } from '../../utils/format';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
-import { recordPayment, closeAsPatron } from '../../firebase/payments';
+import { recordPayment } from '../../firebase/payments';
+import { closeToCari } from '../../firebase/cari';
 import {
   awardLoyaltyPoints,
   adjustLoyaltyPoints,
@@ -43,6 +44,7 @@ import ReceiptPreview from '../../components/ReceiptPreview';
 import CardPaymentModal from '../../components/CardPaymentModal';
 import SplitReceiptModal from '../../components/SplitReceiptModal';
 import PaymentSummaryModal from '../../components/PaymentSummaryModal';
+import CariSelectModal from '../../components/CariSelectModal';
 import { pushToCustomerDisplay } from '../../plugins/customerDisplay';
 import { openCashDrawer } from '../../plugins/networkPrinter';
 import { pickAdisyonPrinter } from '../../utils/posDeviceSettings';
@@ -73,6 +75,7 @@ export default function Payment() {
   const [cashModal, setCashModal] = useState(false);
   const [cardModal, setCardModal] = useState(false);
   const [mealModal, setMealModal] = useState(false);
+  const [cariModalOpen, setCariModalOpen] = useState(false);
 
   // Madde 5+6: Ürün-bazlı ödeme. Her item için adet-tabanlı durum:
   //   { selectedQty, ikramQty, paidQty }
@@ -602,31 +605,27 @@ export default function Payment() {
   };
 
   // Patron / ücretsiz kapatma — tüm hesap bedelsiz, ciroya yazılmaz, "İkram/Patron" eksi.
-  const handlePatronClose = async () => {
-    if (finalized || submitting) return;
-    if (
-      !confirm(
-        `Bu masa PATRON olarak ÜCRETSİZ kapatılsın mı?\n\n` +
-          `Tutar (${formatTL(subtotal)}) ciroya YAZILMAZ; gün sonu ve raporlarda ` +
-          `"İkram/Patron" olarak EKSİ (-) görünür.`,
-      )
-    )
-      return;
+  // Patron / Cari: kasiyer bir kişi (cari) seçer → tutar o kişinin carisine BORÇ yazılır
+  // (ödeme alınmaz, ciroya girmez). Modaldan kişi seçilince çağrılır.
+  const handleCariSelect = async (cari) => {
+    if (finalized || submitting || !cari?.id) return;
     setSubmitting(true);
     setFinalized(true);
+    setCariModalOpen(false);
     try {
-      await closeAsPatron({
+      await closeToCari({
         orderId: order.id,
+        cariId: cari.id,
+        cariAd: cari.ad,
         kasiyerId: user.uid,
         kasiyerAd: profile?.ad || 'Kasiyer',
-        sebep: 'Patron',
       });
       setChange(0);
-      toast.success('Patron masası — ücretsiz kapatıldı');
+      toast.success(`${cari.ad} carisine yazıldı (${formatTL(subtotal)})`);
       pushToCustomerDisplay({ mode: 'thanks', payment: { paraUstu: 0 } });
       setSummaryOpen(true);
     } catch (err) {
-      toast.error(err?.message || 'Kapatılamadı');
+      toast.error(err?.message || 'Cariye yazılamadı');
       setFinalized(false);
     } finally {
       setSubmitting(false);
@@ -1065,12 +1064,12 @@ export default function Payment() {
         />
 
         <button
-          onClick={handlePatronClose}
+          onClick={() => setCariModalOpen(true)}
           disabled={submitting || finalized}
-          title="Tüm hesabı patron/ikram olarak ücretsiz kapat (ciroya yazılmaz, gün sonunda eksi)"
+          title="Hesabı bir cari hesaba (kişiye) borç olarak yaz (ödeme alınmaz, ciroya girmez)"
           className="flex items-center justify-center gap-2 rounded-xl border-2 border-rose-300 bg-rose-50 py-3 text-base font-bold text-rose-700 transition hover:bg-rose-100 active:scale-95 disabled:opacity-50"
         >
-          <Gift size={18} /> PATRON / ÜCRETSİZ
+          <Gift size={18} /> PATRON / CARİ
         </button>
 
         <div className="mt-auto rounded-lg bg-white p-3 text-xs text-slate-500">
@@ -1159,6 +1158,13 @@ export default function Payment() {
         ikramTotal={ikramTotal}
         discount={bestDiscount.amount}
         change={change}
+      />
+
+      <CariSelectModal
+        open={cariModalOpen}
+        onClose={() => setCariModalOpen(false)}
+        amount={subtotal}
+        onSelect={handleCariSelect}
       />
     </div>
   );

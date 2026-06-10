@@ -175,6 +175,18 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Cari hesaplar (patron/veresiye) — personel okur/yazar (kasiyer cariye yazar), admin siler.
+    match /cari/{id} {
+      allow read: if isStaff();
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+    // Cari hareket defteri — personel ekler/okur; düzeltme/silme admin.
+    match /cariHareketleri/{id} {
+      allow read, create: if isStaff();
+      allow update, delete: if isAdmin();
+    }
+
     // Garson çağırma — müşteri masadaki QR menüden oluşturur (giriş gerektirmez).
     // Kötüye kullanımı sınırlamak için sadece beklenen tip/durum ile oluşturulabilir.
     match /waiterCalls/{id} {

@@ -9,6 +9,7 @@ import {
   ShoppingBag,
   Wallet,
   Gift,
+  CreditCard,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -80,6 +81,11 @@ export default function AdminReports() {
       (s, o) => s + (o.patronMasasi ? Number(o.patronTutar || 0) : 0),
       0,
     );
+    // Cariye (kişiye) yazılan — ciroya dahil değil, alacak olarak izlenir
+    const sumCari = orders.reduce(
+      (s, o) => s + (o.cariMasasi ? Number(o.cariTutar || 0) : 0),
+      0,
+    );
     const count = orders.length;
     return {
       ciro: sumToplam,
@@ -88,6 +94,7 @@ export default function AdminReports() {
       kisi: sumKisi,
       kisiBasi: sumKisi > 0 ? sumToplam / sumKisi : 0,
       patron: sumPatron,
+      cari: sumCari,
     };
   }, [orders]);
 
@@ -305,6 +312,7 @@ export default function AdminReports() {
         <StatCard label="Toplam Kişi" value={totals.kisi} color="blue" icon={UsersIcon} />
         <StatCard label="Kişi Başı" value={formatTL(totals.kisiBasi)} color="green" icon={Wallet} />
         <StatCard label="İkram / Patron" value={`- ${formatTL(totals.patron)}`} color="red" icon={Gift} />
+        <StatCard label="Cari'ye yazılan" value={formatTL(totals.cari)} color="amber" icon={CreditCard} />
       </div>
 
       {orders.length === 0 ? (

@@ -155,6 +155,13 @@ export const supplierSchema = z.object({
   aktif: z.boolean(),
 });
 
+export const cariSchema = z.object({
+  ad: z.string().min(1, 'Cari adı zorunlu').max(100),
+  telefon: z.string().max(30).optional().or(z.literal('')),
+  notlar: z.string().max(500).optional().or(z.literal('')),
+  aktif: z.boolean().default(true),
+});
+
 export const stockMovementManualSchema = z.object({
   productId: z.string().min(1, 'Ürün seçin'),
   tip: z.enum(['giris', 'cikis']),

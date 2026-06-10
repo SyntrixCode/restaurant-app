@@ -30,6 +30,7 @@ import AdminEndOfDay from './pages/admin/EndOfDay';
 import AdminStaffReport from './pages/admin/StaffReport';
 import AdminShifts from './pages/admin/Shifts';
 import AdminCustomers from './pages/admin/Customers';
+import AdminCari from './pages/admin/CariHesaplar';
 import AdminAccounting from './pages/admin/Accounting';
 import AdminEInvoice from './pages/admin/EInvoice';
 import AdminInventory from './pages/admin/Inventory';
@@ -97,6 +98,7 @@ export default function App() {
         <Route path="staff-report" element={<AdminStaffReport />} />
         <Route path="shifts" element={<AdminShifts />} />
         <Route path="customers" element={<AdminCustomers />} />
+        <Route path="cari" element={<AdminCari />} />
         <Route path="accounting" element={<AdminAccounting />} />
         <Route path="e-invoice" element={<AdminEInvoice />} />
         <Route path="inventory" element={<AdminInventory />} />

@@ -71,6 +71,12 @@ export default function EndOfDay() {
     0,
   );
   const patronSayisi = validArchived.filter((o) => o.patronMasasi).length;
+  // Cariye (kişiye) yazılan — ciroya girmez, alacak olarak izlenir
+  const cariToplam = validArchived.reduce(
+    (sum, o) => sum + (o.cariMasasi ? Number(o.cariTutar || 0) : 0),
+    0,
+  );
+  const cariSayisi = validArchived.filter((o) => o.cariMasasi).length;
 
   const acilis = parseFloat(acilisKasa) || 0;
   const sayilan = parseFloat(sayilanNakit) || 0;
@@ -98,6 +104,8 @@ export default function EndOfDay() {
         ikramToplam,
         patronToplam,
         patronSayisi,
+        cariToplam,
+        cariSayisi,
         olusturmaZamani: new Date(),
       });
       toast.success('Z raporu kaydedildi');
@@ -155,6 +163,11 @@ export default function EndOfDay() {
                 label={`Patron / ücretsiz${patronSayisi ? ` (${patronSayisi} masa)` : ''}`}
                 value={`- ${formatTL(patronToplam)}`}
                 danger={patronToplam > 0}
+              />
+              <Row
+                label={`Cari'ye yazılan${cariSayisi ? ` (${cariSayisi} masa)` : ''}`}
+                value={formatTL(cariToplam)}
+                danger={cariToplam > 0}
               />
               <div className="my-2 border-t border-slate-100" />
               <Row label="Nakit" value={formatTL(totals.nakit)} />

@@ -27,6 +27,7 @@ import {
   ChefHat,
   Calculator,
   Phone,
+  CreditCard,
   FileSpreadsheet,
   FileCheck2,
 } from 'lucide-react';
@@ -53,6 +54,7 @@ const NAV = [
   { to: '/admin/coupons', label: 'Kupon Kodları', icon: Megaphone },
   { to: '/admin/packages', label: 'Paket Servis', icon: Truck },
   { to: '/admin/customers', label: 'Telefon Defteri', icon: Phone },
+  { to: '/admin/cari', label: 'Cari Hesaplar', icon: CreditCard },
   { to: '/admin/notifications', label: 'Bildirimler', icon: Bell },
   { to: '/admin/reports', label: 'Raporlar', icon: BarChart3 },
   { to: '/admin/finance', label: 'Finans', icon: Wallet },
@@ -100,8 +102,8 @@ export default function AdminLayout() {
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-400">Yönetim Paneli</p>
             <img
-              src="/branding/alazli-logo.svg"
-              alt={settings.restoranAd || 'Alâ Santral Restaurant'}
+              src="/branding/ala-konya-logo.png"
+              alt={settings.restoranAd || 'Alâ Konya Mutfağı'}
               className="mt-1 h-[4.5rem] w-auto"
             />
           </div>
@@ -150,7 +152,7 @@ export default function AdminLayout() {
             <Menu size={22} />
           </button>
           <img
-            src="/branding/alazli-logo.svg"
+            src="/branding/ala-konya-logo.png"
             alt={settings.restoranAd || 'Yönetim'}
             className="h-8 w-auto"
           />
