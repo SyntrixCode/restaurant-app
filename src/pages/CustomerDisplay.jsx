@@ -42,8 +42,8 @@ function IdleScreen({ settings }) {
   return (
     <div className="relative flex h-screen w-screen flex-col items-center justify-center bg-gradient-to-br from-emerald-700 via-emerald-600 to-emerald-800 text-white">
       <img
-        src="/branding/alazli-logo.svg"
-        alt="Alâ Santral Restaurant"
+        src="/branding/ala-konya-logo.png"
+        alt="Alâ Konya Mutfağı"
         className="mb-8 h-40 w-auto rounded-2xl bg-white/95 p-6 shadow-2xl"
       />
       <h1 className="mb-2 text-6xl font-bold tracking-wide">
@@ -78,8 +78,8 @@ function OrderScreen({ state, settings }) {
       <header className="flex items-center justify-between border-b-2 border-emerald-500 bg-slate-800 px-8 py-4">
         <div className="flex items-center gap-3">
           <img
-            src="/branding/alazli-logo.svg"
-            alt="Alâ Santral Restaurant"
+            src="/branding/ala-konya-logo.png"
+            alt="Alâ Konya Mutfağı"
             className="h-12 w-auto rounded bg-white p-1"
           />
           <div>

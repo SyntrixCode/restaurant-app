@@ -101,7 +101,7 @@ export default function AdminSettings() {
           {/* Restoran Bilgileri */}
           <Section title="Restoran Bilgileri" icon={Store}>
             <Field label="Restoran Adı" error={errors.restoranAd}>
-              <input {...register('restoranAd')} className="input" placeholder="Alâ Santral Restaurant" />
+              <input {...register('restoranAd')} className="input" placeholder="Alâ Konya Mutfağı" />
             </Field>
             <Field label="Adres" error={errors.restoranAdres}>
               <input {...register('restoranAdres')} className="input" />

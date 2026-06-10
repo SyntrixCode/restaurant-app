@@ -56,8 +56,8 @@ export default function PosLayout() {
       <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
         <div className="flex items-center gap-4">
           <img
-            src="/branding/alazli-logo.svg"
-            alt={settings.restoranAd || 'Alâ Santral Restaurant'}
+            src="/branding/ala-konya-logo.png"
+            alt={settings.restoranAd || 'Alâ Konya Mutfağı'}
             className="h-[3.75rem] w-auto"
           />
           <span className="text-sm text-slate-500">

@@ -104,8 +104,8 @@ export default function Menu() {
       >
         <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3">
           <img
-            src="/branding/alazli-logo.svg"
-            alt={settings.restoranAd || 'Alâ Santral Restaurant'}
+            src="/branding/ala-konya-logo.png"
+            alt={settings.restoranAd || 'Alâ Konya Mutfağı'}
             className="h-[3.75rem] w-auto"
           />
           <div className="ml-auto flex items-center gap-2">
