@@ -1,5 +1,8 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
+  Menu,
+  X,
   LayoutDashboard,
   ShoppingCart,
   Archive,
@@ -65,8 +68,15 @@ const NAV = [
 
 export default function AdminLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, rol, logout } = useAuthStore();
   const { settings } = useSettingsStore();
+  const [open, setOpen] = useState(false);
+
+  // Rota değişince mobil çekmeceyi kapat
+  useEffect(() => {
+    setOpen(false);
+  }, [location.pathname]);
 
   const handleLogout = async () => {
     await logout();
@@ -75,14 +85,29 @@ export default function AdminLayout() {
 
   return (
     <div className="flex h-full bg-slate-50">
-      <aside className="flex w-64 flex-col border-r border-slate-200 bg-white">
-        <div className="border-b border-slate-200 px-5 py-4">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Yönetim Paneli</p>
-          <img
-            src="/branding/alazli-logo.svg"
-            alt={settings.restoranAd || 'Alâ Santral Restaurant'}
-            className="mt-1 h-[4.5rem] w-auto"
-          />
+      {/* Mobil arka plan (çekmece açıkken) */}
+      {open && (
+        <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setOpen(false)} />
+      )}
+
+      {/* Sidebar — masaüstünde sabit, mobilde kayan çekmece */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 flex w-64 transform flex-col border-r border-slate-200 bg-white transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0 ${
+          open ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-400">Yönetim Paneli</p>
+            <img
+              src="/branding/alazli-logo.svg"
+              alt={settings.restoranAd || 'Alâ Santral Restaurant'}
+              className="mt-1 h-[4.5rem] w-auto"
+            />
+          </div>
+          <button onClick={() => setOpen(false)} className="btn-ghost -mr-2 lg:hidden" aria-label="Kapat">
+            <X size={20} />
+          </button>
         </div>
         <nav className="flex-1 overflow-y-auto p-3">
           {NAV.map(({ to, label, icon: Icon }) => (
@@ -116,10 +141,25 @@ export default function AdminLayout() {
           </div>
         </div>
       </aside>
-      <main className="flex-1 overflow-y-auto">
-        <OfflineBanner />
-        <Outlet />
-      </main>
+
+      {/* İçerik sütunu */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Mobil üst bar (hamburger) */}
+        <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-2.5 lg:hidden">
+          <button onClick={() => setOpen(true)} className="btn-ghost -ml-1" aria-label="Menü">
+            <Menu size={22} />
+          </button>
+          <img
+            src="/branding/alazli-logo.svg"
+            alt={settings.restoranAd || 'Yönetim'}
+            className="h-8 w-auto"
+          />
+        </header>
+        <main className="flex-1 overflow-y-auto">
+          <OfflineBanner />
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
