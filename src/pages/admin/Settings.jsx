@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
-import { Save, Store, Receipt, Bell, Gift, Settings as SettingsIcon, CreditCard } from 'lucide-react';
+import { Save, Store, Receipt, Bell, Gift, Settings as SettingsIcon, CreditCard, Share2 } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import Toggle from '../../components/ui/Toggle';
 import UpdateCard from '../../components/admin/UpdateCard';
@@ -44,6 +44,11 @@ const DEFAULT_VALUES = {
   cardPaymentProvider: 'manual',
   cardTerminalIp: '',
   cardTerminalPort: 9100,
+  instagramUrl: '',
+  googleMapsUrl: '',
+  whatsappNumarasi: '',
+  calismaSaatleri: '',
+  menuKarsilama: '',
 };
 
 export default function AdminSettings() {
@@ -117,6 +122,34 @@ export default function AdminSettings() {
             <Field label="Vergi Dairesi" error={errors.vergiDairesi}>
               <input {...register('vergiDairesi')} className="input" placeholder="Selçuklu" />
             </Field>
+          </Section>
+
+          {/* Menü & Sosyal Medya — QR/Instagram menüsünün altında gösterilir */}
+          <Section title="Menü & Sosyal Medya" icon={Share2}>
+            <p className="-mt-1 mb-1 text-xs text-slate-500">
+              QR ve Instagram menüsünün altında gösterilir. Boş bırakılanlar görünmez.
+            </p>
+            <Field label="Instagram linki" error={errors.instagramUrl}>
+              <input {...register('instagramUrl')} className="input" placeholder="https://instagram.com/alakonyamutfagi" />
+            </Field>
+            <Field label="Google Haritalar (konum) linki" error={errors.googleMapsUrl}>
+              <input {...register('googleMapsUrl')} className="input" placeholder="https://maps.app.goo.gl/..." />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="WhatsApp numarası" error={errors.whatsappNumarasi}>
+                <input {...register('whatsappNumarasi')} className="input" placeholder="+90 850 309 7983" />
+              </Field>
+              <Field label="Çalışma saatleri" error={errors.calismaSaatleri}>
+                <input {...register('calismaSaatleri')} className="input" placeholder="Her gün 08:00 - 23:00" />
+              </Field>
+            </div>
+            <Field label="Menü karşılama yazısı" error={errors.menuKarsilama}>
+              <input {...register('menuKarsilama')} className="input" placeholder="Hoş geldiniz — afiyet olsun" />
+            </Field>
+            <p className="text-xs text-slate-500">
+              ⭐ Google yorum linki için <strong>Fiş Ayarları → Değerlendirme QR Linki</strong> alanını
+              kullanın; menüdeki “Google’da değerlendir” butonu da onu kullanır.
+            </p>
           </Section>
 
           {/* Operasyon */}

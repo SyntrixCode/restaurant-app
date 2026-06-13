@@ -389,6 +389,7 @@ function ProductModal({ open, onClose, editing, categories, printers = [] }) {
     resolver: zodResolver(productSchema),
     defaultValues: {
       ad: '', categoryId: '', yaziciIds: [], fiyat: 0, stokTakipli: false, stok: 0, aciklama: '', opsiyonlar: [],
+      etiketler: [], oneCikan: false,
       ceviri: { en: { ad: '', aciklama: '' }, ar: { ad: '', aciklama: '' } },
       aktif: true,
     },
@@ -409,6 +410,8 @@ function ProductModal({ open, onClose, editing, categories, printers = [] }) {
               dusukStokEsigi: editing.dusukStokEsigi ?? null,
               aciklama: editing.aciklama || '',
               opsiyonlar: editing.opsiyonlar || [],
+              etiketler: editing.etiketler || [],
+              oneCikan: !!editing.oneCikan,
               ceviri: {
                 en: { ad: editing.ceviri?.en?.ad || '', aciklama: editing.ceviri?.en?.aciklama || '' },
                 ar: { ad: editing.ceviri?.ar?.ad || '', aciklama: editing.ceviri?.ar?.aciklama || '' },
@@ -425,6 +428,8 @@ function ProductModal({ open, onClose, editing, categories, printers = [] }) {
               dusukStokEsigi: null,
               aciklama: '',
               opsiyonlar: [],
+              etiketler: [],
+              oneCikan: false,
               ceviri: { en: { ad: '', aciklama: '' }, ar: { ad: '', aciklama: '' } },
               aktif: true,
             },
@@ -606,6 +611,44 @@ function ProductModal({ open, onClose, editing, categories, printers = [] }) {
           <p className="mt-1 text-xs text-slate-500">
             Garson siparişe eklerken bu seçenekler çıkar. Birden fazla seçilebilir, fiyatı etkilemez.
           </p>
+        </div>
+
+        <div className="col-span-2">
+          <label className="mb-1 block text-sm font-medium text-slate-700">Menü Rozetleri</label>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { k: 'populer', t: '🔥 Popüler' },
+              { k: 'yeni', t: '🆕 Yeni' },
+              { k: 'acili', t: '🌶️ Acılı' },
+              { k: 'vejetaryen', t: '🥬 Vejetaryen' },
+            ].map(({ k, t }) => {
+              const sel = (watch('etiketler') || []).includes(k);
+              return (
+                <button
+                  type="button"
+                  key={k}
+                  onClick={() => {
+                    const cur = watch('etiketler') || [];
+                    setValue('etiketler', sel ? cur.filter((x) => x !== k) : [...cur, k], { shouldDirty: true });
+                  }}
+                  className={`rounded-full border px-3 py-1.5 text-sm transition ${
+                    sel ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {t}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-1 text-xs text-slate-500">Müşteri menüsünde ürünün yanında rozet olarak görünür.</p>
+        </div>
+
+        <div className="col-span-2 flex items-center justify-between rounded-lg bg-amber-50 p-3">
+          <div>
+            <span className="text-sm font-medium text-amber-800">⭐ Şefin Önerisi (Öne Çıkanlar vitrini)</span>
+            <p className="text-xs text-amber-700">Menünün en üstündeki vitrinde gösterilir + ⭐ rozeti alır.</p>
+          </div>
+          <Toggle checked={watch('oneCikan')} onChange={(v) => setValue('oneCikan', v, { shouldDirty: true })} />
         </div>
 
         <details className="col-span-2 rounded-lg border border-slate-200 p-3">

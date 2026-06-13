@@ -49,6 +49,10 @@ export const productSchema = z.object({
   // Hızlı not seçimi — ör. ["acılı", "acısız", "soğansız"]. Fiyatı etkilemez,
   // sipariş kaydında item.notlar alanına "acılı, soğansız" şeklinde yazılır.
   opsiyonlar: z.array(z.string()).optional().default([]),
+  // Müşteri menüsü rozetleri (sadece görsel): 'acili','vejetaryen','populer','yeni'.
+  etiketler: z.array(z.string()).optional().default([]),
+  // Şefin Önerisi / Öne Çıkanlar vitrininde gösterilsin mi?
+  oneCikan: z.boolean().optional().default(false),
   // QR menü çevirileri (opsiyonel). Boşsa müşteri menüsünde TR'ye düşer.
   ceviri: z
     .object({
@@ -119,6 +123,12 @@ export const settingsSchema = z.object({
     .optional()
     .or(z.literal('')),
   cardTerminalPort: z.coerce.number().int().min(1, 'Port 1-65535').max(65535, 'Port 1-65535').default(9100),
+  // Müşteri/QR menüsü — sosyal medya & iletişim (boş bırakılanlar menüde gösterilmez)
+  instagramUrl: z.string().max(300).optional().or(z.literal('')),
+  googleMapsUrl: z.string().max(500).optional().or(z.literal('')),
+  whatsappNumarasi: z.string().max(30).optional().or(z.literal('')),
+  calismaSaatleri: z.string().max(120).optional().or(z.literal('')),
+  menuKarsilama: z.string().max(200).optional().or(z.literal('')),
 });
 
 export const ingredientSchema = z.object({
