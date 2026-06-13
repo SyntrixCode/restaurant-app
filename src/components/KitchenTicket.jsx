@@ -77,20 +77,24 @@ export default function KitchenTicket({
       if (hasNetworkPrinter) {
         setNativeAvailable(true);
         setPrinting(true);
-        try {
-          for (const group of ticketGroups) {
-            // Bu istasyona düzeltme (silinen/azalan) düşüyor mu?
-            const groupHasCorrection = group.removed.length > 0 || group.changed.length > 0;
-            const lines = buildKitchenTicketLines({
-              order,
-              items: group.items,
-              isAddendum,
-              isCancellation,
-              cancellationReason,
-              isCorrection: groupHasCorrection,
-              correctionDiff: groupHasCorrection ? { removed: group.removed, changed: group.changed } : null,
-              printerAd: group.printer.ad,
-            });
+        let hata = 0;
+        for (const group of ticketGroups) {
+          // Bu istasyona düzeltme (silinen/azalan) düşüyor mu?
+          const groupHasCorrection = group.removed.length > 0 || group.changed.length > 0;
+          const lines = buildKitchenTicketLines({
+            order,
+            items: group.items,
+            isAddendum,
+            isCancellation,
+            cancellationReason,
+            isCorrection: groupHasCorrection,
+            correctionDiff: groupHasCorrection ? { removed: group.removed, changed: group.changed } : null,
+            printerAd: group.printer.ad,
+          });
+          // Her istasyon BAĞIMSIZ basılır — biri hata verse (offline/timeout) diğerleri
+          // yine de bassın. (Eskiden tek try tüm döngüyü sarıyordu → bir yazıcı patlayınca
+          // sonraki istasyonlar hiç basılmıyordu = sipariş eksik çıkıyordu.)
+          try {
             await printNetworkReceipt({
               ip: group.printer.ip,
               model: group.printer.model || 'SRP-E300',
@@ -115,15 +119,15 @@ export default function KitchenTicket({
                 gap: pattern.gap,
               }).catch((e) => console.warn('Buzzer tetiklenemedi:', e?.message || e));
             }
+          } catch (err) {
+            hata++;
+            console.warn(`Yazıcıya basılamadı (${group.printer.ad} @ ${group.printer.ip}):`, err?.message || err);
           }
-          if (!cancelled) {
-            setPrinted(true);
-            setTimeout(() => !cancelled && onClose(), 800);
-          }
-        } catch (err) {
-          console.warn('Bixolon network print failed:', err);
-        } finally {
-          if (!cancelled) setPrinting(false);
+        }
+        if (!cancelled) {
+          setPrinted(true);
+          setTimeout(() => !cancelled && onClose(), hata ? 1800 : 800);
+          setPrinting(false);
         }
         return;
       }
@@ -172,28 +176,33 @@ export default function KitchenTicket({
             correctionDiff: groupHasCorrection ? { removed: group.removed, changed: group.changed } : null,
             printerAd: group.printer.ad,
           });
-          await printNetworkReceipt({
-            ip: group.printer.ip,
-            model: group.printer.model || 'SRP-E300',
-            connection: group.printer.baglanti || 'ethernet',
-            lines,
-            cut: true,
-            feedLines: 3,
-          });
-          if (group.printer.siparisZili) {
-            const pattern = buzzerPatternFor({
-              isCancellation,
-              isCorrection: groupHasCorrection,
-              isAddendum,
-              isPackage: !!order?.paketMi,
-            });
-            triggerBuzzer({
+          // Her istasyon bağımsız — biri hata verse diğerleri yine de bassın.
+          try {
+            await printNetworkReceipt({
               ip: group.printer.ip,
               model: group.printer.model || 'SRP-E300',
               connection: group.printer.baglanti || 'ethernet',
-              pulses: pattern.pulses,
-              gap: pattern.gap,
-            }).catch((e) => console.warn('Buzzer tetiklenemedi:', e?.message || e));
+              lines,
+              cut: true,
+              feedLines: 3,
+            });
+            if (group.printer.siparisZili) {
+              const pattern = buzzerPatternFor({
+                isCancellation,
+                isCorrection: groupHasCorrection,
+                isAddendum,
+                isPackage: !!order?.paketMi,
+              });
+              triggerBuzzer({
+                ip: group.printer.ip,
+                model: group.printer.model || 'SRP-E300',
+                connection: group.printer.baglanti || 'ethernet',
+                pulses: pattern.pulses,
+                gap: pattern.gap,
+              }).catch((e) => console.warn('Buzzer tetiklenemedi:', e?.message || e));
+            }
+          } catch (err) {
+            console.warn(`Yazıcıya basılamadı (${group.printer.ad} @ ${group.printer.ip}):`, err?.message || err);
           }
         }
       } else {

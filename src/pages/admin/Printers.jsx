@@ -2,20 +2,27 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2, Printer as PrinterIcon, Star, Zap, Wallet, Bell, Receipt } from 'lucide-react';
+import { Plus, Pencil, Trash2, Printer as PrinterIcon, Star, Zap, Wallet, Bell, Receipt, ClipboardList } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import PageHeader from '../../components/layout/PageHeader';
 import Modal from '../../components/ui/Modal';
 import Toggle from '../../components/ui/Toggle';
 import { watchCollection, createDoc, patchDoc, removeDoc } from '../../firebase/firestore';
 import { printerSchema } from '../../utils/validators';
-import { testNetworkPrinter, openCashDrawer, triggerBuzzer } from '../../plugins/networkPrinter';
+import { testNetworkPrinter, openCashDrawer, triggerBuzzer, printNetworkReceipt } from '../../plugins/networkPrinter';
+import { groupItemsByPrinter } from '../../utils/printerRouting';
 
 export default function Printers() {
   const [printers, setPrinters] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [editing, setEditing] = useState(null);
   const [open, setOpen] = useState(false);
+  const [listPrinting, setListPrinting] = useState(false);
 
   useEffect(() => watchCollection('printers', setPrinters), []);
+  useEffect(() => watchCollection('products', setProducts), []);
+  useEffect(() => watchCollection('categories', setCategories), []);
 
   const setDefault = async (p) => {
     const others = printers.filter((x) => x.varsayilan && x.id !== p.id);
@@ -66,21 +73,86 @@ export default function Printers() {
     }
   };
 
+  // Her yazıcıdan, O YAZICIDAN basılan ürünlerin listesini çıkar (sipariş/ciro oluşmadan).
+  // Hem bağlantıyı hem ürün→yazıcı yönlendirmesini tek seferde doğrular.
+  const handlePrintRoutingMap = async () => {
+    if (!Capacitor.isNativePlatform()) {
+      toast.error(
+        'Bu işlem yazıcılara baskı gönderir — restorandaki TABLET üzerinden (yazıcı ağına bağlı) çalıştırın.',
+        { duration: 7000 },
+      );
+      return;
+    }
+    const aktifUrun = products.filter((p) => p.aktif !== false);
+    const groups = groupItemsByPrinter(aktifUrun, categories, printers);
+    if (groups.length === 0) {
+      toast.error('Aktif ve IP’li yazıcı bulunamadı.');
+      return;
+    }
+    setListPrinting(true);
+    const t = toast.loading('Tüm yazıcılardan ürün listesi basılıyor…');
+    let ok = 0;
+    let fail = 0;
+    for (const g of groups) {
+      const urunler = [...g.items].sort((a, b) => (a.ad || '').localeCompare(b.ad || '', 'tr'));
+      const lines = [
+        { type: 'text', text: 'URUN LISTESI (TEST)', align: 'center', size: 30, bold: true },
+        { type: 'text', text: `» ${String(g.printer.ad).toLocaleUpperCase('tr-TR')} «`, align: 'center', size: 40, bold: true },
+        { type: 'text', text: `${g.printer.ip || ''}`, align: 'center', size: 20 },
+        { type: 'divider' },
+        { type: 'text', text: `Bu yazicidan ${urunler.length} urun basilir:`, size: 24, bold: true },
+        ...urunler.map((u, i) => ({ type: 'text', text: `${i + 1}. ${u.ad}`, size: 26 })),
+        { type: 'divider' },
+        { type: 'text', text: 'Yazici/urun yonlendirme testi', align: 'center', size: 20 },
+        { type: 'feed', lines: 1 },
+      ];
+      try {
+        await printNetworkReceipt({
+          ip: g.printer.ip,
+          model: g.printer.model || 'SRP-E300',
+          connection: g.printer.baglanti || 'ethernet',
+          lines,
+          cut: true,
+          feedLines: 3,
+        });
+        ok++;
+      } catch (err) {
+        fail++;
+        console.warn(`Liste basılamadı (${g.printer.ad} @ ${g.printer.ip}):`, err?.message || err);
+      }
+    }
+    setListPrinting(false);
+    toast[fail ? 'error' : 'success'](
+      `${ok} yazıcıdan liste basıldı${fail ? ` · ${fail} yazıcı başarısız` : ''}`,
+      { id: t, duration: 6000 },
+    );
+  };
+
   return (
     <div className="p-8">
       <PageHeader
         title="Yazıcılar"
         subtitle="Mutfak / bar yazıcıları ve kategori yönlendirme"
         actions={
-          <button
-            onClick={() => {
-              setEditing(null);
-              setOpen(true);
-            }}
-            className="btn-primary"
-          >
-            <Plus size={16} /> Yeni Yazıcı
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handlePrintRoutingMap}
+              disabled={listPrinting}
+              className="btn-secondary disabled:opacity-50"
+              title="Her yazıcıdan, o yazıcının bastığı ürünlerin listesini çıkarır (sipariş/ciro oluşmaz)"
+            >
+              <ClipboardList size={16} /> {listPrinting ? 'Basılıyor…' : 'Yazıcı–Ürün Listesi Bas'}
+            </button>
+            <button
+              onClick={() => {
+                setEditing(null);
+                setOpen(true);
+              }}
+              className="btn-primary"
+            >
+              <Plus size={16} /> Yeni Yazıcı
+            </button>
+          </div>
         }
       />
 
