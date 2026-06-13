@@ -20,6 +20,7 @@ const STRINGS = {
     hesapIstendi: 'Hesap istendi',
     tel: 'Tel',
     masa: 'Masa',
+    menu: 'MENÜ',
   },
   en: {
     menuHazirlaniyor: 'Menu is being prepared.',
@@ -31,6 +32,7 @@ const STRINGS = {
     hesapIstendi: 'Bill requested',
     tel: 'Phone',
     masa: 'Table',
+    menu: 'MENU',
   },
   ar: {
     menuHazirlaniyor: 'القائمة قيد الإعداد.',
@@ -42,6 +44,7 @@ const STRINGS = {
     hesapIstendi: 'تم طلب الفاتورة',
     tel: 'هاتف',
     masa: 'طاولة',
+    menu: 'القائمة',
   },
 };
 

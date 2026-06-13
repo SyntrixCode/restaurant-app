@@ -64,11 +64,16 @@ export default function App() {
     };
   }, [initAuth, initSettings]);
 
+  // alakonyamutfagi.web.app → kök adres direkt genel (masasız) menüyü açar.
+  // Diğer alan adlarında kök → admin girişi. Masa QR'ları (/menu/:masaId) DEĞİŞMEZ.
+  const isMenuHost =
+    typeof window !== 'undefined' && /alakonyamutfagi/i.test(window.location.hostname);
+
   return (
     <>
     <CallerIdPopup />
     <Routes>
-      <Route path="/" element={<Navigate to="/admin/login" replace />} />
+      <Route path="/" element={isMenuHost ? <Menu /> : <Navigate to="/admin/login" replace />} />
 
       <Route path="/admin/login" element={<AdminLogin />} />
 
@@ -131,6 +136,9 @@ export default function App() {
       </Route>
 
       <Route path="/menu/:masaId" element={<Menu />} />
+      {/* Instagram/genel menü — masasız (garson çağır YOK). alakonyamutfagi.web.app kökü buraya eşdeğer. */}
+      <Route path="/alakonyamutfagi" element={<Menu />} />
+      <Route path="/menu" element={<Menu />} />
 
       {/* Müşteri ekranı — 2. ekranda Presentation tarafından açılır.
           Login gerektirmez; doğrudan BroadcastChannel ile state dinler. */}

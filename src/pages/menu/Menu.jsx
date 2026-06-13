@@ -33,6 +33,7 @@ export default function Menu() {
   const { settings } = useSettingsStore();
   const garsonCagirmaAcik = settings?.garsonCagirmaAcik !== false;
   const dir = dirFor(lang);
+  const genel = !masaId; // masasız = Instagram/genel menü (masa adı + garson çağır YOK)
 
   useEffect(() => watchCollection('categories', setCategories, orderBy('sira', 'asc')), []);
   useEffect(() => watchCollection('products', setProducts), []);
@@ -70,9 +71,18 @@ export default function Menu() {
     }
     setCalling(tip);
     try {
+      // Masa adını garanti et — asenkron fetch henüz bitmediyse anında çek.
+      // (Aksi halde sayfa yüklenirken hızlı basınca masaAd = ID'ye düşüyordu.)
+      let masaAd = masa?.ad;
+      if (!masaAd) {
+        try {
+          const m = await fetchOne('tables', masaId);
+          if (m) { setMasa(m); masaAd = m.ad; }
+        } catch { /* yoksay, ID'ye düşeriz */ }
+      }
       await createDoc('waiterCalls', {
         masaId,
-        masaAd: masa?.ad || masaId,
+        masaAd: masaAd || masaId,
         tip,
         durum: 'bekliyor',
         olusturmaZamani: new Date(),
@@ -97,24 +107,26 @@ export default function Menu() {
         fontFamily: '"Cormorant Garamond", Georgia, "Times New Roman", serif',
       }}
     >
-      {/* HEADER: parşömen + logo + dil butonları */}
-      <header
-        className="sticky top-0 z-20 border-b shadow-sm"
-        style={{ background: THEME.bg, borderColor: THEME.divider }}
-      >
-        <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3">
-          <img
-            src="/branding/ala-konya-logo.png"
-            alt={settings.restoranAd || 'Alâ Konya Mutfağı'}
-            className="h-[3.75rem] w-auto"
-          />
-          <div className="ml-auto flex items-center gap-2">
-            {masa && (
-              <p className="text-sm font-medium" style={{ color: THEME.textMuted }}>
-                {masa.ad}
+      {/* HEADER */}
+      {genel ? (
+        /* GENEL (Instagram) — ortalı şık kapak: büyük logo + altın ayraç + adres */
+        <header className="border-b" style={{ background: THEME.bg, borderColor: THEME.divider }}>
+          <div className="mx-auto max-w-2xl px-4 pb-5 pt-9 text-center">
+            <img
+              src="/branding/ala-konya-logo.png"
+              alt={settings.restoranAd || 'Alâ Konya Mutfağı'}
+              className="mx-auto h-28 w-auto sm:h-32"
+            />
+            <div className="mx-auto mt-5 h-px w-24" style={{ background: THEME.gold }} />
+            <p className="mt-3 text-xs uppercase tracking-[0.4em]" style={{ color: THEME.textMuted }}>
+              {t(lang, 'menu')}
+            </p>
+            {settings.restoranAdres && (
+              <p className="mt-2 text-sm italic" style={{ color: THEME.textMuted }}>
+                {settings.restoranAdres}
               </p>
             )}
-            <div className="flex gap-1">
+            <div className="mt-4 flex justify-center gap-1">
               {MENU_LANGS.map((l) => (
                 <button
                   key={l.code}
@@ -131,14 +143,51 @@ export default function Menu() {
               ))}
             </div>
           </div>
-        </div>
-      </header>
+        </header>
+      ) : (
+        /* MASA — kompakt sticky header (logo + masa adı + dil) */
+        <header
+          className="sticky top-0 z-20 border-b shadow-sm"
+          style={{ background: THEME.bg, borderColor: THEME.divider }}
+        >
+          <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3">
+            <img
+              src="/branding/ala-konya-logo.png"
+              alt={settings.restoranAd || 'Alâ Konya Mutfağı'}
+              className="h-[3.75rem] w-auto"
+            />
+            <div className="ml-auto flex items-center gap-2">
+              {masa && (
+                <p className="text-sm font-medium" style={{ color: THEME.textMuted }}>
+                  {masa.ad}
+                </p>
+              )}
+              <div className="flex gap-1">
+                {MENU_LANGS.map((l) => (
+                  <button
+                    key={l.code}
+                    onClick={() => setLang(l.code)}
+                    className="rounded px-2.5 py-1 text-xs font-bold uppercase tracking-wider transition"
+                    style={
+                      lang === l.code
+                        ? { background: THEME.banner, color: THEME.gold }
+                        : { background: THEME.bgAlt, color: THEME.text }
+                    }
+                  >
+                    {l.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </header>
+      )}
 
       {/* KATEGORİ NAVİGASYON ŞERİDİ */}
       <nav
         className="sticky z-10 overflow-x-auto border-b"
         style={{
-          top: '5.5rem',
+          top: genel ? '0' : '5.5rem',
           background: THEME.banner,
           borderColor: THEME.gold + '40',
         }}
