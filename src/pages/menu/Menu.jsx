@@ -54,6 +54,7 @@ export default function Menu() {
   useEffect(() => watchDoc('settings', 'public', (d) => d && setPubSettings(d)), []);
   const settings = pubSettings ? { ...staffSettings, ...pubSettings } : staffSettings;
   const garsonCagirmaAcik = settings?.garsonCagirmaAcik !== false;
+  const waNum = (settings.whatsappNumarasi || '').replace(/[^0-9]/g, '');
   const dir = dirFor(lang);
   const genel = !masaId; // masasız = Instagram/genel menü (masa adı + garson çağır YOK)
 
@@ -385,6 +386,23 @@ export default function Menu() {
         </div>
       )}
 
+      {/* REZERVASYON — Instagram/genel menüde sabit alt çubuk (kaydırınca hep görünür) */}
+      {genel && waNum && (
+        <div className="sticky bottom-0 z-20 border-t backdrop-blur" style={{ background: THEME.banner + 'f0', borderColor: THEME.gold + '60' }}>
+          <div className="mx-auto max-w-2xl px-4 py-3">
+            <a
+              href={waLink(waNum, 'Merhaba, rezervasyon yapmak istiyorum.')}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center justify-center gap-2 rounded-md px-4 py-3 text-base font-bold uppercase tracking-wider shadow-sm transition active:scale-95"
+              style={{ background: THEME.gold, color: THEME.banner }}
+            >
+              <CalendarCheck size={20} /> {t(lang, 'rezervasyon')}
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* SOSYAL / İLETİŞİM ALT BİLGİ */}
       <SocialFooter lang={lang} settings={settings} genel={genel} />
 
@@ -416,19 +434,6 @@ function SocialFooter({ lang, settings, genel }) {
 
   return (
     <footer className="border-t px-4 py-7 text-center text-sm" style={{ background: THEME.banner, color: THEME.goldLight, borderColor: THEME.gold + '40' }}>
-      {/* Rezervasyon (genel/Instagram modu) */}
-      {genel && waNum && (
-        <a
-          href={waLink(waNum, 'Merhaba, rezervasyon yapmak istiyorum.')}
-          target="_blank"
-          rel="noreferrer"
-          className="mx-auto mb-5 flex max-w-xs items-center justify-center gap-2 rounded-md px-5 py-3 text-base font-bold uppercase tracking-wide shadow-sm transition active:scale-95"
-          style={{ background: THEME.gold, color: THEME.banner }}
-        >
-          <CalendarCheck size={18} /> {t(lang, 'rezervasyon')}
-        </a>
-      )}
-
       {/* Sosyal ikon satırı */}
       {links.length > 0 && (
         <div className="mb-4 flex flex-wrap justify-center gap-2">
