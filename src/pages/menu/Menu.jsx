@@ -4,7 +4,7 @@ import {
   ImageIcon, BellRing, Receipt, Check, Search, Star, X,
   MapPin, Clock, Instagram, MessageCircle, CalendarCheck, ArrowUp,
 } from 'lucide-react';
-import { watchCollection, fetchOne, orderBy, createDoc } from '../../firebase/firestore';
+import { watchCollection, fetchOne, orderBy, createDoc, watchDoc } from '../../firebase/firestore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL } from '../../utils/format';
 import PoweredBy from '../../components/PoweredBy';
@@ -48,7 +48,11 @@ export default function Menu() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null); // detay penceresi ürünü
   const [showTop, setShowTop] = useState(false);
-  const { settings } = useSettingsStore();
+  const { settings: staffSettings } = useSettingsStore();
+  // Anonim müşteri settings/global'i okuyamaz (kurallar) → public aynayı dinle ve birleştir
+  const [pubSettings, setPubSettings] = useState(null);
+  useEffect(() => watchDoc('settings', 'public', (d) => d && setPubSettings(d)), []);
+  const settings = pubSettings ? { ...staffSettings, ...pubSettings } : staffSettings;
   const garsonCagirmaAcik = settings?.garsonCagirmaAcik !== false;
   const dir = dirFor(lang);
   const genel = !masaId; // masasız = Instagram/genel menü (masa adı + garson çağır YOK)
