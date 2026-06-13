@@ -22,7 +22,7 @@ import { watchDoc, watchCollection, patchDoc } from '../../firebase/firestore';
 import { formatTL, minutesSince, formatAdet } from '../../utils/format';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
-import { recordPayment } from '../../firebase/payments';
+import { recordPayment, closeIkramOrder } from '../../firebase/payments';
 import { closeToCari } from '../../firebase/cari';
 import {
   awardLoyaltyPoints,
@@ -479,13 +479,17 @@ export default function Payment() {
 
   const handleComplete = async () => {
     if (finalized || submitting) return; // Double-click koruması
-    if (payments.length === 0) {
-      toast.error('Ödeme yöntemi seçin');
-      return;
-    }
-    if (!isFullyPaid) {
-      toast.error(`Eksik ödeme: ${formatTL(remaining)} kaldı`);
-      return;
+    // Ödenecek tutar 0 (tüm hesap ikram / %100 indirim) → ödeme yöntemi GEREKMEZ.
+    const odenecekYok = (totals.effectiveTotalKurus || 0) <= 0;
+    if (!odenecekYok) {
+      if (payments.length === 0) {
+        toast.error('Ödeme yöntemi seçin');
+        return;
+      }
+      if (!isFullyPaid) {
+        toast.error(`Eksik ödeme: ${formatTL(remaining)} kaldı`);
+        return;
+      }
     }
     setSubmitting(true);
     setFinalized(true); // Erken işaretle — duplicate çağrıları engelle
@@ -507,6 +511,20 @@ export default function Payment() {
           items: updatedItems,
           araToplam: subtotal, // ikram düşülmüş hali (paymentMath'ten geldi)
         });
+      }
+
+      // Ödenecek tutar 0 → ödemesiz "ikram" kapanış (recordPayment en az 1 ödeme ister).
+      if (odenecekYok) {
+        await closeIkramOrder({
+          orderId: order.id,
+          kasiyerId: user.uid,
+          kasiyerAd: profile?.ad || 'Kasiyer',
+        });
+        setChange(0);
+        toast.success('Hesap ikram olarak kapatıldı');
+        pushToCustomerDisplay({ mode: 'thanks', payment: { paraUstu: 0 } });
+        setSummaryOpen(true);
+        return; // recordPayment yolunu atla
       }
 
       let discountPayload = null;
