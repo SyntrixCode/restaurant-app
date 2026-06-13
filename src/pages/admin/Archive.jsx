@@ -7,12 +7,14 @@ import {
   Download,
   Ban,
   Undo2,
+  StickyNote,
+  Save,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import Modal from '../../components/ui/Modal';
-import { watchCollection, orderBy } from '../../firebase/firestore';
+import { watchCollection, orderBy, patchDoc } from '../../firebase/firestore';
 import { cancelArchivedOrder, uncancelArchivedOrder } from '../../firebase/orders';
 import { useAuthStore } from '../../store/authStore';
 import { exportArchivedOrders } from '../../utils/excelExport';
@@ -226,7 +228,10 @@ export default function AdminArchive() {
                     <p className={`font-semibold ${cancelled ? 'text-slate-500 line-through' : 'text-slate-900'}`}>
                       {o.masaAd || 'Paket'}
                     </p>
-                    <p className="text-xs text-slate-500">#{o.id.slice(0, 6)}</p>
+                    <p className="text-xs text-slate-500">
+                      #{o.id.slice(0, 6)}
+                      {o.not && <span title="Not var"> · 📝</span>}
+                    </p>
                   </div>
                   <div className="col-span-2 text-sm text-slate-700">{o.garsonAd || '—'}</div>
                   <div className="col-span-1 text-sm text-slate-700">
@@ -278,7 +283,26 @@ function ArchiveDetailModal({ open, order, onClose }) {
   const { user, profile, rol } = useAuthStore();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [not, setNot] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
   const isAdmin = rol === 'admin';
+
+  // Başka sipariş açılınca not alanını o siparişin notuyla doldur
+  useEffect(() => {
+    setNot(order?.not || '');
+  }, [order?.id]);
+
+  const handleSaveNote = async () => {
+    setSavingNote(true);
+    try {
+      await patchDoc('archivedOrders', order.id, { not: not.trim() });
+      toast.success('Not kaydedildi');
+    } catch (err) {
+      toast.error(err?.message || 'Not kaydedilemedi');
+    } finally {
+      setSavingNote(false);
+    }
+  };
 
   if (!open || !order) return null;
 
@@ -389,6 +413,40 @@ function ArchiveDetailModal({ open, order, onClose }) {
                 {formatTL(order.toplam)}
               </span>
             </div>
+          </div>
+
+          {/* Sonradan eklenebilen serbest NOT — özellikle iptal sebebi unutulduysa */}
+          <div>
+            <label className="mb-1 flex items-center gap-1.5 text-sm font-medium text-slate-700">
+              <StickyNote size={14} /> Not
+              {cancelled && (
+                <span className="text-xs font-normal text-slate-400">(iptal açıklaması / ek bilgi)</span>
+              )}
+            </label>
+            {isAdmin ? (
+              <>
+                <textarea
+                  value={not}
+                  onChange={(e) => setNot(e.target.value)}
+                  rows={3}
+                  placeholder="Bu siparişle ilgili sonradan not ekle (ör. iptal sebebi, müşteri açıklaması)..."
+                  className="input"
+                />
+                <div className="mt-2 flex justify-end">
+                  <button
+                    onClick={handleSaveNote}
+                    disabled={savingNote || not.trim() === (order.not || '').trim()}
+                    className="btn-primary text-sm disabled:opacity-50"
+                  >
+                    <Save size={14} /> {savingNote ? 'Kaydediliyor...' : 'Notu Kaydet'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                {order.not ? order.not : <span className="italic text-slate-400">Not eklenmemiş</span>}
+              </p>
+            )}
           </div>
         </div>
       </Modal>
