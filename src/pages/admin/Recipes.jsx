@@ -13,6 +13,7 @@ import StatCard from '../../components/ui/StatCard';
 import Modal from '../../components/ui/Modal';
 import { watchCollection, upsertDoc, removeDoc, orderBy } from '../../firebase/firestore';
 import { formatTL, formatAdet } from '../../utils/format';
+import { toBaseQty, recipeUnitOptions } from '../../utils/units';
 
 const BIRIM_LABELS = {
   adet: 'adet',
@@ -118,7 +119,7 @@ export default function AdminRecipes() {
             const maliyet = hasRecipe
               ? recipe.items.reduce((sum, it) => {
                   const ing = ingredients.find((i) => i.id === it.ingredientId);
-                  return sum + (ing?.birimMaliyet || 0) * (it.miktar || 0);
+                  return sum + (ing?.birimMaliyet || 0) * toBaseQty(it.miktar, it.birim, ing?.birim);
                 }, 0)
               : 0;
             return (
@@ -139,7 +140,7 @@ export default function AdminRecipes() {
                             className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700"
                           >
                             {ing?.ad || '?'} ×{formatAdet(it.miktar)}
-                            {ing?.birim && ` ${BIRIM_LABELS[ing.birim]}`}
+                            {` ${BIRIM_LABELS[it.birim || ing?.birim] || ''}`}
                           </span>
                         );
                       })}
@@ -209,7 +210,7 @@ function RecipeModal({ open, product, existingRecipe, ingredients, onClose }) {
     .filter((i) => !search || i.ad.toLowerCase().includes(search.toLowerCase()));
 
   const addIngredient = (ing) => {
-    setItems((arr) => [...arr, { ingredientId: ing.id, miktar: 1, _ing: ing }]);
+    setItems((arr) => [...arr, { ingredientId: ing.id, miktar: 1, birim: ing.birim, _ing: ing }]);
     setSearch('');
   };
 
@@ -217,6 +218,14 @@ function RecipeModal({ open, product, existingRecipe, ingredients, onClose }) {
     setItems((arr) => {
       const next = [...arr];
       next[idx] = { ...next[idx], miktar };
+      return next;
+    });
+  };
+
+  const updateItemBirim = (idx, birim) => {
+    setItems((arr) => {
+      const next = [...arr];
+      next[idx] = { ...next[idx], birim };
       return next;
     });
   };
@@ -233,7 +242,10 @@ function RecipeModal({ open, product, existingRecipe, ingredients, onClose }) {
         productAd: product.ad,
         items: items
           .filter((it) => it.miktar > 0)
-          .map((it) => ({ ingredientId: it.ingredientId, miktar: Number(it.miktar) })),
+          .map((it) => {
+            const ing = ingredients.find((i) => i.id === it.ingredientId);
+            return { ingredientId: it.ingredientId, miktar: Number(it.miktar), birim: it.birim || ing?.birim || null };
+          }),
       };
       if (payload.items.length === 0) {
         // boş reçete = silme
@@ -254,7 +266,7 @@ function RecipeModal({ open, product, existingRecipe, ingredients, onClose }) {
 
   const totalMaliyet = items.reduce((sum, it) => {
     const ing = ingredients.find((i) => i.id === it.ingredientId);
-    return sum + (ing?.birimMaliyet || 0) * (Number(it.miktar) || 0);
+    return sum + (ing?.birimMaliyet || 0) * toBaseQty(it.miktar, it.birim, ing?.birim);
   }, 0);
 
   return (
@@ -314,9 +326,19 @@ function RecipeModal({ open, product, existingRecipe, ingredients, onClose }) {
                     step="0.01"
                     value={it.miktar}
                     onChange={(e) => updateItem(idx, e.target.value)}
-                    className="w-24 rounded border border-slate-300 px-2 py-1 text-right tabular-nums"
+                    className="w-20 rounded border border-slate-300 px-2 py-1 text-right tabular-nums"
                   />
-                  <span className="w-12 text-xs text-slate-500">{BIRIM_LABELS[ing?.birim] || ''}</span>
+                  <select
+                    value={it.birim || ing?.birim || ''}
+                    onChange={(e) => updateItemBirim(idx, e.target.value)}
+                    className="w-16 rounded border border-slate-300 px-1 py-1 text-xs"
+                  >
+                    {recipeUnitOptions(ing?.birim).map((u) => (
+                      <option key={u} value={u}>
+                        {BIRIM_LABELS[u] || u}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     onClick={() => removeItem(idx)}
                     className="rounded p-1.5 text-red-500 hover:bg-red-50"

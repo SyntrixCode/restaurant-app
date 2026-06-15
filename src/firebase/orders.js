@@ -6,6 +6,7 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import { db } from './config';
+import { toBaseQty } from '../utils/units';
 
 export async function createOrder({
   masaId,
@@ -56,7 +57,10 @@ export async function createOrder({
       const rs = recipeSnapshots[idx];
       if (!rs.exists()) return;
       (rs.data().items || []).forEach((r) => {
-        const total = (r.miktar || 0) * (it.adet || 0);
+        // Reçete satırı birimini (gram vb.) malzemenin ana birimine (kg) çevir
+        const baseBirim = ingredientById[r.ingredientId]?.data?.birim;
+        const perPortion = toBaseQty(r.miktar || 0, r.birim, baseBirim);
+        const total = perPortion * (it.adet || 0);
         ingredientDeductions[r.ingredientId] = (ingredientDeductions[r.ingredientId] || 0) + total;
       });
     });

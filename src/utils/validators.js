@@ -149,6 +149,8 @@ export const recipeSchema = z.object({
       z.object({
         ingredientId: z.string().min(1),
         miktar: z.coerce.number().positive(),
+        // Satırda seçilen birim (kg/gram/lt/ml...). Boşsa malzemenin ana birimi varsayılır.
+        birim: z.string().optional(),
       }),
     )
     .min(1, 'Reçetede en az 1 malzeme olmalı'),
