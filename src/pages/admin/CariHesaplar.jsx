@@ -1,12 +1,13 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { CreditCard, Search, Pencil, Trash2, Plus, Users, Wallet, History, ChevronDown, ChevronRight } from 'lucide-react';
+import { CreditCard, Search, Pencil, Trash2, Plus, Users, Wallet, History, ChevronDown, ChevronRight, Printer, X } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import Modal from '../../components/ui/Modal';
 import { watchCollection, createDoc, patchDoc, removeDoc, where, fetchOne } from '../../firebase/firestore';
 import { recordCariTahsilat } from '../../firebase/cari';
 import { useAuthStore } from '../../store/authStore';
+import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL, formatDate, formatAdet } from '../../utils/format';
 
 export default function CariHesaplar() {
@@ -210,6 +211,7 @@ function DetailModal({ cari, onClose }) {
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(null); // açık borç hareketi id
   const [orders, setOrders] = useState({}); // { orderId: 'loading' | order | 'notfound' }
+  const [fisData, setFisData] = useState(null); // { order, hareket } — yazdırılacak cari fişi
 
   useEffect(() => {
     if (!cari) return undefined;
@@ -217,6 +219,7 @@ function DetailModal({ cari, onClose }) {
     setAciklama('');
     setExpanded(null);
     setOrders({});
+    setFisData(null);
     return watchCollection('cariHareketleri', setHar, where('cariId', '==', cari.id));
   }, [cari]);
 
@@ -271,6 +274,7 @@ function DetailModal({ cari, onClose }) {
   const bakiye = Number(cari?.bakiye || 0);
 
   return (
+    <>
     <Modal
       open={!!cari}
       onClose={onClose}
@@ -381,6 +385,14 @@ function DetailModal({ cari, onClose }) {
                               <span>Toplam</span>
                               <span className="tabular-nums">{formatTL(od.cariTutar || od.araToplam || h.tutar || 0)}</span>
                             </div>
+                            <div className="mt-2 flex justify-end">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setFisData({ order: od, hareket: h }); }}
+                                className="btn-secondary text-xs"
+                              >
+                                <Printer size={14} /> Fiş Bas
+                              </button>
+                            </div>
                           </div>
                         )}
                       </td>
@@ -393,5 +405,94 @@ function DetailModal({ cari, onClose }) {
         </table>
       </div>
     </Modal>
+    {fisData && (
+      <CariReceiptModal
+        order={fisData.order}
+        hareket={fisData.hareket}
+        cari={cari}
+        onClose={() => setFisData(null)}
+      />
+    )}
+    </>
+  );
+}
+
+function CariReceiptModal({ order, hareket, cari, onClose }) {
+  const { settings } = useSettingsStore();
+  const items = order?.items || [];
+  const toplam = order?.cariTutar || order?.araToplam || hareket?.tutar || 0;
+  const tarih = order?.tamamlandiZamani || order?.arsivZamani || hareket?.zaman;
+
+  useEffect(() => {
+    const onEsc = (e) => e.key === 'Escape' && onClose();
+    document.addEventListener('keydown', onEsc);
+    return () => document.removeEventListener('keydown', onEsc);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/70 p-4 print:bg-white print:p-0"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-xs overflow-hidden rounded-xl bg-white shadow-2xl print:max-w-none print:rounded-none print:shadow-none"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2 print:hidden">
+          <h3 className="font-semibold">Cari Hesap Fişi</h3>
+          <div className="flex gap-2">
+            <button onClick={() => window.print()} className="btn-primary text-sm">
+              <Printer size={14} /> Yazdır
+            </button>
+            <button onClick={onClose} className="btn-ghost text-sm">
+              <X size={14} /> Kapat
+            </button>
+          </div>
+        </div>
+
+        <div id="cari-fis" className="p-5 font-mono text-sm leading-snug text-slate-900">
+          <div className="text-center">
+            <p className="text-base font-bold">{settings.restoranAd || 'Alâ Konya Mutfağı'}</p>
+            {settings.restoranAdres && <p className="text-xs">{settings.restoranAdres}</p>}
+            {settings.restoranTel && <p className="text-xs">Tel: {settings.restoranTel}</p>}
+          </div>
+          <div className="my-2 border-t border-dashed border-slate-400" />
+          <p className="text-center font-bold tracking-widest">CARİ HESAP FİŞİ</p>
+          <div className="my-2 border-t border-dashed border-slate-400" />
+          <div className="flex justify-between"><span>Cari:</span><span className="font-bold">{cari?.ad || '—'}</span></div>
+          <div className="flex justify-between"><span>Masa:</span><span>{order?.masaAd || hareket?.masaAd || '—'}</span></div>
+          <div className="flex justify-between"><span>Tarih:</span><span>{tarih ? formatDate(tarih, 'dd.MM.yyyy HH:mm') : '—'}</span></div>
+          <div className="my-2 border-t border-dashed border-slate-400" />
+          {items.map((it, i) => (
+            <div key={i} className="flex justify-between gap-2">
+              <span className="min-w-0">
+                {formatAdet(it.adet)}× {it.ad}
+                {it.ikram ? ' (ikram)' : ''}
+              </span>
+              <span className="shrink-0 tabular-nums">{formatTL((it.fiyat || 0) * (it.adet || 0))}</span>
+            </div>
+          ))}
+          {items.length === 0 && <p className="text-xs text-slate-400">Ürün kaydı yok.</p>}
+          <div className="my-2 border-t border-dashed border-slate-400" />
+          <div className="flex justify-between text-base font-bold">
+            <span>TOPLAM</span>
+            <span className="tabular-nums">{formatTL(toplam)}</span>
+          </div>
+          <div className="my-2 border-t border-dashed border-slate-400" />
+          <p className="text-center text-xs">Güncel Cari Bakiye: <strong>{formatTL(cari?.bakiye || 0)}</strong></p>
+          <p className="mt-3 text-center text-[10px] text-slate-500">
+            Bu bir mali belge değildir — cari hesap dökümüdür.
+          </p>
+        </div>
+      </div>
+
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          #cari-fis, #cari-fis * { visibility: visible; }
+          #cari-fis { position: absolute; left: 0; top: 0; width: 80mm; padding: 4mm; }
+        }
+      `}</style>
+    </div>
   );
 }
