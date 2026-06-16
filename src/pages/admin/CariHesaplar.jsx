@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { CreditCard, Search, Pencil, Trash2, Plus, Users, Wallet, History } from 'lucide-react';
+import { CreditCard, Search, Pencil, Trash2, Plus, Users, Wallet, History, ChevronDown, ChevronRight } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import Modal from '../../components/ui/Modal';
-import { watchCollection, createDoc, patchDoc, removeDoc, where } from '../../firebase/firestore';
+import { watchCollection, createDoc, patchDoc, removeDoc, where, fetchOne } from '../../firebase/firestore';
 import { recordCariTahsilat } from '../../firebase/cari';
 import { useAuthStore } from '../../store/authStore';
-import { formatTL, formatDate } from '../../utils/format';
+import { formatTL, formatDate, formatAdet } from '../../utils/format';
 
 export default function CariHesaplar() {
   const { rol } = useAuthStore();
@@ -208,13 +208,33 @@ function DetailModal({ cari, onClose }) {
   const [tutar, setTutar] = useState('');
   const [aciklama, setAciklama] = useState('');
   const [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState(null); // açık borç hareketi id
+  const [orders, setOrders] = useState({}); // { orderId: 'loading' | order | 'notfound' }
 
   useEffect(() => {
     if (!cari) return undefined;
     setTutar('');
     setAciklama('');
+    setExpanded(null);
+    setOrders({});
     return watchCollection('cariHareketleri', setHar, where('cariId', '==', cari.id));
   }, [cari]);
+
+  // Borç satırına tıklayınca o siparişin detayını (arşivden) aç/kapat
+  const toggleRow = async (h) => {
+    if (h.tip !== 'borc' || !h.orderId) return;
+    const willOpen = expanded !== h.id;
+    setExpanded(willOpen ? h.id : null);
+    if (willOpen && orders[h.orderId] === undefined) {
+      setOrders((o) => ({ ...o, [h.orderId]: 'loading' }));
+      try {
+        const od = await fetchOne('archivedOrders', h.orderId);
+        setOrders((o) => ({ ...o, [h.orderId]: od || 'notfound' }));
+      } catch {
+        setOrders((o) => ({ ...o, [h.orderId]: 'notfound' }));
+      }
+    }
+  };
 
   const sorted = useMemo(
     () =>
@@ -305,21 +325,70 @@ function DetailModal({ cari, onClose }) {
             {sorted.length === 0 && (
               <tr><td colSpan={5} className="py-8 text-center text-slate-400">Hareket yok.</td></tr>
             )}
-            {sorted.map((h) => (
-              <tr key={h.id}>
-                <td className="px-2 py-2 text-slate-500">{h.zaman ? formatDate(h.zaman, 'dd.MM.yyyy HH:mm') : '—'}</td>
-                <td className="px-2 py-2">
-                  <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${h.tip === 'borc' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                    {h.tip === 'borc' ? 'Borç' : 'Tahsilat'}
-                  </span>
-                </td>
-                <td className="px-2 py-2 text-slate-600">{h.masaAd || h.aciklama || '—'}</td>
-                <td className={`px-2 py-2 text-right tabular-nums font-medium ${h.tip === 'borc' ? 'text-rose-600' : 'text-emerald-600'}`}>
-                  {h.tip === 'borc' ? '+' : '−'}{formatTL(h.tutar || 0)}
-                </td>
-                <td className="px-2 py-2 text-right tabular-nums text-slate-700">{formatTL(h.yeniBakiye || 0)}</td>
-              </tr>
-            ))}
+            {sorted.map((h) => {
+              const acilabilir = h.tip === 'borc' && h.orderId;
+              const acik = expanded === h.id;
+              const od = h.orderId ? orders[h.orderId] : undefined;
+              return (
+                <Fragment key={h.id}>
+                  <tr
+                    onClick={() => toggleRow(h)}
+                    className={acilabilir ? 'cursor-pointer hover:bg-slate-50' : ''}
+                  >
+                    <td className="px-2 py-2 text-slate-500">
+                      <span className="inline-flex items-center gap-1">
+                        {acilabilir ? (acik ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : null}
+                        {h.zaman ? formatDate(h.zaman, 'dd.MM.yyyy HH:mm') : '—'}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2">
+                      <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${h.tip === 'borc' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                        {h.tip === 'borc' ? 'Borç' : 'Tahsilat'}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2 text-slate-600">{h.masaAd || h.aciklama || '—'}</td>
+                    <td className={`px-2 py-2 text-right tabular-nums font-medium ${h.tip === 'borc' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                      {h.tip === 'borc' ? '+' : '−'}{formatTL(h.tutar || 0)}
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums text-slate-700">{formatTL(h.yeniBakiye || 0)}</td>
+                  </tr>
+                  {acik && (
+                    <tr className="bg-slate-50/60">
+                      <td colSpan={5} className="px-3 py-2">
+                        {od === 'loading' && <p className="text-xs text-slate-400">Sipariş yükleniyor…</p>}
+                        {od === 'notfound' && <p className="text-xs text-slate-400">Sipariş detayı bulunamadı.</p>}
+                        {od && typeof od === 'object' && (
+                          <div className="rounded-lg border border-slate-200 bg-white p-2">
+                            <p className="mb-1 text-xs font-semibold uppercase text-slate-500">
+                              Sipariş İçeriği{(od.masaAd || h.masaAd) ? ` — ${od.masaAd || h.masaAd}` : ''}
+                            </p>
+                            <ul className="divide-y divide-slate-100">
+                              {(od.items || []).map((it, i) => (
+                                <li key={i} className="flex justify-between gap-3 py-1 text-sm">
+                                  <span className="min-w-0">
+                                    <strong>{formatAdet(it.adet)}×</strong> {it.ad}
+                                    {it.ikram && <em className="ml-1 text-xs text-emerald-600">(ikram)</em>}
+                                    {it.notlar && <em className="ml-1 text-xs text-slate-500">({it.notlar})</em>}
+                                  </span>
+                                  <span className="shrink-0 tabular-nums text-slate-600">{formatTL((it.fiyat || 0) * (it.adet || 0))}</span>
+                                </li>
+                              ))}
+                              {(!od.items || od.items.length === 0) && (
+                                <li className="py-1 text-xs text-slate-400">Ürün kaydı yok.</li>
+                              )}
+                            </ul>
+                            <div className="mt-1 flex justify-between border-t border-slate-200 pt-1 text-sm font-semibold">
+                              <span>Toplam</span>
+                              <span className="tabular-nums">{formatTL(od.cariTutar || od.araToplam || h.tutar || 0)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>
