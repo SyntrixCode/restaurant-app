@@ -34,6 +34,20 @@ export async function recordPayment({
   if (!orderId) throw new Error('orderId zorunlu');
   if (!payments || payments.length === 0) throw new Error('En az 1 ödeme satırı gerekli');
 
+  // Cari ödemeleri (ürün bazlı bölme) ciroya GİRMEZ — ilgili kişinin borcuna yazılır.
+  const cariPays = payments.filter((p) => p.yontem === 'cari' && p.cariId);
+  const collectedPays = payments.filter((p) => p.yontem !== 'cari');
+  // Aynı cariye birden çok satır eklendiyse birleştir
+  const cariMap = {};
+  for (const p of cariPays) {
+    const e = cariMap[p.cariId] || { cariId: p.cariId, cariAd: p.cariAd, tutar: 0, items: [] };
+    e.tutar += Number(p.tutar) || 0;
+    if (Array.isArray(p.items)) e.items.push(...p.items);
+    cariMap[p.cariId] = e;
+  }
+  const cariList = Object.values(cariMap);
+  const cariTotal = cariList.reduce((s, c) => s + c.tutar, 0);
+
   const orderRef = doc(db, 'orders', orderId);
 
   return runTransaction(db, async (txn) => {
@@ -43,6 +57,15 @@ export async function recordPayment({
     const order = orderSnap.data();
     if (order.durum === 'tamamlandi') {
       throw new Error('Bu sipariş zaten ödendi');
+    }
+
+    // Cari doc'larını oku (write'lardan ÖNCE — Firestore transaction kuralı)
+    const cariRefs = cariList.map((c) => doc(db, 'cari', c.cariId));
+    const cariSnaps = [];
+    for (let i = 0; i < cariRefs.length; i++) {
+      const s = await txn.get(cariRefs[i]);
+      if (!s.exists()) throw new Error(`Cari bulunamadı: ${cariList[i].cariAd}`);
+      cariSnaps.push(s);
     }
 
     // İndirim hesabı: subtotal = araToplam (orijinal)
@@ -88,7 +111,8 @@ export async function recordPayment({
     const gun = gunString();
     const paymentIds = [];
 
-    for (const p of payments) {
+    // Sadece TAHSİL EDİLEN ödemeler (nakit/kart/yemekKarti) ciroya yazılır
+    for (const p of collectedPays) {
       const payRef = doc(collection(db, 'payments'));
       txn.set(payRef, {
         orderId,
@@ -105,6 +129,28 @@ export async function recordPayment({
       paymentIds.push(payRef.id);
     }
 
+    // Cari payları: ilgili kişinin bakiyesine BORÇ yaz (ciroya girmez, alacak takibi)
+    cariList.forEach((c, i) => {
+      const onceki = Number(cariSnaps[i].data().bakiye || 0);
+      const yeni = onceki + c.tutar;
+      txn.update(cariRefs[i], { bakiye: yeni, updatedAt: serverTimestamp() });
+      txn.set(doc(collection(db, 'cariHareketleri')), {
+        cariId: c.cariId,
+        cariAd: c.cariAd,
+        tip: 'borc',
+        tutar: c.tutar,
+        oncekiBakiye: onceki,
+        yeniBakiye: yeni,
+        orderId,
+        masaAd: order.masaAd || null,
+        items: c.items.length ? c.items : null,
+        kasiyerId,
+        kasiyerAd,
+        zaman: serverTimestamp(),
+        gun,
+      });
+    });
+
     // İndirim bilgisini order doc'a yaz
     const orderPatch = {};
     if (indirimAmount > 0) {
@@ -119,6 +165,13 @@ export async function recordPayment({
         orderPatch.kuponId = discount.kuponId || null;
         orderPatch.kampanyaId = null;
       }
+    }
+
+    // Cari varsa: ciroya yazılan toplam = SADECE tahsil edilen kısım; cari payı alacağa gider
+    if (cariList.length > 0) {
+      orderPatch.cariMasasi = true;
+      orderPatch.cariTutar = cariTotal;
+      orderPatch.toplam = collectedPays.reduce((s, p) => s + (Number(p.tutar) || 0), 0);
     }
 
     if (finalize) {
@@ -163,7 +216,7 @@ export async function recordPayment({
       }
     }
 
-    return { paymentIds, totalPaid, change: totalPaid - effectiveTotal, effectiveTotal };
+    return { paymentIds, totalPaid, change: totalPaid - effectiveTotal, effectiveTotal, cariTotal };
   });
 }
 

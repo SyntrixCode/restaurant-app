@@ -562,6 +562,9 @@ export default function Payment() {
           tutar: p.tutar,
           yontem: p.yontem,
           kartTipi: p.kartTipi || null,
+          cariId: p.cariId || null,
+          cariAd: p.cariAd || null,
+          items: p.items || null,
         })),
         fisBasildi: fisBas,
         discount: discountPayload,
@@ -625,29 +628,31 @@ export default function Payment() {
   // Patron / ücretsiz kapatma — tüm hesap bedelsiz, ciroya yazılmaz, "İkram/Patron" eksi.
   // Patron / Cari: kasiyer bir kişi (cari) seçer → tutar o kişinin carisine BORÇ yazılır
   // (ödeme alınmaz, ciroya girmez). Modaldan kişi seçilince çağrılır.
-  const handleCariSelect = async (cari) => {
-    if (finalized || submitting || !cari?.id) return;
-    setSubmitting(true);
-    setFinalized(true);
+  // CARİ → seçili ürünlerin tutarını bir "cari ödeme satırı" olarak ekler (kapatmaz).
+  // Böylece aynı hesapta birden çok cari (ürün bazlı) bölünebilir: Sezgin'e 2 pide,
+  // Ali'ye 2 pide... Hepsi eklenip toplam dolunca "ÖDEMEYİ TAMAMLA" ile kapanır.
+  const handleCariSelect = (cari) => {
+    if (!cari?.id) return;
     setCariModalOpen(false);
-    try {
-      await closeToCari({
-        orderId: order.id,
-        cariId: cari.id,
-        cariAd: cari.ad,
-        kasiyerId: user.uid,
-        kasiyerAd: profile?.ad || 'Kasiyer',
-      });
-      setChange(0);
-      toast.success(`${cari.ad} carisine yazıldı (${formatTL(subtotal)})`);
-      pushToCustomerDisplay({ mode: 'thanks', payment: { paraUstu: 0 } });
-      setSummaryOpen(true);
-    } catch (err) {
-      toast.error(err?.message || 'Cariye yazılamadı');
-      setFinalized(false);
-    } finally {
-      setSubmitting(false);
+    // Tutar: ürün seçiliyse seçimin net tutarı, yoksa kalan tutar (tek cariye tüm hesap)
+    const amount = selectedSubtotal > 0 ? selectedSubtotal : remaining;
+    if (!(amount > 0)) {
+      toast.error('Önce cariye yazılacak ürünleri seç');
+      return;
     }
+    // Bu cariye giden ürünler: seçim varsa seçilenler, yoksa tüm sipariş
+    const selItems = [];
+    (order.items || []).forEach((it, i) => {
+      const sq = itemStates[i]?.selectedQty || 0;
+      if (sq > 0) selItems.push({ ad: it.ad, fiyat: it.fiyat, adet: sq });
+    });
+    const items = selItems.length
+      ? selItems
+      : (order.items || []).map((it) => ({ ad: it.ad, fiyat: it.fiyat, adet: it.adet }));
+    addPayment({ yontem: 'cari', tutar: amount, cariId: cari.id, cariAd: cari.ad, items });
+    // Seçimi temizle — sonraki cari için
+    setItemStates((arr) => arr.map((s) => ({ ...s, selectedQty: 0 })));
+    toast.success(`${cari.ad} → ${formatTL(amount)} eklendi (cari)`);
   };
 
   const closeReceipt = () => {
@@ -970,6 +975,7 @@ export default function Payment() {
                     {p.yontem === 'nakit' && '💵 Nakit'}
                     {p.yontem === 'kart' && '💳 Kart'}
                     {p.yontem === 'yemekKarti' && `🍴 ${p.kartTipi}`}
+                    {p.yontem === 'cari' && `🧾 Cari: ${p.cariAd}`}
                   </span>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold tabular-nums">{formatTL(p.tutar)}</span>
@@ -1181,7 +1187,7 @@ export default function Payment() {
       <CariSelectModal
         open={cariModalOpen}
         onClose={() => setCariModalOpen(false)}
-        amount={subtotal}
+        amount={selectedSubtotal > 0 ? selectedSubtotal : remaining}
         onSelect={handleCariSelect}
       />
     </div>

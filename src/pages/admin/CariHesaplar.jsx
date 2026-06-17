@@ -225,10 +225,11 @@ function DetailModal({ cari, onClose }) {
 
   // Borç satırına tıklayınca o siparişin detayını (arşivden) aç/kapat
   const toggleRow = async (h) => {
-    if (h.tip !== 'borc' || !h.orderId) return;
+    if (h.tip !== 'borc' || (!Array.isArray(h.items) && !h.orderId)) return;
     const willOpen = expanded !== h.id;
     setExpanded(willOpen ? h.id : null);
-    if (willOpen && orders[h.orderId] === undefined) {
+    // Ürün bazlı bölmede hareketin kendi items'ı var → arşiv siparişine gerek yok
+    if (willOpen && !Array.isArray(h.items) && h.orderId && orders[h.orderId] === undefined) {
       setOrders((o) => ({ ...o, [h.orderId]: 'loading' }));
       try {
         const od = await fetchOne('archivedOrders', h.orderId);
@@ -330,9 +331,14 @@ function DetailModal({ cari, onClose }) {
               <tr><td colSpan={5} className="py-8 text-center text-slate-400">Hareket yok.</td></tr>
             )}
             {sorted.map((h) => {
-              const acilabilir = h.tip === 'borc' && h.orderId;
+              const acilabilir = h.tip === 'borc' && (Array.isArray(h.items) || h.orderId);
               const acik = expanded === h.id;
               const od = h.orderId ? orders[h.orderId] : undefined;
+              // Ürün bazlı bölmede hareketin kendi items'ı var; yoksa arşiv siparişinin tümü
+              const hItems = Array.isArray(h.items)
+                ? h.items
+                : (od && typeof od === 'object' ? od.items : null);
+              const hToplam = h.tutar || (od && typeof od === 'object' ? (od.cariTutar || od.araToplam) : 0);
               return (
                 <Fragment key={h.id}>
                   <tr
@@ -359,15 +365,15 @@ function DetailModal({ cari, onClose }) {
                   {acik && (
                     <tr className="bg-slate-50/60">
                       <td colSpan={5} className="px-3 py-2">
-                        {od === 'loading' && <p className="text-xs text-slate-400">Sipariş yükleniyor…</p>}
-                        {od === 'notfound' && <p className="text-xs text-slate-400">Sipariş detayı bulunamadı.</p>}
-                        {od && typeof od === 'object' && (
+                        {!hItems && od === 'loading' && <p className="text-xs text-slate-400">Sipariş yükleniyor…</p>}
+                        {!hItems && od === 'notfound' && <p className="text-xs text-slate-400">Sipariş detayı bulunamadı.</p>}
+                        {hItems && (
                           <div className="rounded-lg border border-slate-200 bg-white p-2">
                             <p className="mb-1 text-xs font-semibold uppercase text-slate-500">
-                              Sipariş İçeriği{(od.masaAd || h.masaAd) ? ` — ${od.masaAd || h.masaAd}` : ''}
+                              Sipariş İçeriği{h.masaAd ? ` — ${h.masaAd}` : ''}
                             </p>
                             <ul className="divide-y divide-slate-100">
-                              {(od.items || []).map((it, i) => (
+                              {hItems.map((it, i) => (
                                 <li key={i} className="flex justify-between gap-3 py-1 text-sm">
                                   <span className="min-w-0">
                                     <strong>{formatAdet(it.adet)}×</strong> {it.ad}
@@ -377,17 +383,17 @@ function DetailModal({ cari, onClose }) {
                                   <span className="shrink-0 tabular-nums text-slate-600">{formatTL((it.fiyat || 0) * (it.adet || 0))}</span>
                                 </li>
                               ))}
-                              {(!od.items || od.items.length === 0) && (
+                              {hItems.length === 0 && (
                                 <li className="py-1 text-xs text-slate-400">Ürün kaydı yok.</li>
                               )}
                             </ul>
                             <div className="mt-1 flex justify-between border-t border-slate-200 pt-1 text-sm font-semibold">
                               <span>Toplam</span>
-                              <span className="tabular-nums">{formatTL(od.cariTutar || od.araToplam || h.tutar || 0)}</span>
+                              <span className="tabular-nums">{formatTL(hToplam)}</span>
                             </div>
                             <div className="mt-2 flex justify-end">
                               <button
-                                onClick={(e) => { e.stopPropagation(); setFisData({ order: od, hareket: h }); }}
+                                onClick={(e) => { e.stopPropagation(); setFisData({ order: od && typeof od === 'object' ? od : null, hareket: h, items: hItems }); }}
                                 className="btn-secondary text-xs"
                               >
                                 <Printer size={14} /> Fiş Bas
@@ -409,6 +415,7 @@ function DetailModal({ cari, onClose }) {
       <CariReceiptModal
         order={fisData.order}
         hareket={fisData.hareket}
+        items={fisData.items}
         cari={cari}
         onClose={() => setFisData(null)}
       />
@@ -417,10 +424,10 @@ function DetailModal({ cari, onClose }) {
   );
 }
 
-function CariReceiptModal({ order, hareket, cari, onClose }) {
+function CariReceiptModal({ order, hareket, items: itemsProp, cari, onClose }) {
   const { settings } = useSettingsStore();
-  const items = order?.items || [];
-  const toplam = order?.cariTutar || order?.araToplam || hareket?.tutar || 0;
+  const items = itemsProp || order?.items || [];
+  const toplam = hareket?.tutar || order?.cariTutar || order?.araToplam || 0;
   const tarih = order?.tamamlandiZamani || order?.arsivZamani || hareket?.zaman;
 
   useEffect(() => {
