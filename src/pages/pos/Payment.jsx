@@ -474,6 +474,15 @@ export default function Payment() {
   };
 
   const removePayment = (idx) => {
+    const p = payments[idx];
+    // Cari satırı geri alınınca, o satırın "ödendi"ye taşıdığı ürünleri geri ver
+    if (p?.paidMap) {
+      setItemStates((arr) =>
+        arr.map((s, i) =>
+          p.paidMap[i] ? { ...s, paidQty: Math.max(0, (s.paidQty || 0) - p.paidMap[i]) } : s,
+        ),
+      );
+    }
     setPayments((arr) => arr.filter((_, i) => i !== idx));
   };
 
@@ -642,16 +651,35 @@ export default function Payment() {
     }
     // Bu cariye giden ürünler: seçim varsa seçilenler, yoksa tüm sipariş
     const selItems = [];
+    const paidMap = {};
     (order.items || []).forEach((it, i) => {
-      const sq = itemStates[i]?.selectedQty || 0;
-      if (sq > 0) selItems.push({ ad: it.ad, fiyat: it.fiyat, adet: sq });
+      const s = itemStates[i] || {};
+      const sq = s.selectedQty || 0;
+      if (sq > 0) {
+        selItems.push({ ad: it.ad, fiyat: it.fiyat, adet: sq });
+        paidMap[i] = sq;
+      }
     });
-    const items = selItems.length
-      ? selItems
-      : (order.items || []).map((it) => ({ ad: it.ad, fiyat: it.fiyat, adet: it.adet }));
-    addPayment({ yontem: 'cari', tutar: amount, cariId: cari.id, cariAd: cari.ad, items });
-    // Seçimi temizle — sonraki cari için
-    setItemStates((arr) => arr.map((s) => ({ ...s, selectedQty: 0 })));
+    if (selItems.length === 0) {
+      // Seçim yok → kalan tüm ürünleri bu cariye yaz
+      (order.items || []).forEach((it, i) => {
+        const s = itemStates[i] || {};
+        const rem = (Number(it.adet) || 0) - (s.ikramQty || 0) - (s.paidQty || 0);
+        if (rem > 0) {
+          selItems.push({ ad: it.ad, fiyat: it.fiyat, adet: rem });
+          paidMap[i] = rem;
+        }
+      });
+    }
+    addPayment({ yontem: 'cari', tutar: amount, cariId: cari.id, cariAd: cari.ad, items: selItems, paidMap });
+    // Bu ürünleri "ödendi"ye taşı → listeden düşer (paidQty subtotal'ı etkilemez)
+    setItemStates((arr) =>
+      arr.map((s, i) =>
+        paidMap[i]
+          ? { ...s, paidQty: (s.paidQty || 0) + paidMap[i], selectedQty: 0 }
+          : { ...s, selectedQty: 0 },
+      ),
+    );
     toast.success(`${cari.ad} → ${formatTL(amount)} eklendi (cari)`);
   };
 
