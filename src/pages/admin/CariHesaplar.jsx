@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { CreditCard, Search, Pencil, Trash2, Plus, Users, Wallet, History, ChevronDown, ChevronRight, Printer, X } from 'lucide-react';
+import { CreditCard, Search, Pencil, Trash2, Plus, Users, Wallet, History, ChevronDown, ChevronRight, Printer, X, FileText } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import Modal from '../../components/ui/Modal';
@@ -17,6 +17,7 @@ export default function CariHesaplar() {
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState(null); // {id?, ad, ...} | 'new'
   const [detail, setDetail] = useState(null); // seçili cari (geçmiş + tahsilat)
+  const [reportOpen, setReportOpen] = useState(false);
 
   useEffect(() => watchCollection('cari', setList), []);
 
@@ -50,9 +51,14 @@ export default function CariHesaplar() {
         title="Cari Hesaplar"
         subtitle="Patron/veresiye — kişiye yazılan hesaplar ve borç (alacak) takibi"
         actions={
-          <button onClick={() => setEditing('new')} className="btn-primary">
-            <Plus size={16} /> Yeni Cari
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={() => setReportOpen(true)} className="btn-secondary">
+              <FileText size={16} /> Rapor / PDF
+            </button>
+            <button onClick={() => setEditing('new')} className="btn-primary">
+              <Plus size={16} /> Yeni Cari
+            </button>
+          </div>
         }
       />
 
@@ -129,6 +135,191 @@ export default function CariHesaplar() {
 
       <EditModal value={editing} onClose={() => setEditing(null)} />
       <DetailModal cari={detail} onClose={() => setDetail(null)} />
+      {reportOpen && <CariReportModal caris={list} onClose={() => setReportOpen(false)} />}
+    </div>
+  );
+}
+
+// ───────────────── Cari Raporu / Ekstre (yazdır → PDF) ─────────────────
+function isoToday() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function isoDaysAgo(n) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function CariReportModal({ caris, onClose }) {
+  const { settings } = useSettingsStore();
+  const [preset, setPreset] = useState('7'); // today | 7 | 30 | custom
+  const [from, setFrom] = useState(isoDaysAgo(6));
+  const [to, setTo] = useState(isoToday());
+  const [scope, setScope] = useState('all'); // 'all' | cariId
+  const [har, setHar] = useState([]);
+
+  useEffect(() => {
+    if (preset === 'today') { setFrom(isoToday()); setTo(isoToday()); }
+    else if (preset === '7') { setFrom(isoDaysAgo(6)); setTo(isoToday()); }
+    else if (preset === '30') { setFrom(isoDaysAgo(29)); setTo(isoToday()); }
+  }, [preset]);
+
+  useEffect(
+    () => watchCollection('cariHareketleri', setHar, where('gun', '>=', from), where('gun', '<=', to)),
+    [from, to],
+  );
+
+  const bakiyeById = useMemo(() => Object.fromEntries((caris || []).map((c) => [c.id, Number(c.bakiye || 0)])), [caris]);
+
+  const rows = useMemo(
+    () => (scope === 'all' ? har : har.filter((h) => h.cariId === scope)),
+    [har, scope],
+  );
+
+  const byCari = useMemo(() => {
+    const m = {};
+    rows.forEach((h) => {
+      const e = m[h.cariId] || { cariId: h.cariId, cariAd: h.cariAd, borc: 0, tahsilat: 0, urunler: {}, adet: 0 };
+      if (h.tip === 'borc') {
+        e.borc += Number(h.tutar || 0);
+        (h.items || []).forEach((it) => {
+          const u = e.urunler[it.ad] || { adet: 0, tutar: 0 };
+          u.adet += Number(it.adet) || 0;
+          u.tutar += (Number(it.fiyat) || 0) * (Number(it.adet) || 0);
+          e.urunler[it.ad] = u;
+          e.adet += Number(it.adet) || 0;
+        });
+      } else {
+        e.tahsilat += Number(h.tutar || 0);
+      }
+      m[h.cariId] = e;
+    });
+    return Object.values(m).sort((a, b) => b.borc - a.borc);
+  }, [rows]);
+
+  const grandBorc = byCari.reduce((s, c) => s + c.borc, 0);
+  const grandTahsilat = byCari.reduce((s, c) => s + c.tahsilat, 0);
+  const tarihAraligi = from === to ? from.split('-').reverse().join('.') : `${from.split('-').reverse().join('.')} – ${to.split('-').reverse().join('.')}`;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-slate-900/70 p-4 print:static print:bg-white print:p-0">
+      <div className="my-4 w-full max-w-3xl rounded-xl bg-white shadow-2xl print:my-0 print:max-w-none print:rounded-none print:shadow-none">
+        {/* Kontroller (yazdırmada gizli) */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-3 print:hidden">
+          <div className="flex gap-1">
+            {[['today', 'Bugün'], ['7', 'Son 7 Gün'], ['30', 'Son 30 Gün'], ['custom', 'Özel']].map(([k, l]) => (
+              <button
+                key={k}
+                onClick={() => setPreset(k)}
+                className={`rounded-md px-3 py-1.5 text-sm ${preset === k ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'}`}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+          {preset === 'custom' && (
+            <div className="flex items-center gap-1">
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="input max-w-[150px]" />
+              <span className="text-slate-400">→</span>
+              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="input max-w-[150px]" />
+            </div>
+          )}
+          <select value={scope} onChange={(e) => setScope(e.target.value)} className="input max-w-[180px]">
+            <option value="all">Tüm Cariler</option>
+            {(caris || []).slice().sort((a, b) => (a.ad || '').localeCompare(b.ad || '', 'tr')).map((c) => (
+              <option key={c.id} value={c.id}>{c.ad}</option>
+            ))}
+          </select>
+          <div className="ml-auto flex gap-2">
+            <button onClick={() => window.print()} className="btn-primary text-sm">
+              <Printer size={14} /> Yazdır / PDF
+            </button>
+            <button onClick={onClose} className="btn-ghost text-sm"><X size={14} /> Kapat</button>
+          </div>
+        </div>
+
+        {/* Yazdırılabilir rapor */}
+        <div id="cari-rapor" className="p-6">
+          <div className="mb-4 text-center">
+            <h1 className="text-xl font-bold text-slate-900">{settings.restoranAd || 'Restoran'}</h1>
+            <p className="text-sm font-semibold text-slate-700">CARİ HESAP RAPORU</p>
+            <p className="text-xs text-slate-500">Dönem: {tarihAraligi}{scope !== 'all' ? ` · ${byCari[0]?.cariAd || ''}` : ''}</p>
+          </div>
+
+          {byCari.length === 0 ? (
+            <p className="py-12 text-center text-sm italic text-slate-400">Bu dönemde cari hareketi yok.</p>
+          ) : (
+            <>
+              {byCari.map((c) => {
+                const urunList = Object.entries(c.urunler).sort((a, b) => b[1].tutar - a[1].tutar);
+                return (
+                  <div key={c.cariId} className="mb-5 break-inside-avoid rounded-lg border border-slate-200">
+                    <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
+                      <span className="font-bold text-slate-900">{c.cariAd}</span>
+                      <span className="text-sm text-slate-600">
+                        Dönem borç: <strong className="text-rose-600">{formatTL(c.borc)}</strong>
+                        {c.tahsilat > 0 && <> · Tahsilat: <strong className="text-emerald-600">{formatTL(c.tahsilat)}</strong></>}
+                        {' '}· Güncel bakiye: <strong>{formatTL(bakiyeById[c.cariId] || 0)}</strong>
+                      </span>
+                    </div>
+                    {urunList.length > 0 ? (
+                      <table className="w-full text-sm">
+                        <thead className="text-left text-xs uppercase text-slate-500">
+                          <tr>
+                            <th className="px-3 py-1.5">Ürün</th>
+                            <th className="px-3 py-1.5 text-right">Adet</th>
+                            <th className="px-3 py-1.5 text-right">Tutar</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {urunList.map(([ad, u]) => (
+                            <tr key={ad}>
+                              <td className="px-3 py-1.5">{ad}</td>
+                              <td className="px-3 py-1.5 text-right tabular-nums">{formatAdet(u.adet)}</td>
+                              <td className="px-3 py-1.5 text-right tabular-nums">{formatTL(u.tutar)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t border-slate-200 font-semibold">
+                            <td className="px-3 py-1.5">Toplam</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums">{formatAdet(c.adet)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums">{formatTL(c.borc)}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    ) : (
+                      <p className="px-3 py-2 text-xs text-slate-400">Ürün dökümü yok (eski kayıt). Borç: {formatTL(c.borc)}</p>
+                    )}
+                  </div>
+                );
+              })}
+
+              {scope === 'all' && byCari.length > 1 && (
+                <div className="mt-4 flex justify-between border-t-2 border-slate-300 pt-2 text-base font-bold">
+                  <span>GENEL TOPLAM</span>
+                  <span>
+                    Borç: <span className="text-rose-600">{formatTL(grandBorc)}</span>
+                    {grandTahsilat > 0 && <> · Tahsilat: <span className="text-emerald-600">{formatTL(grandTahsilat)}</span></>}
+                  </span>
+                </div>
+              )}
+            </>
+          )}
+          <p className="mt-4 text-center text-[10px] text-slate-400">
+            {settings.restoranAd || 'Restoran'} — Cari hesap dökümüdür, mali belge değildir. ({tarihAraligi})
+          </p>
+        </div>
+      </div>
+
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          #cari-rapor, #cari-rapor * { visibility: visible; }
+          #cari-rapor { position: absolute; left: 0; top: 0; width: 100%; padding: 10mm; }
+        }
+      `}</style>
     </div>
   );
 }
