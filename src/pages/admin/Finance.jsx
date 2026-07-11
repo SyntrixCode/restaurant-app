@@ -13,6 +13,7 @@ import {
   Download,
   ArrowUpRight,
   ArrowDownRight,
+  Truck,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import PageHeader from '../../components/layout/PageHeader';
@@ -70,8 +71,21 @@ export default function AdminFinance() {
   const [filterKategori, setFilterKategori] = useState('all');
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
+  const [suppliers, setSuppliers] = useState([]);
 
   useEffect(() => watchCollection('transactions', setTxs, orderBy('tarih', 'desc')), []);
+  useEffect(() => watchCollection('suppliers', setSuppliers), []);
+
+  // Açık tedarikçi borçları (ödenmemiş) — canlı, gider/net'e DAHİL DEĞİL.
+  // Fatura girince artar, ödeme yapılınca azalır. Ödeme zaten 'gider' olarak ayrıca işlenir.
+  const borclular = useMemo(
+    () => suppliers.filter((s) => Number(s.bakiye) > 0).sort((a, b) => b.bakiye - a.bakiye),
+    [suppliers],
+  );
+  const acikBorcToplam = useMemo(
+    () => borclular.reduce((t, s) => t + Number(s.bakiye || 0), 0),
+    [borclular],
+  );
 
   const filtered = useMemo(() => {
     let list = txs.filter((t) => {
@@ -189,6 +203,29 @@ export default function AdminFinance() {
           color={stats.net >= 0 ? 'green' : 'red'}
         />
       </div>
+
+      {/* Açık tedarikçi borçları (ödenmemiş) — gider değil, ödendiğinde gider olur */}
+      {acikBorcToplam > 0 && (
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-amber-800">
+              <Truck size={14} /> Açık Tedarikçi Borcu (ödenmemiş)
+            </p>
+            <p className="text-lg font-bold text-amber-800">{formatTL(acikBorcToplam)}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {borclular.map((s) => (
+              <span key={s.id} className="rounded-full bg-amber-200 px-2 py-0.5 text-xs text-amber-900">
+                {s.ad}: <strong>{formatTL(s.bakiye)}</strong>
+              </span>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-amber-700">
+            ℹ️ Bu tutar <strong>gider/net'e dahil değildir</strong> — sadece borç takibidir. Tedarikçiye
+            "Öde" dediğinde o tutar <strong>gider</strong> olarak yukarıya işlenir ve borç düşer.
+          </p>
+        </div>
+      )}
 
       {/* Filtreler */}
       <div className="mb-4 flex flex-wrap items-center gap-2">

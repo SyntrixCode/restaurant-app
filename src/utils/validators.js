@@ -167,6 +167,36 @@ export const supplierSchema = z.object({
   aktif: z.boolean(),
 });
 
+export const tedarikciFaturaSchema = z.object({
+  faturaNo: z.string().max(60).optional().or(z.literal('')),
+  tarih: z.string().min(1, 'Tarih zorunlu'),
+  kalemler: z
+    .array(
+      z
+        .object({
+          // 'diger' = stok dışı kalem (temizlik, peçete vb.) — stoğa yazılmaz
+          tip: z.enum(['ingredient', 'product', 'diger']),
+          refId: z.string().optional(),
+          ad: z.string().optional(),
+          stokKodu: z.string().optional(),
+          miktar: z.coerce.number().positive('Miktar > 0 olmalı'),
+          birim: z.string().optional(),
+          birimFiyat: z.coerce.number().min(0, 'Fiyat negatif olamaz'),
+          kdv: z.coerce.number().min(0).max(100).optional(),
+        })
+        .refine((k) => k.tip === 'diger' || !!k.refId, {
+          message: 'Kalem seçin',
+          path: ['refId'],
+        })
+        .refine((k) => k.tip !== 'diger' || !!(k.ad && k.ad.trim()), {
+          message: 'Kalem adı girin',
+          path: ['ad'],
+        }),
+    )
+    .min(1, 'En az 1 kalem ekleyin'),
+  notlar: z.string().max(500).optional().or(z.literal('')),
+});
+
 export const cariSchema = z.object({
   ad: z.string().min(1, 'Cari adı zorunlu').max(100),
   telefon: z.string().max(30).optional().or(z.literal('')),

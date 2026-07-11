@@ -136,6 +136,19 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Tedarikçi faturaları — admin girer/okur (fatura + stok girişi).
+    match /tedarikciFaturalari/{id} {
+      allow read: if isStaff();
+      allow create: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+    // Tedarikçi cari hareket defteri (fatura borcu / ödeme).
+    match /tedarikciHareketleri/{id} {
+      allow read: if isStaff();
+      allow create: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
     match /ingredients/{id} {
       allow read: if isStaff();
       allow create, delete: if isAdmin();

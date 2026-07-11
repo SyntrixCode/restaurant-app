@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useNavigate, NavLink } from 'react-router-dom';
-import { LogOut, ShoppingCart, Truck, Grid3x3, ClipboardList, Settings as SettingsIcon } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { LogOut, ShoppingCart, Truck, Grid3x3, ClipboardList, Settings as SettingsIcon, Timer } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import { useIdleLogout } from '../../hooks/useIdleLogout';
 import { useSettingsStore } from '../../store/settingsStore';
 import PoweredBy from '../PoweredBy';
 import WaiterCallAlert from '../WaiterCallAlert';
@@ -49,6 +51,22 @@ export default function PosLayout() {
     navigate('/pos/login');
   };
 
+  // Garson 2 dk işlem yapmazsa otomatik çıkış (mutfak/kasa/kurye ekranları etkilenmez)
+  const IDLE_MS = 120000;
+  const idleEnabled = rol === 'garson';
+  const remainingMs = useIdleLogout({
+    timeoutMs: IDLE_MS,
+    enabled: idleEnabled,
+    onTimeout: async () => {
+      toast('2 dk işlem yapılmadı — otomatik çıkış', { icon: '⏱️' });
+      await handleLogout();
+    },
+  });
+  const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
+  const idleMM = Math.floor(remainingSec / 60);
+  const idleSS = String(remainingSec % 60).padStart(2, '0');
+  const idleLow = remainingMs <= 30000;
+
   return (
     <div className="flex h-full flex-col bg-slate-100">
       <OfflineBanner />
@@ -63,6 +81,17 @@ export default function PosLayout() {
           <span className="text-sm text-slate-500">
             {profile?.ad} <span className="font-medium text-blue-600">({rol})</span>
           </span>
+          {idleEnabled && (
+            <span
+              className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-sm font-semibold tabular-nums transition ${
+                idleLow ? 'animate-pulse bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'
+              }`}
+              title="İşlem yapılmazsa otomatik çıkış yapılır"
+            >
+              <Timer size={15} />
+              Oto. çıkış {idleMM}:{idleSS}
+            </span>
+          )}
         </div>
         <nav className="flex items-center gap-1">
           {!isKurye && <PosNavLink to="/pos/tables" icon={Grid3x3} label="Masalar" />}
