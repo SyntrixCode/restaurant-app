@@ -133,6 +133,12 @@ export default function NewOrder() {
       start(null, masaEtiket ? `${masaEtiket} · Paket` : 'Paket');
       return () => clear();
     }
+    // Mevcut PAKET siparişini düzenleme (masasız): orderId var, masaId yok → masaAd URL'den.
+    // Böylece paket siparişler de masa siparişleri gibi ürün ekle/çıkar edilebilir.
+    if (orderId && !masaId) {
+      start(null, masaEtiket || 'Paket');
+      return () => clear();
+    }
     if (!masaId) {
       navigate('/pos/tables', { replace: true });
       return;
@@ -274,6 +280,10 @@ export default function NewOrder() {
           masaAd,
           kisiSayisi: null,
           garsonAd: profile?.ad || 'Garson',
+          // Paket siparişi düzenleniyorsa mutfak fişi de paket-stili olsun ("PAKET - ...")
+          paketMi: existingOrder?.paketMi,
+          paketKaynak: existingOrder?.paketKaynak,
+          paketKaynakAd: existingOrder?.paketKaynakAd,
         };
         const iptalItems = [];
         const ekItems = [];

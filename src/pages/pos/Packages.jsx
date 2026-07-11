@@ -30,11 +30,6 @@ import KitchenTicket from '../../components/KitchenTicket';
 const KAYNAK_LABELS = {
   manuel: 'Manuel (kasada)',
   telefon: 'Telefon',
-  yemeksepeti: 'Yemeksepeti',
-  getir: 'Getir',
-  trendyol: 'Trendyol',
-  migros: 'Migros',
-  diger: 'Diğer',
 };
 
 export default function PosPackages() {
@@ -233,6 +228,8 @@ export default function PosPackages() {
 
       {/* Sağ: müşteri formu + sepet */}
       <aside className="flex w-[460px] flex-col border-l border-slate-200 bg-white">
+        {/* Form + sepet TEK kaydırılabilir alan — tablette form uzun olunca sepet sıkışmasın */}
+        <div className="flex-1 overflow-y-auto">
         <form
           id="paket-form"
           onSubmit={handleSubmit(onSubmit)}
@@ -339,7 +336,7 @@ export default function PosPackages() {
           </div>
         </form>
 
-        <div className="flex-1 overflow-y-auto p-3">
+        <div className="p-3">
           {items.length === 0 ? (
             <p className="py-16 text-center text-base text-slate-400">Sepet boş</p>
           ) : (
@@ -407,6 +404,7 @@ export default function PosPackages() {
               ))}
             </ul>
           )}
+        </div>
         </div>
 
         <div className="border-t-2 border-slate-200 p-4">

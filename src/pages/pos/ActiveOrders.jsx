@@ -6,6 +6,7 @@ import {
   Truck,
   Receipt,
   Send,
+  Plus,
   Smartphone,
   Check,
   X,
@@ -137,6 +138,22 @@ export default function ActiveOrders() {
     const sebep = prompt('İptal sebebi (zorunlu):', 'Platformda iptal / teslim edilmedi');
     if (!sebep || !sebep.trim()) return;
 
+    // İptal başarılı olunca mutfağa İPTAL fişi bas (mutfak yapmayı durdursun).
+    const printIptalFisi = () =>
+      setKitchenTicket({
+        order: {
+          id: order.id,
+          masaAd: order.masaAd,
+          garsonAd: order.garsonAd,
+          paketMi: order.paketMi,
+          paketKaynak: order.paketKaynak,
+          paketKaynakAd: order.paketKaynakAd,
+        },
+        items: order.items || [],
+        isCancellation: true,
+        cancellationReason: sebep.trim(),
+      });
+
     const t = toast.loading('İptal ediliyor…');
     let platformOk = false;
     if (order.posentegraPid) {
@@ -150,6 +167,7 @@ export default function ActiveOrders() {
 
     if (platformOk) {
       toast.success('Sipariş iptal edildi (platforma da bildirildi)', { id: t });
+      printIptalFisi();
       return; // posentegraReject order'ı zaten 'iptal'e aldı
     }
 
@@ -172,6 +190,7 @@ export default function ActiveOrders() {
         kullaniciAd: profile?.ad || 'Personel',
       });
       toast.success('Sipariş iptal edildi (ciroya girmedi)', { id: t2 });
+      printIptalFisi();
     } catch (err) {
       console.error(err);
       toast.error(err?.message || 'İptal edilemedi', { id: t2 });
@@ -359,6 +378,9 @@ export default function ActiveOrders() {
                       onAppPaid={() => handleAppPaid(o)}
                       onManuelPay={() => navigate(`/pos/payment?orderId=${o.id}`)}
                       onIptal={() => handleIptalPaket(o)}
+                      onDuzenle={() =>
+                        navigate(`/pos/order/new?orderId=${o.id}&masa=${encodeURIComponent(o.masaAd || 'Paket')}`)
+                      }
                     />
                   ))}
                 </div>
@@ -380,6 +402,8 @@ export default function ActiveOrders() {
         onClose={() => setKitchenTicket(null)}
         order={kitchenTicket?.order}
         items={kitchenTicket?.items}
+        isCancellation={kitchenTicket?.isCancellation}
+        cancellationReason={kitchenTicket?.cancellationReason}
       />
 
       <KuryeSelectModal
@@ -603,6 +627,7 @@ function PaketOrderCard({
   onAppPaid,
   onManuelPay,
   onIptal,
+  onDuzenle,
 }) {
   const mins = minutesSince(order.olusturmaZamani);
   const late = mins > gecikmeEsigi;
@@ -759,14 +784,24 @@ function PaketOrderCard({
             </button>
           </div>
         ) : !yolda ? (
-          // Sipariş henüz yola çıkmadı — platform/restoran fark etmeksizin "Yola Çıkar"
+          // Sipariş henüz yola çıkmadı — önce düzenleme (ürün ekle/çıkar), sonra "Yola Çıkar".
           // Platform için kurye seçim modalı açılmıyor (handleYolaCikar içinde bypass var)
-          <button
-            onClick={onYolaCikar}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow hover:bg-blue-700 active:scale-95"
-          >
-            <Send size={15} /> Yola Çıkar
-          </button>
+          <div className="space-y-2">
+            {onDuzenle && !order.posentegraPid && (
+              <button
+                onClick={onDuzenle}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100 active:scale-95"
+              >
+                <Plus size={15} /> Sipariş Ekle / Düzenle
+              </button>
+            )}
+            <button
+              onClick={onYolaCikar}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow hover:bg-blue-700 active:scale-95"
+            >
+              <Send size={15} /> Yola Çıkar
+            </button>
+          </div>
         ) : platformDelivery ? (
           // Yola çıktı + platform kuryesi → pasif gösterge + canlı sayaç + manuel kapat butonu
           <div className="space-y-2">

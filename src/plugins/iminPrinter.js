@@ -1,4 +1,5 @@
 import { registerPlugin, Capacitor } from '@capacitor/core';
+import { platformAd } from '../utils/platform';
 
 /**
  * iMin termal yazıcı plugin'i.
@@ -79,7 +80,8 @@ export function buildKitchenTicketLines({
   //  - Paket sipariş (order.paketMi) → "PAKET" (online: "PAKET - <platform>")
   //  - Masaya paket (ek sipariş ama eklenen kalemlerin HEPSİ paket) → "PAKET - MASA 6"
   const isPaket = !!order?.paketMi;
-  const paketKaynakAd = order?.paketKaynakAd || '';
+  // Platform siparişinde temiz etiket ("Trendyol Paket"); online değilse ''.
+  const paketKaynakAd = platformAd(order);
   const paketEk = isAddendum && Array.isArray(items) && items.length > 0 && items.every((it) => it?.paket);
   const paketMode = isPaket || paketEk;
 
@@ -96,12 +98,14 @@ export function buildKitchenTicketLines({
       ? `PAKET - ${paketMasaRef.toLocaleUpperCase('tr-TR')}`
       : 'PAKET';
   const heading = isCancellation
-    ? '!!! SİPARİŞ İPTAL !!!'
-    : paketMode
+    ? (isPaket ? '!!! PAKET - İPTAL !!!' : '!!! SİPARİŞ İPTAL !!!')
+    : paketEk
       ? paketBaslik
       : isAddendum
-        ? '!!! EK SİPARİŞ !!!'
-        : 'YENİ SİPARİŞ';
+        ? (isPaket ? '!!! PAKET - EK SİPARİŞ !!!' : '!!! EK SİPARİŞ !!!')
+        : isPaket
+          ? paketBaslik
+          : 'YENİ SİPARİŞ';
   lines.push({
     type: 'text',
     text: heading,
@@ -129,7 +133,8 @@ export function buildKitchenTicketLines({
   if (!paketMode) {
     lines.push({ type: 'text', text: `Garson: ${order.garsonAd || '-'}`, size: 32 });
   } else if (order.masaAd && order.masaAd !== 'Paket' && !paketMasaRef && !paketKaynakAd) {
-    lines.push({ type: 'text', text: order.masaAd, size: 32 });
+    // Paket Servis müşteri referansı ("Paket - Ahmet") — bir tık büyük
+    lines.push({ type: 'text', text: order.masaAd, size: 36, bold: true });
   }
   const now = new Date();
   const hh = String(now.getHours()).padStart(2, '0');

@@ -248,14 +248,16 @@ export default function KitchenTicket({
       ? `PAKET - ${paketMasaRef.toLocaleUpperCase('tr-TR')}`
       : 'PAKET';
   const heading = isCancellation
-    ? '!!! SİPARİŞ İPTAL !!!'
+    ? (isPaket ? '!!! PAKET - İPTAL !!!' : '!!! SİPARİŞ İPTAL !!!')
     : isCorrection
       ? '🔄 SİPARİŞ DÜZELTME'
-      : paketMode
+      : paketEk
         ? paketBaslik
         : isAddendum
-          ? '!!! EK SİPARİŞ !!!'
-          : 'YENİ SİPARİŞ';
+          ? (isPaket ? '!!! PAKET - EK SİPARİŞ !!!' : '!!! EK SİPARİŞ !!!')
+          : isPaket
+            ? paketBaslik
+            : 'YENİ SİPARİŞ';
   const shortId =
     typeof order.id === 'string' ? order.id.slice(0, 8).toUpperCase() : '';
 
@@ -345,7 +347,7 @@ export default function KitchenTicket({
               </>
             ) : (
               order.masaAd && order.masaAd !== 'Paket' && !paketMasaRef && !paketKaynakAd && (
-                <div className="truncate">{order.masaAd}</div>
+                <div className="truncate text-lg font-semibold">{order.masaAd}</div>
               )
             )}
             <div className="flex justify-between">

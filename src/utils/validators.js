@@ -225,12 +225,14 @@ export const financeTxSchema = z.object({
 
 export const paketSchema = z.object({
   musteriAd: z.string().min(2, 'Ad en az 2 karakter').max(100),
+  // Telefon ve adres OPSİYONEL — sadece müşteri adı zorunlu. Girilirse biçim/uzunluk kontrol edilir.
   musteriTel: z
     .string()
-    .min(7, 'Telefon en az 7 karakter')
     .max(20)
-    .regex(/^[0-9\s+()-]+$/, 'Sadece rakam ve telefon karakterleri'),
-  musteriAdres: z.string().min(5, 'Adres en az 5 karakter').max(500),
+    .regex(/^[0-9\s+()-]*$/, 'Sadece rakam ve telefon karakterleri')
+    .optional()
+    .or(z.literal('')),
+  musteriAdres: z.string().max(500).optional().or(z.literal('')),
   paketKaynak: z.enum(['manuel', 'telefon', 'yemeksepeti', 'getir', 'trendyol', 'migros', 'diger']),
   paketNotlar: z.string().max(300).optional().or(z.literal('')),
 });
