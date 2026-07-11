@@ -7,11 +7,12 @@ import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import Modal from '../../components/ui/Modal';
 import Toggle from '../../components/ui/Toggle';
-import { watchCollection, patchDoc, removeDoc, upsertDoc } from '../../firebase/firestore';
+import { watchCollection, patchDoc, removeDoc, upsertDoc, fetchOne } from '../../firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app } from '../../firebase/config';
 
 const checkPinAvailableFn = httpsCallable(getFunctions(app, 'europe-west1'), 'checkPinAvailable');
+const deletePosUserFn = httpsCallable(getFunctions(app, 'europe-west1'), 'deletePosUser');
 import { userSchema, randomCode4 } from '../../utils/validators';
 import { createPosUser } from '../../firebase/auth';
 import { derivePosCredentials } from '../../utils/hash';
@@ -54,11 +55,19 @@ export default function Users() {
   const handleDelete = async (u) => {
     if (!confirm(`${u.ad} kullanıcısı silinsin mi?`)) return;
     try {
-      await removeDoc('users', u.id);
-      toast.success('Kullanıcı silindi');
+      // KALICI sil: hem Firestore dokümanı hem Auth hesabı → kod tekrar serbest kalır.
+      await deletePosUserFn({ userId: u.id });
+      toast.success('Kullanıcı silindi, kod serbest');
     } catch (err) {
-      toast.error('Silme hatası');
+      // Fonksiyon yoksa/erişilemezse en azından dokümanı sil (kod Auth'ta rezerve kalır).
       console.error(err);
+      try {
+        await removeDoc('users', u.id);
+        toast.success('Kullanıcı silindi (kod serbest bırakılamadı)');
+      } catch (e2) {
+        toast.error('Silme hatası');
+        console.error(e2);
+      }
     }
   };
 
@@ -238,6 +247,14 @@ function UserModal({ open, onClose, editing }) {
           ad: data.ad,
           rol: data.rol,
         });
+        // Güvenlik: createPosUser bu koda ait mevcut Auth hesabını benimseyebilir
+        // (silinmiş kullanıcının kodu yeniden kullanılıyorsa). Ama bu uid'de HÂLÂ bir
+        // users dokümanı varsa, kod AKTİF bir kullanıcıya ait demektir → üzerine yazma.
+        const existing = await fetchOne('users', uid);
+        if (existing) {
+          toast.error('Bu kod aktif bir kullanıcıya ait. Önce o kullanıcıyı silin.');
+          return;
+        }
         await upsertDoc('users', uid, {
           ad: data.ad,
           rol: data.rol,

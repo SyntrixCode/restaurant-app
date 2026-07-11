@@ -21,6 +21,7 @@ import {
   Ban,
   Printer,
   ArrowLeftRight,
+  Truck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useForm } from 'react-hook-form';
@@ -891,6 +892,11 @@ export default function PosTables() {
             defaultKisi: k.defaultKisi,
           });
         }}
+        onPaket={() => {
+          const masa = kisiPrompt?.masaAd || '';
+          setKisiPrompt(null);
+          navigate(`/pos/order/new?paket=1&masa=${encodeURIComponent(masa)}`);
+        }}
       />
 
       <ReserveFormModal
@@ -1068,7 +1074,7 @@ function ConfirmMergeModal({ open, dragged, target, group, submitting, onCancel,
   );
 }
 
-function KisiSayisiModal({ open, masaAd, defaultKisi, groupId, onClose, onConfirm, onDissolve, onSwitchToReserve }) {
+function KisiSayisiModal({ open, masaAd, defaultKisi, groupId, onClose, onConfirm, onDissolve, onSwitchToReserve, onPaket }) {
   const [kisi, setKisi] = useState(defaultKisi || 2);
 
   useEffect(() => {
@@ -1150,15 +1156,26 @@ function KisiSayisiModal({ open, masaAd, defaultKisi, groupId, onClose, onConfir
           />
         </div>
 
-        {onSwitchToReserve && (
-          <div className="border-t border-slate-200 pt-3 text-center">
-            <button
-              type="button"
-              onClick={onSwitchToReserve}
-              className="inline-flex items-center gap-1 text-sm text-amber-700 hover:underline"
-            >
-              <CalendarClock size={14} /> Sipariş yerine rezervasyon yap
-            </button>
+        {(onSwitchToReserve || onPaket) && (
+          <div className="grid grid-cols-2 gap-2 border-t border-slate-200 pt-3">
+            {onSwitchToReserve && (
+              <button
+                type="button"
+                onClick={onSwitchToReserve}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border-2 border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-semibold text-amber-700 transition hover:bg-amber-100 active:scale-95"
+              >
+                <CalendarClock size={16} /> Rezervasyon Yap
+              </button>
+            )}
+            {onPaket && (
+              <button
+                type="button"
+                onClick={onPaket}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border-2 border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 active:scale-95"
+              >
+                <Truck size={16} /> Paket Sipariş
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -1553,6 +1570,17 @@ function FullTableModal({ open, onClose, table, tables = [], rol, navigate, onDi
               <ArrowLeftRight size={16} /> Masayı Taşı / Aktar
             </button>
           )}
+
+          {/* Paket Sipariş — bu masadan ayrı bir paket siparişi başlat (masayı meşgul etmez) */}
+          <button
+            onClick={() => {
+              onClose();
+              navigate(`/pos/order/new?paket=1&masa=${encodeURIComponent(table.ad || '')}`);
+            }}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
+          >
+            <Truck size={16} /> Paket Sipariş
+          </button>
 
           {/* Hesap Fişi (Adisyon) — ödemeden önce müşteriye verilir */}
           <button

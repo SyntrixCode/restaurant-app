@@ -155,6 +155,7 @@ export default function PosPackages() {
           masaAd: `Paket - ${data.musteriAd}`,
           kisiSayisi: null,
           garsonAd: profile?.ad || 'Personel',
+          paketMi: true,
         },
         items: ticketItems,
       });

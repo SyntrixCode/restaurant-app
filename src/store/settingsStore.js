@@ -42,6 +42,9 @@ export const useSettingsStore = create((set, get) => ({
   unsub: null,
 
   init: () => {
+    // Tek abonelik — listener churn'ü (Firestore çok-sekmeli SDK'sını bozabilir) önlemek için
+    // yeniden-bağlanma yok. permission-denied, watchDoc'un varsayılan hata yöneticisiyle
+    // sessizce yutulur (uncaught spam olmaz).
     const unsub = watchDoc('settings', 'global', (data) => {
       set({ settings: { ...DEFAULTS, ...(data || {}) }, loading: false });
     });

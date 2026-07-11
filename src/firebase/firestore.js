@@ -30,18 +30,40 @@ export async function fetchOne(name, id) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export function watchCollection(name, callback, ...constraints) {
-  const q = constraints.length ? query(col(name), ...constraints) : col(name);
-  return onSnapshot(q, (snap) => {
-    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    callback(items);
-  });
+// onSnapshot varsayılan hata yöneticisi. Hata callback'i verilmezse Firebase, listener
+// hatasını "Uncaught Error in snapshot listener" olarak konsola basar. permission-denied
+// çoğunlukla oturum geçişlerinde (giriş/çıkış/token yenileme) ya da açılışta auth henüz
+// hazır değilken oluşur — beklenen bir durumdur, sessizce geçilir; diğer hatalar uyarılır.
+function defaultSnapError(label) {
+  return (err) => {
+    if (err?.code === 'permission-denied') {
+      console.debug(`[firestore] ${label}: izin reddi (oturum geçişi olabilir), yok sayıldı`);
+    } else {
+      console.warn(`[firestore] ${label} dinleyici hatası:`, err?.message || err);
+    }
+  };
 }
 
-export function watchDoc(name, id, callback) {
-  return onSnapshot(ref(name, id), (snap) => {
-    callback(snap.exists() ? { id: snap.id, ...snap.data() } : null);
-  });
+export function watchCollection(name, callback, ...constraints) {
+  const q = constraints.length ? query(col(name), ...constraints) : col(name);
+  return onSnapshot(
+    q,
+    (snap) => {
+      const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      callback(items);
+    },
+    defaultSnapError(name),
+  );
+}
+
+export function watchDoc(name, id, callback, onError) {
+  return onSnapshot(
+    ref(name, id),
+    (snap) => {
+      callback(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+    },
+    onError || defaultSnapError(`${name}/${id}`),
+  );
 }
 
 export async function createDoc(name, data) {

@@ -11,7 +11,8 @@ import {
   initializeFirestore,
   connectFirestoreEmulator,
   persistentLocalCache,
-  persistentMultipleTabManager,
+  persistentSingleTabManager,
+  memoryLocalCache,
 } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -29,10 +30,21 @@ export const POS_EMAIL_DOMAIN =
 
 export const app = initializeApp(firebaseConfig);
 
+// Firestore önbelleği. persistentMultipleTabManager (çok-sekme) "INTERNAL ASSERTION FAILED:
+// Unexpected state" iç hatasını tetikliyordu; tek-sekme yöneticisi bu bug sınıfını ortadan
+// kaldırır (tek cihaz-tek sekme POS için uygun). IndexedDB init'i patlarsa (bozuk önbellek,
+// gizli mod, çoklu instance) bellek önbelleğine düşerek uygulamanın açılmasını garanti eder.
+function makeLocalCache() {
+  try {
+    return persistentLocalCache({ tabManager: persistentSingleTabManager({}) });
+  } catch (e) {
+    console.warn('[firestore] kalıcı önbellek kurulamadı, bellek önbelleğine düşülüyor:', e?.message || e);
+    return memoryLocalCache();
+  }
+}
+
 export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager(),
-  }),
+  localCache: makeLocalCache(),
 });
 
 // Capacitor APK ortamında getAuth() bazen IDB init'ini bekleyemeden localStorage'a

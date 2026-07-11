@@ -5,6 +5,7 @@ import { watchCollection, where } from '../../firebase/firestore';
 import { formatTL } from '../../utils/format';
 import { toKurus, fromKurus } from '../../utils/paymentMath';
 import { exportExcel } from '../../utils/excelExport';
+import { excludeTest } from '../../utils/testAccount';
 
 // Firestore Timestamp veya Date → millisaniye
 function tsToMillis(ts) {
@@ -34,8 +35,8 @@ export default function StaffReport() {
   const [payments, setPayments] = useState([]);
 
   useEffect(() => {
-    const unsubA = watchCollection('archivedOrders', setArchived, where('gun', '==', gun));
-    const unsubP = watchCollection('payments', setPayments, where('gun', '==', gun));
+    const unsubA = watchCollection('archivedOrders', (l) => setArchived(excludeTest(l)), where('gun', '==', gun));
+    const unsubP = watchCollection('payments', (l) => setPayments(excludeTest(l)), where('gun', '==', gun));
     return () => {
       unsubA();
       unsubP();

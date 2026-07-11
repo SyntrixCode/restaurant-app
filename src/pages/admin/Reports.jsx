@@ -32,6 +32,7 @@ import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import { watchCollection, orderBy } from '../../firebase/firestore';
 import { formatTL } from '../../utils/format';
+import { excludeTest } from '../../utils/testAccount';
 
 const COLORS = [
   '#3b82f6',
@@ -63,10 +64,10 @@ export default function AdminReports() {
   const [to, setTo] = useState(todayISO());
 
   useEffect(
-    () => watchCollection('archivedOrders', setArchived, orderBy('tamamlandiZamani', 'desc')),
+    () => watchCollection('archivedOrders', (l) => setArchived(excludeTest(l)), orderBy('tamamlandiZamani', 'desc')),
     [],
   );
-  useEffect(() => watchCollection('payments', setPayments), []);
+  useEffect(() => watchCollection('payments', (l) => setPayments(excludeTest(l))), []);
 
   const inRange = (gun) => gun >= from && gun <= to;
   const orders = useMemo(() => archived.filter((o) => inRange(o.gun || '')), [archived, from, to]);

@@ -14,6 +14,7 @@ import Modal from '../../components/ui/Modal';
 import { watchCollection, where, orderBy, removeDoc } from '../../firebase/firestore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL, formatDate, minutesSince, formatAdet } from '../../utils/format';
+import { excludeTest } from '../../utils/testAccount';
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
@@ -27,7 +28,7 @@ export default function AdminOrders() {
     () =>
       watchCollection(
         'orders',
-        setOrders,
+        (l) => setOrders(excludeTest(l)),
         where('durum', 'in', ['aktif', 'hazirlandi', 'masayaGitti']),
         orderBy('olusturmaZamani', 'desc'),
       ),

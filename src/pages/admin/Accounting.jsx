@@ -8,6 +8,7 @@ import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL } from '../../utils/format';
 import { toKurus, fromKurus } from '../../utils/paymentMath';
 import { exportExcel, exportCSV } from '../../utils/excelExport';
+import { excludeTest } from '../../utils/testAccount';
 
 function isoDay(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -52,7 +53,7 @@ export default function Accounting() {
         where('gun', '<=', bit),
         orderBy('gun', 'asc'),
       );
-      setPayments(rows);
+      setPayments(excludeTest(rows));
       setLoaded(true);
       if (rows.length === 0) toast('Bu aralıkta ödeme yok', { icon: 'ℹ️' });
     } catch (err) {

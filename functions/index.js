@@ -706,14 +706,42 @@ export const checkPinAvailable = onCall(
     const projectId = process.env.GCLOUD_PROJECT || 'alazligida-e77b9';
     const email = `pos-${kodHash.slice(0, 16)}@${projectId}.firebaseapp.com`;
     try {
-      await auth.getUserByEmail(email);
-      return { inUse: true };
+      const authUser = await auth.getUserByEmail(email);
+      // Auth hesabı var — ama ona bağlı bir users dokümanı da var mı? Kullanıcı
+      // silinmişse (doküman yok) kod yeniden kullanılabilir sayılır → inUse:false.
+      const docSnap = await db.collection('users').doc(authUser.uid).get();
+      return { inUse: docSnap.exists };
     } catch (err) {
       if (err.code === 'auth/user-not-found') return { inUse: false };
       throw new HttpsError('internal', err.message);
     }
   },
 );
+
+/**
+ * POS kullanıcısını KALICI siler: hem Firestore dokümanını hem koddan türetilen
+ * Firebase Auth hesabını. Auth hesabı silinince o 4 haneli kod tekrar "uygun" olur.
+ * Yalnızca admin çağırabilir. (userId = users doküman id'si = Auth uid.)
+ */
+export const deletePosUser = onCall({ region: 'europe-west1' }, async (req) => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Giriş gerekli');
+  const adminSnap = await db.collection('users').doc(req.auth.uid).get();
+  if (!adminSnap.exists || adminSnap.data().rol !== 'admin') {
+    throw new HttpsError('permission-denied', 'Admin yetkisi gerekli');
+  }
+  const userId = String(req.data?.userId || '');
+  if (!userId) throw new HttpsError('invalid-argument', 'userId gerekli');
+  // Auth hesabını sil → kod serbest kalır. Auth yoksa (eski kayıt) sorun değil.
+  try {
+    await auth.deleteUser(userId);
+  } catch (err) {
+    if (err.code !== 'auth/user-not-found') {
+      console.warn('deletePosUser: Auth hesabı silinemedi:', err.message);
+    }
+  }
+  await db.collection('users').doc(userId).delete();
+  return { ok: true };
+});
 
 export const onUserWrite = onDocumentWritten('users/{userId}', async (event) => {
   const after = event.data?.after?.data();

@@ -8,6 +8,7 @@ import UpdateBanner from '../../components/UpdateBanner';
 import { watchCollection, where } from '../../firebase/firestore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL } from '../../utils/format';
+import { excludeTest } from '../../utils/testAccount';
 
 export default function Dashboard() {
   const [activeOrders, setActiveOrders] = useState([]);
@@ -20,8 +21,8 @@ export default function Dashboard() {
     const today = new Date();
     const gun = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-    const unsubOrders = watchCollection('orders', setActiveOrders, where('durum', 'in', ['aktif', 'hazirlandi', 'masayaGitti']));
-    const unsubPayments = watchCollection('payments', setTodayPayments, where('gun', '==', gun));
+    const unsubOrders = watchCollection('orders', (l) => setActiveOrders(excludeTest(l)), where('durum', 'in', ['aktif', 'hazirlandi', 'masayaGitti']));
+    const unsubPayments = watchCollection('payments', (l) => setTodayPayments(excludeTest(l)), where('gun', '==', gun));
     const unsubTables = watchCollection('tables', setTables);
     const unsubProducts = watchCollection('products', setProducts);
 

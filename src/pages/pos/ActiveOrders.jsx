@@ -109,6 +109,8 @@ export default function ActiveOrders() {
           masaAd: order.masaAd || `Paket - ${order.paketKaynakAd || 'Posentegra'}`,
           kisiSayisi: null,
           garsonAd: order.paketKaynakAd || order.garsonAd || 'Posentegra',
+          paketMi: true,
+          paketKaynakAd: order.paketKaynakAd || null,
         },
         items: (order.items || []).map((it) => ({
           ad: it.ad,

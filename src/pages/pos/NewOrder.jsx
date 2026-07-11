@@ -18,10 +18,16 @@ export default function NewOrder() {
   const masaId = params.get('masaId');
   const orderId = params.get('orderId');
   const kisi = Number(params.get('kisi')) || null;
+  // Paket modu: masa seçmeden hızlı paket siparişi (?paket=1). Masa yok, kişi yok.
+  const isPaket = params.get('paket') === '1';
+  // Paket, bir masanın "Kaç kişi?" modalından açıldıysa o masa etiketi taşınır (ekranda gösterilir).
+  const masaEtiket = params.get('masa') || '';
   const { user, profile, rol, logout } = useAuthStore();
   const { masaAd, items, start, addItem, changeQuantity, toggleHalf, removeItem, setNote, clear, total } =
     useCartStore();
   const [kitchenTicket, setKitchenTicket] = useState(null);
+  // Düzenleme birden fazla fiş üretebilir (önce İptal, sonra Ek Sipariş). Sıradakiler burada bekler.
+  const [ticketQueue, setTicketQueue] = useState([]);
 
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
@@ -118,6 +124,12 @@ export default function NewOrder() {
   };
 
   useEffect(() => {
+    // Paket modu: masa/kişi aramadan doğrudan "Paket" sepeti başlat.
+    // Bir masadan açıldıysa etiket "Masa 6 · Paket" olur (ekranda ve fişin alt satırında görünür).
+    if (isPaket) {
+      start(null, masaEtiket ? `${masaEtiket} · Paket` : 'Paket');
+      return () => clear();
+    }
     if (!masaId) {
       navigate('/pos/tables', { replace: true });
       return;
@@ -148,7 +160,7 @@ export default function NewOrder() {
       start(masaId, t.ad);
     })();
     return () => clear();
-  }, [masaId]);
+  }, [masaId, isPaket, masaEtiket]);
 
   useEffect(() => watchCollection('categories', setCategories, orderBy('sira', 'asc')), []);
   useEffect(() => watchCollection('products', setProducts), []);
@@ -249,35 +261,65 @@ export default function NewOrder() {
           addedCount = result.added;
         }
 
-        // Mutfak fişi: diff veya ek sipariş veya her ikisi
-        const isCorrection = !!editDiff && (editDiff.removed.length > 0 || editDiff.changed.length > 0);
-        if (isCorrection || addedCount > 0) {
+        // Mutfak fişleri: ÖNCE İptal (çıkarılan + adedi azaltılan), SONRA Ek Sipariş
+        // (yeni eklenen + adedi artan). Adet artışı "1x > 2x" değil, artan fark kadar
+        // yeni kalem gibi ek sipariş fişinde çıkar.
+        const orderInfo = {
+          id: orderId,
+          masaAd,
+          kisiSayisi: null,
+          garsonAd: profile?.ad || 'Garson',
+        };
+        const iptalItems = [];
+        const ekItems = [];
+        if (editDiff) {
+          for (const it of editDiff.removed) {
+            iptalItems.push({
+              ad: it.ad,
+              adet: it.adet,
+              notlar: it.notlar,
+              categoryId: it.categoryId || null,
+              yaziciIds: it.yaziciIds || [],
+            });
+          }
+          for (const it of editDiff.changed) {
+            const delta = (it.toAdet || 0) - (it.fromAdet || 0);
+            const base = {
+              ad: it.ad,
+              notlar: it.notlar,
+              categoryId: it.categoryId || null,
+              yaziciIds: it.yaziciIds || [],
+            };
+            if (delta < 0) iptalItems.push({ ...base, adet: -delta });
+            else if (delta > 0) ekItems.push({ ...base, adet: delta });
+          }
+        }
+        if (items.length > 0) ekItems.push(...ticketItems);
+
+        const queue = [];
+        if (iptalItems.length > 0) queue.push({ isCancellation: true, order: orderInfo, items: iptalItems });
+        if (ekItems.length > 0) queue.push({ isAddendum: true, order: orderInfo, items: ekItems });
+
+        if (queue.length > 0) {
           toast.success(
-            isCorrection
-              ? `${addedCount > 0 ? `${addedCount} eklendi, ` : ''}sipariş güncellendi`
-              : `${addedCount} ürün eklendi`,
+            iptalItems.length > 0 && ekItems.length > 0
+              ? 'İptal + ek sipariş fişi mutfağa iletildi'
+              : iptalItems.length > 0
+                ? 'İptal fişi mutfağa iletildi'
+                : `${addedCount} ürün eklendi`,
           );
-          setKitchenTicket({
-            isAddendum: !isCorrection && addedCount > 0,
-            isCorrection,
-            correctionDiff: editDiff,
-            addedItems: ticketItems,
-            order: {
-              id: orderId,
-              masaAd,
-              kisiSayisi: null,
-              garsonAd: profile?.ad || 'Garson',
-            },
-            items: ticketItems,
-          });
+          setTicketQueue(queue.slice(1));
+          setKitchenTicket(queue[0]);
         }
       } else {
         const result = await createOrder({
-          masaId,
+          masaId: isPaket ? null : masaId,
           masaAd,
-          kisiSayisi: kisi,
+          kisiSayisi: isPaket ? null : kisi,
           garsonId: user.uid,
           garsonAd: profile?.ad || 'Garson',
+          paketMi: isPaket,
+          paketKaynak: isPaket ? 'manuel' : null,
           items: items.map((it) => ({
             productId: it.productId,
             adet: it.adet,
@@ -285,14 +327,19 @@ export default function NewOrder() {
             opsiyonProductIds: it.opsiyonProductIds || [],
           })),
         });
-        toast.success(`Sipariş alındı (${formatTL(result.araToplam)})`);
+        toast.success(
+          isPaket
+            ? `Paket sipariş alındı (${formatTL(result.araToplam)})`
+            : `Sipariş alındı (${formatTL(result.araToplam)})`,
+        );
         setKitchenTicket({
           isAddendum: false,
           order: {
             id: result.orderId,
             masaAd,
-            kisiSayisi: kisi,
+            kisiSayisi: isPaket ? null : kisi,
             garsonAd: profile?.ad || 'Garson',
+            paketMi: isPaket,
           },
           items: ticketItems,
         });
@@ -309,6 +356,8 @@ export default function NewOrder() {
 
   const closeKitchenTicket = () => {
     setKitchenTicket(null);
+    // Sırada başka fiş varsa (düzenleme: iptal → ek) aşağıdaki effect onu açar; akışı bitirme.
+    if (ticketQueue.length > 0) return;
     // Garson: sipariş girildikten sonra otomatik çıkış → POS kod giriş ekranına dön.
     // (Tablet garsonlar arası paylaşımlı; herkes kendi kodunu girsin.) Logout user'ı
     // null'a çeker, ProtectedRoute /pos/login'e yönlendirir. Kasiyer/admin masalarda kalır.
@@ -318,6 +367,15 @@ export default function NewOrder() {
       navigate('/pos/tables');
     }
   };
+
+  // Fiş kuyruğu: mevcut fiş kapanınca (null olunca) sıradakini aç. `open` kısa süre
+  // false olduğu için KitchenTicket kendini sıfırlar ve yeni fişi otomatik basar.
+  useEffect(() => {
+    if (!kitchenTicket && ticketQueue.length > 0) {
+      setKitchenTicket(ticketQueue[0]);
+      setTicketQueue((q) => q.slice(1));
+    }
+  }, [kitchenTicket, ticketQueue]);
 
   const subtotal = total();
 
@@ -709,8 +767,7 @@ export default function NewOrder() {
         order={kitchenTicket?.order}
         items={kitchenTicket?.items}
         isAddendum={kitchenTicket?.isAddendum}
-        isCorrection={kitchenTicket?.isCorrection}
-        correctionDiff={kitchenTicket?.correctionDiff}
+        isCancellation={kitchenTicket?.isCancellation}
       />
     </div>
   );

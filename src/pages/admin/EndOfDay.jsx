@@ -8,6 +8,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL } from '../../utils/format';
 import { toKurus, fromKurus } from '../../utils/paymentMath';
+import { excludeTest } from '../../utils/testAccount';
 
 function todayISO() {
   const d = new Date();
@@ -25,8 +26,8 @@ export default function EndOfDay() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const unsubP = watchCollection('payments', setPayments, where('gun', '==', gun));
-    const unsubA = watchCollection('archivedOrders', setArchived, where('gun', '==', gun));
+    const unsubP = watchCollection('payments', (l) => setPayments(excludeTest(l)), where('gun', '==', gun));
+    const unsubA = watchCollection('archivedOrders', (l) => setArchived(excludeTest(l)), where('gun', '==', gun));
     return () => {
       unsubP();
       unsubA();

@@ -5,6 +5,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './config';
+import { isTestAccount } from '../utils/testAccount';
 
 function gunString(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -110,6 +111,9 @@ export async function recordPayment({
     // === WRITES ===
     const gun = gunString();
     const paymentIds = [];
+    // Test/demo: sipariş test hesabından açıldıysa VEYA ödemeyi test hesabı aldıysa,
+    // ödeme de test sayılır → ciroya/raporlara girmez.
+    const isTest = order.test === true || isTestAccount(kasiyerAd);
 
     // Sadece TAHSİL EDİLEN ödemeler (nakit/kart/yemekKarti) ciroya yazılır
     for (const p of collectedPays) {
@@ -123,6 +127,7 @@ export async function recordPayment({
         kasiyerId,
         kasiyerAd,
         fisBasildi,
+        test: isTest,
         zaman: serverTimestamp(),
         gun,
       });
@@ -187,6 +192,7 @@ export async function recordPayment({
       const archived = {
         ...order,
         ...orderPatch,
+        test: isTest,
         arsivZamani: serverTimestamp(),
         gun,
         odemeYontemleri: payments.map((p) => p.yontem),

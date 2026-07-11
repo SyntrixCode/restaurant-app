@@ -19,6 +19,7 @@ import { cancelArchivedOrder, uncancelArchivedOrder } from '../../firebase/order
 import { useAuthStore } from '../../store/authStore';
 import { exportArchivedOrders } from '../../utils/excelExport';
 import { formatTL, formatDate, formatAdet } from '../../utils/format';
+import { excludeTest } from '../../utils/testAccount';
 
 function todayISO() {
   const d = new Date();
@@ -40,7 +41,7 @@ export default function AdminArchive() {
 
   useEffect(
     () =>
-      watchCollection('archivedOrders', setArchived, orderBy('tamamlandiZamani', 'desc')),
+      watchCollection('archivedOrders', (l) => setArchived(excludeTest(l)), orderBy('tamamlandiZamani', 'desc')),
     [],
   );
 

@@ -7,6 +7,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './config';
 import { toBaseQty } from '../utils/units';
+import { isTestAccount } from '../utils/testAccount';
 
 export async function createOrder({
   masaId,
@@ -187,6 +188,8 @@ export async function createOrder({
       musteriAd,
       musteriTel,
       musteriAdres,
+      // Test/demo hesabından (Syntrix*) açılan sipariş → ciroya/raporlara girmez
+      test: isTestAccount(garsonAd),
       olusturmaZamani: serverTimestamp(),
       hazirlandiZamani: null,
       masayaGittiZamani: null,

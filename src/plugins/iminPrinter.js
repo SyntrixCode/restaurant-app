@@ -73,94 +73,72 @@ export function buildKitchenTicketLines({
   isAddendum = false,
   isCancellation = false,
   cancellationReason = '',
-  isCorrection = false,
-  correctionDiff = null,
-  printerAd = '',
 }) {
   const lines = [];
+  // Başlık: yeni sipariş / ek / iptal / paket. Paket ise "PAKET"
+  // (online: "PAKET - <platform>", masadan açıldıysa: "PAKET - MASA 6").
+  const isPaket = !!order?.paketMi;
+  const paketKaynakAd = order?.paketKaynakAd || '';
+  // Masadan açılan paket masaAd'ı "Masa 6 · Paket" formatındadır → masa etiketini ayıkla.
+  let paketMasaRef = '';
+  if (isPaket && !paketKaynakAd && typeof order?.masaAd === 'string' && order.masaAd.endsWith(' · Paket')) {
+    paketMasaRef = order.masaAd.slice(0, order.masaAd.length - ' · Paket'.length).trim();
+  }
+  const paketBaslik = paketKaynakAd
+    ? `PAKET - ${paketKaynakAd.toLocaleUpperCase('tr-TR')}`
+    : paketMasaRef
+      ? `PAKET - ${paketMasaRef.toLocaleUpperCase('tr-TR')}`
+      : 'PAKET';
   const heading = isCancellation
-    ? '*** SIPARIS IPTAL ***'
-    : isCorrection
-      ? '*** SIPARIS DUZELTME ***'
-      : isAddendum
-        ? 'EK SIPARIS'
-        : 'MUTFAK ADISYONU';
+    ? '*** SİPARİŞ İPTAL ***'
+    : isAddendum
+      ? '*** EK SİPARİŞ ***'
+      : isPaket
+        ? paketBaslik
+        : 'YENİ SİPARİŞ';
   lines.push({
     type: 'text',
     text: heading,
     align: 'center',
-    size: isCancellation || isCorrection ? 42 : 36,
+    size: isCancellation ? 42 : 40,
     bold: true,
   });
-  // İstasyon (yazıcı) adı — mutfaktaki kişi fişin kendisine ait olduğunu anlasın
-  if (printerAd) {
+
+  // Dine-in: eski » MUTFAK «/» BAR « satırının yerine BÜYÜK masa + numarası.
+  // (Kalemler hâlâ kategoriye göre mutfak/bar yazıcısına bölünür; fişin geldiği
+  //  fiziksel yazıcı zaten istasyonu belli eder.)
+  if (!isPaket) {
     lines.push({
       type: 'text',
-      text: `» ${String(printerAd).toLocaleUpperCase('tr-TR')} «`,
+      text: String(order.masaAd || 'Paket').toLocaleUpperCase('tr-TR'),
       align: 'center',
-      size: 40,
+      size: 46,
       bold: true,
     });
   }
   if (isCancellation && cancellationReason) {
-    lines.push({
-      type: 'text',
-      text: `Sebep: ${cancellationReason}`,
-      align: 'center',
-      size: 24,
-      bold: true,
-    });
+    lines.push({ type: 'text', text: `Sebep: ${cancellationReason}`, align: 'center', size: 24, bold: true });
   }
   lines.push({ type: 'divider' });
-  lines.push({ type: 'text', text: `Masa: ${order.masaAd || 'Paket'}`, size: 28, bold: true });
-  if (order.kisiSayisi != null) {
-    lines.push({ type: 'text', text: `Kişi: ${order.kisiSayisi}` });
+
+  // Meta blok — yazılar büyütüldü. Masa artık üstteki büyük satırda.
+  if (!isPaket) {
+    if (order.kisiSayisi != null) lines.push({ type: 'text', text: `Kişi: ${order.kisiSayisi}`, size: 32 });
+    lines.push({ type: 'text', text: `Garson: ${order.garsonAd || '-'}`, size: 32 });
+  } else if (order.masaAd && order.masaAd !== 'Paket' && !paketMasaRef && !paketKaynakAd) {
+    // Paket (Paket Servis): müşteri referansı (ör. "Paket - Ahmet") korunur.
+    // Masadan açılan paket ve online paketlerde referans zaten başlıkta olduğu için tekrar yazılmaz.
+    lines.push({ type: 'text', text: order.masaAd, size: 32 });
   }
-  lines.push({ type: 'text', text: `Garson: ${order.garsonAd || '-'}` });
   const now = new Date();
   const hh = String(now.getHours()).padStart(2, '0');
   const mm = String(now.getMinutes()).padStart(2, '0');
-  lines.push({ type: 'text', text: `Saat: ${hh}:${mm}` });
+  lines.push({ type: 'text', text: `Saat: ${hh}:${mm}`, size: 32 });
   lines.push({ type: 'divider' });
-
-  // Düzeltme fişi: önce silinenler ve değişenler
-  if (isCorrection && correctionDiff) {
-    if (correctionDiff.removed?.length > 0) {
-      lines.push({ type: 'text', text: 'IPTAL EDILEN:', size: 26, bold: true });
-      for (const it of correctionDiff.removed) {
-        const adet = it.adet % 1 === 0 ? String(it.adet) : it.adet.toFixed(1).replace('.', ',');
-        lines.push({ type: 'text', text: `- ${adet}x ${it.ad}`, size: 32, bold: true });
-        if (it.notlar) {
-          lines.push({ type: 'text', text: `   (${it.notlar})`, size: 22, italic: true });
-        }
-      }
-      lines.push({ type: 'divider' });
-    }
-    if (correctionDiff.changed?.length > 0) {
-      lines.push({ type: 'text', text: 'ADET DEGISEN:', size: 26, bold: true });
-      for (const it of correctionDiff.changed) {
-        const f = it.fromAdet % 1 === 0 ? String(it.fromAdet) : it.fromAdet.toFixed(1).replace('.', ',');
-        const t = it.toAdet % 1 === 0 ? String(it.toAdet) : it.toAdet.toFixed(1).replace('.', ',');
-        lines.push({ type: 'text', text: `${it.ad}: ${f}x > ${t}x`, size: 30, bold: true });
-        if (it.notlar) {
-          lines.push({ type: 'text', text: `   (${it.notlar})`, size: 22, italic: true });
-        }
-      }
-      lines.push({ type: 'divider' });
-    }
-    if (items && items.length > 0) {
-      lines.push({ type: 'text', text: 'YENI EKLENEN:', size: 26, bold: true });
-    }
-  }
 
   for (const it of items || []) {
     const adet = it.adet % 1 === 0 ? String(it.adet) : it.adet.toFixed(1).replace('.', ',');
-    lines.push({
-      type: 'text',
-      text: `${isCorrection ? '+ ' : ''}${adet}x ${it.ad}`,
-      size: 32,
-      bold: true,
-    });
+    lines.push({ type: 'text', text: `${adet}x ${it.ad}`, size: 32, bold: true });
     if (it.notlar) {
       lines.push({ type: 'text', text: `   (${it.notlar})`, size: 24, italic: true });
     }

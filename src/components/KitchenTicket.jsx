@@ -222,13 +222,27 @@ export default function KitchenTicket({
       setPrinting(false);
     }
   };
+  const isPaket = !!order?.paketMi;
+  const paketKaynakAd = order?.paketKaynakAd || '';
+  // Masadan açılan paket masaAd'ı "Masa 6 · Paket" → başlıkta "PAKET - MASA 6"
+  let paketMasaRef = '';
+  if (isPaket && !paketKaynakAd && typeof order?.masaAd === 'string' && order.masaAd.endsWith(' · Paket')) {
+    paketMasaRef = order.masaAd.slice(0, order.masaAd.length - ' · Paket'.length).trim();
+  }
+  const paketBaslik = paketKaynakAd
+    ? `PAKET - ${paketKaynakAd.toLocaleUpperCase('tr-TR')}`
+    : paketMasaRef
+      ? `PAKET - ${paketMasaRef.toLocaleUpperCase('tr-TR')}`
+      : 'PAKET';
   const heading = isCancellation
-    ? '❌ SİPARİŞ İPTAL'
+    ? '*** SİPARİŞ İPTAL ***'
     : isCorrection
       ? '🔄 SİPARİŞ DÜZELTME'
       : isAddendum
-        ? 'EK SİPARİŞ'
-        : 'MUTFAK ADİSYONU';
+        ? '*** EK SİPARİŞ ***'
+        : isPaket
+          ? paketBaslik
+          : 'YENİ SİPARİŞ';
   const shortId =
     typeof order.id === 'string' ? order.id.slice(0, 8).toUpperCase() : '';
 
@@ -243,7 +257,9 @@ export default function KitchenTicket({
                 ? '🔄 Düzeltme Fişi'
                 : isAddendum
                   ? 'Ek Sipariş Fişi'
-                  : 'Mutfak Fişi'}
+                  : isPaket
+                    ? 'Paket Fişi'
+                    : 'Mutfak Fişi'}
             {nativeAvailable && (
               <span className="ml-2 text-xs font-normal text-emerald-600">
                 {printed
@@ -301,21 +317,32 @@ export default function KitchenTicket({
             )}
           </div>
 
-          <div className="mb-2 border-t border-dashed border-slate-400 pt-2 text-sm">
-            <div className="flex justify-between">
-              <span>Masa:</span>
-              <span className="font-bold">{order.masaAd || 'Paket'}</span>
+          {/* Dine-in: eski Mutfak/Bar satırının yerine BÜYÜK masa + numarası */}
+          {!isPaket && (
+            <div className="mb-3 text-center text-3xl font-extrabold tracking-wider">
+              {(order.masaAd || 'Paket').toLocaleUpperCase('tr-TR')}
             </div>
-            {order.kisiSayisi != null && (
-              <div className="flex justify-between">
-                <span>Kişi:</span>
-                <span>{order.kisiSayisi}</span>
-              </div>
+          )}
+
+          <div className="mb-2 border-t border-dashed border-slate-400 pt-2 text-base">
+            {!isPaket ? (
+              <>
+                {order.kisiSayisi != null && (
+                  <div className="flex justify-between">
+                    <span>Kişi:</span>
+                    <span>{order.kisiSayisi}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span>Garson:</span>
+                  <span>{order.garsonAd}</span>
+                </div>
+              </>
+            ) : (
+              order.masaAd && order.masaAd !== 'Paket' && !paketMasaRef && !paketKaynakAd && (
+                <div className="truncate">{order.masaAd}</div>
+              )
             )}
-            <div className="flex justify-between">
-              <span>Garson:</span>
-              <span>{order.garsonAd}</span>
-            </div>
             <div className="flex justify-between">
               <span>Saat:</span>
               <span>{formatDate(new Date(), 'HH:mm')}</span>

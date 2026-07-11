@@ -99,10 +99,32 @@ export async function createPosUser({ kod, ad, rol }) {
   const { email, password } = await derivePosCredentials(kod, POS_EMAIL_DOMAIN);
   const { auth: secondary, dispose } = getSecondaryAuth();
   try {
-    const cred = await createUserWithEmailAndPassword(secondary, email, password);
-    if (cred.user) await updateProfile(cred.user, { displayName: ad });
+    let user;
+    try {
+      const cred = await createUserWithEmailAndPassword(secondary, email, password);
+      user = cred.user;
+      if (user) await updateProfile(user, { displayName: ad });
+    } catch (err) {
+      // Bu koda ait Auth hesabı zaten var (ör. doküman panelden silinip aynı kodla
+      // yeniden eklenirken, ya da eski uid kayması). Hata vermek yerine hesaba giriş
+      // yapıp GERÇEK uid'ini al — çağıran, users dokümanını bu doğru uid altına yazar
+      // (self-heal). Böylece "kod zaten kullanımda" tıkanması ve uid uyuşmazlığı biter.
+      if (err.code === 'auth/email-already-in-use') {
+        const cred = await signInWithEmailAndPassword(secondary, email, password);
+        user = cred.user;
+        if (user && ad) {
+          try {
+            await updateProfile(user, { displayName: ad });
+          } catch {
+            /* displayName güncellenemese de akış devam etsin */
+          }
+        }
+      } else {
+        throw err;
+      }
+    }
     await signOut(secondary);
-    return { uid: cred.user.uid, email };
+    return { uid: user.uid, email };
   } finally {
     try {
       await dispose();
