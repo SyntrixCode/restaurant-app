@@ -70,7 +70,12 @@ export default function AdminReports() {
   useEffect(() => watchCollection('payments', (l) => setPayments(excludeTest(l))), []);
 
   const inRange = (gun) => gun >= from && gun <= to;
-  const orders = useMemo(() => archived.filter((o) => inRange(o.gun || '')), [archived, from, to]);
+  // İptal edilen siparişler ciroya/sayıma/ürün-garson performansına DAHİL EDİLMEZ.
+  // (iptal.edildi: arşiv iptali; durum==='iptal': Posentegra/aktif iptal)
+  const orders = useMemo(
+    () => archived.filter((o) => inRange(o.gun || '') && !o.iptal?.edildi && o.durum !== 'iptal'),
+    [archived, from, to],
+  );
   const filteredPayments = useMemo(() => payments.filter((p) => inRange(p.gun || '')), [payments, from, to]);
 
   // === KPI ===

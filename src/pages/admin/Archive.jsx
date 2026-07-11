@@ -9,13 +9,15 @@ import {
   Undo2,
   StickyNote,
   Save,
+  Wallet,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import Modal from '../../components/ui/Modal';
-import { watchCollection, orderBy, patchDoc } from '../../firebase/firestore';
+import { watchCollection, orderBy, patchDoc, where } from '../../firebase/firestore';
 import { cancelArchivedOrder, uncancelArchivedOrder } from '../../firebase/orders';
+import { updateOdemeYontemi } from '../../firebase/payments';
 import { useAuthStore } from '../../store/authStore';
 import { exportArchivedOrders } from '../../utils/excelExport';
 import { formatTL, formatDate, formatAdet } from '../../utils/format';
@@ -286,12 +288,57 @@ function ArchiveDetailModal({ open, order, onClose }) {
   const [submitting, setSubmitting] = useState(false);
   const [not, setNot] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+  const [pays, setPays] = useState([]); // bu siparişin tahsilat kayıtları
+  const [payEdits, setPayEdits] = useState({}); // paymentId -> yontem
+  const [savingPay, setSavingPay] = useState(false);
   const isAdmin = rol === 'admin';
 
   // Başka sipariş açılınca not alanını o siparişin notuyla doldur
   useEffect(() => {
     setNot(order?.not || '');
   }, [order?.id]);
+
+  // Siparişin ödeme kayıtlarını izle (gün sonu nakit/kart dağılımı buradan gelir)
+  useEffect(() => {
+    if (!order?.id) {
+      setPays([]);
+      return;
+    }
+    return watchCollection('payments', setPays, where('orderId', '==', order.id));
+  }, [order?.id]);
+
+  // Ödemeler gelince düzenleme taslağını mevcut yöntemlerle doldur
+  useEffect(() => {
+    setPayEdits(Object.fromEntries(pays.map((p) => [p.id, p.yontem])));
+  }, [pays]);
+
+  const payDirty = pays.some((p) => payEdits[p.id] && payEdits[p.id] !== p.yontem);
+
+  const handleSavePayments = async () => {
+    setSavingPay(true);
+    try {
+      const res = await updateOdemeYontemi({
+        orderId: order.id,
+        updates: pays.map((p) => ({
+          paymentId: p.id,
+          yontem: payEdits[p.id] || p.yontem,
+          kartTipi: p.kartTipi,
+        })),
+        kullaniciId: user?.uid,
+        kullaniciAd: profile?.ad || 'Admin',
+      });
+      toast.success(
+        res.degisen > 0
+          ? 'Ödeme yöntemi düzeltildi — gün sonu/raporlar güncellendi'
+          : 'Değişiklik yok',
+      );
+    } catch (err) {
+      console.error(err);
+      toast.error(err?.message || 'Ödeme yöntemi güncellenemedi');
+    } finally {
+      setSavingPay(false);
+    }
+  };
 
   const handleSaveNote = async () => {
     setSavingNote(true);
@@ -415,6 +462,70 @@ function ArchiveDetailModal({ open, order, onClose }) {
               </span>
             </div>
           </div>
+
+          {/* ÖDEME YÖNTEMİ DÜZELTME — kasiyer yanlış girdiyse (nakit ödendi ama kart işaretlendi).
+              payments dokümanı güncellenir → Gün Sonu / Raporlar dağılımı düzelir. Tutar değişmez. */}
+          {pays.length > 0 && (
+            <div className="rounded-lg border border-slate-200">
+              <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
+                <span className="flex items-center gap-1.5 text-xs font-medium uppercase text-slate-500">
+                  <Wallet size={14} /> Ödeme Yöntemi
+                </span>
+                {isAdmin && (
+                  <button
+                    onClick={handleSavePayments}
+                    disabled={!payDirty || savingPay}
+                    className="btn-primary px-2 py-1 text-xs disabled:opacity-40"
+                  >
+                    <Save size={13} /> {savingPay ? 'Kaydediliyor…' : 'Düzeltmeyi Kaydet'}
+                  </button>
+                )}
+              </div>
+              <ul className="divide-y divide-slate-100">
+                {pays.map((p) => (
+                  <li key={p.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                    <span className="font-semibold text-slate-900">{formatTL(p.tutar)}</span>
+                    <div className="flex items-center gap-2">
+                      {p.duzeltme && (
+                        <span
+                          title={`Önce: ${p.duzeltme.oncekiYontem} → ${p.duzeltme.yeniYontem} · ${p.duzeltme.kullaniciAd || '—'}`}
+                          className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
+                        >
+                          düzeltildi
+                        </span>
+                      )}
+                      {isAdmin ? (
+                        <select
+                          value={payEdits[p.id] ?? p.yontem}
+                          onChange={(e) =>
+                            setPayEdits((s) => ({ ...s, [p.id]: e.target.value }))
+                          }
+                          className={`input max-w-[150px] py-1 text-sm ${
+                            payEdits[p.id] && payEdits[p.id] !== p.yontem
+                              ? 'border-amber-400 bg-amber-50 font-medium'
+                              : ''
+                          }`}
+                        >
+                          <option value="nakit">Nakit</option>
+                          <option value="kart">Kart</option>
+                          <option value="yemekKarti">Yemek Kartı</option>
+                        </select>
+                      ) : (
+                        <span className="text-slate-600">{p.yontem}</span>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {isAdmin && (
+                <p className="border-t border-slate-100 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-700">
+                  ℹ️ Yanlış yöntem girildiyse (müşteri nakit ödedi ama kart işaretlendi) buradan
+                  düzelt. <strong>Tutar değişmez</strong>, sadece Gün Sonu ve Raporlardaki
+                  nakit/kart dağılımı düzelir.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Sonradan eklenebilen serbest NOT — özellikle iptal sebebi unutulduysa */}
           <div>

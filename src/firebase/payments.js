@@ -11,6 +11,81 @@ function gunString(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
+// Kasada tahsil edilen (gün sonu nakit/kart dağılımına giren) yöntemler
+export const TAHSIL_YONTEMLERI = ['nakit', 'kart', 'yemekKarti'];
+
+/**
+ * Arşivlenmiş bir siparişin ÖDEME YÖNTEMİNİ düzeltir (kasiyer yanlış girdiyse:
+ * müşteri nakit ödedi ama "kart" işaretlendi gibi).
+ *
+ * `payments` dokümanlarının `yontem` alanını değiştirir → Gün Sonu ve Raporlardaki
+ * nakit/kart/yemek kartı dağılımı düzelir. `archivedOrders.odemeYontemleri` de
+ * senkronlanır (cari/patron/ikram gibi tahsilat-dışı işaretler korunur).
+ *
+ * TUTARLAR DEĞİŞMEZ — sadece yöntem. Ciro etkilenmez, sadece dağılım düzelir.
+ * Her değişiklik `duzeltme` alanında iz bırakır (kim, ne zaman, önceki yöntem).
+ *
+ * @param {{ orderId: string,
+ *           updates: Array<{ paymentId: string, yontem: 'nakit'|'kart'|'yemekKarti', kartTipi?: string }>,
+ *           kullaniciId?: string, kullaniciAd?: string }} params
+ */
+export async function updateOdemeYontemi({ orderId, updates, kullaniciId, kullaniciAd }) {
+  if (!orderId) throw new Error('orderId zorunlu');
+  if (!Array.isArray(updates) || updates.length === 0) throw new Error('Değişiklik yok');
+  for (const u of updates) {
+    if (!u.paymentId) throw new Error('Ödeme kaydı seçilmedi');
+    if (!TAHSIL_YONTEMLERI.includes(u.yontem)) {
+      throw new Error(`Geçersiz ödeme yöntemi: ${u.yontem}`);
+    }
+  }
+
+  return runTransaction(db, async (txn) => {
+    // ---- READS (yazımlardan ÖNCE) ----
+    const pays = [];
+    for (const u of updates) {
+      const ref = doc(db, 'payments', u.paymentId);
+      const snap = await txn.get(ref);
+      if (!snap.exists()) throw new Error('Ödeme kaydı bulunamadı');
+      const data = snap.data();
+      if (data.orderId !== orderId) throw new Error('Ödeme bu siparişe ait değil');
+      pays.push({ u, ref, data });
+    }
+    const archiveRef = doc(db, 'archivedOrders', orderId);
+    const archiveSnap = await txn.get(archiveRef);
+
+    // ---- WRITES ----
+    let degisen = 0;
+    for (const { u, ref, data } of pays) {
+      const onceki = data.yontem;
+      if (onceki === u.yontem) continue; // değişmemiş, dokunma
+      degisen++;
+      txn.update(ref, {
+        yontem: u.yontem,
+        // Kart değilse kart tipi anlamsız → temizle
+        kartTipi: u.yontem === 'kart' ? u.kartTipi || data.kartTipi || null : null,
+        duzeltme: {
+          oncekiYontem: onceki,
+          yeniYontem: u.yontem,
+          kullaniciId: kullaniciId || null,
+          kullaniciAd: kullaniciAd || null,
+          zaman: serverTimestamp(),
+        },
+      });
+    }
+
+    // archivedOrders.odemeYontemleri senkronla — tahsilat-dışı işaretleri (cari/patron/ikram) koru
+    if (archiveSnap.exists()) {
+      const mevcut = archiveSnap.data().odemeYontemleri || [];
+      const tahsilatDisi = mevcut.filter((y) => !TAHSIL_YONTEMLERI.includes(y));
+      txn.update(archiveRef, {
+        odemeYontemleri: [...updates.map((u) => u.yontem), ...tahsilatDisi],
+      });
+    }
+
+    return { degisen };
+  });
+}
+
 /**
  * Ödemeyi kaydeder. Opsiyonel discount uygulanır (kümülatif değil — en büyük 1 indirim).
  *
@@ -69,10 +144,16 @@ export async function recordPayment({
       cariSnaps.push(s);
     }
 
-    // İndirim hesabı: subtotal = araToplam (orijinal)
+    // İndirim hesabı: subtotal = araToplam (orijinal ürün toplamı)
     const subtotal = Number(order.araToplam || order.toplam || 0);
+    // Sipariş OLUŞTURULURKEN gelen indirim — Trendyol/Yemeksepeti kampanya indirimi
+    // (mapPosentegraOrder `indirim`i yazar). Bu hesaba katılmazsa platform siparişi
+    // "Eksik ödeme" hatası verir: ürünler 700 ama önceden ödenen 500 olur.
+    const mevcutIndirim = Number(order.indirim || 0);
+    // Ödeme anında kasiyerin uyguladığı indirim (kampanya/kupon)
     const indirimAmount = discount && discount.amount > 0 ? Number(discount.amount) : 0;
-    const effectiveTotal = Math.max(0, subtotal - indirimAmount);
+    const toplamIndirim = mevcutIndirim + indirimAmount;
+    const effectiveTotal = Math.max(0, subtotal - toplamIndirim);
 
     const totalPaid = payments.reduce((sum, p) => sum + Number(p.tutar || 0), 0);
     if (totalPaid + 0.005 < effectiveTotal) {
@@ -159,7 +240,8 @@ export async function recordPayment({
     // İndirim bilgisini order doc'a yaz
     const orderPatch = {};
     if (indirimAmount > 0) {
-      orderPatch.indirim = indirimAmount;
+      // Platform (Trendyol/YS) indirimini EZME — üstüne ekle
+      orderPatch.indirim = toplamIndirim;
       orderPatch.toplam = effectiveTotal;
       if (discount.type === 'kampanya') {
         orderPatch.kampanyaId = discount.kampanyaId || null;

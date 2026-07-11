@@ -54,6 +54,21 @@ export function playNewPackageSound() {
 }
 
 /**
+ * PLATFORM siparişi (Trendyol / Yemeksepeti / Getir) — EN YÜKSEK ve en ayırt edici alarm.
+ * Bu siparişler kaçırılırsa ceza/iptal riski var; masa siparişinden net ayrılmalı.
+ * Yükselen 3'lü motif × 3 tekrar (siren benzeri), belirgin yüksek ses.
+ */
+export function playPlatformOrderSound() {
+  const G = 0.5; // masa/paket sesinden ~3x yüksek
+  for (let r = 0; r < 3; r++) {
+    const t = r * 700;
+    tone(784, 160, t, 'square', G); // G5
+    tone(1047, 160, t + 160, 'square', G); // C6
+    tone(1319, 300, t + 320, 'square', G); // E6
+  }
+}
+
+/**
  * Garson çağırma — alarm tarzı tekrarlı.
  */
 export function playWaiterCallSound() {
