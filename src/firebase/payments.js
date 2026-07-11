@@ -143,10 +143,16 @@ export async function recordPayment({
       cariSnaps.push(s);
     }
 
-    // İndirim hesabı: subtotal = araToplam (orijinal)
+    // İndirim hesabı: subtotal = araToplam (orijinal ürün toplamı)
     const subtotal = Number(order.araToplam || order.toplam || 0);
+    // Sipariş OLUŞTURULURKEN gelen indirim — Trendyol/Yemeksepeti kampanya indirimi
+    // (mapPosentegraOrder `indirim`i yazar). Bu hesaba katılmazsa platform siparişi
+    // "Eksik ödeme" hatası verir: ürünler 700 ama önceden ödenen 500 olur.
+    const mevcutIndirim = Number(order.indirim || 0);
+    // Ödeme anında kasiyerin uyguladığı indirim (kampanya/kupon)
     const indirimAmount = discount && discount.amount > 0 ? Number(discount.amount) : 0;
-    const effectiveTotal = Math.max(0, subtotal - indirimAmount);
+    const toplamIndirim = mevcutIndirim + indirimAmount;
+    const effectiveTotal = Math.max(0, subtotal - toplamIndirim);
 
     const totalPaid = payments.reduce((sum, p) => sum + Number(p.tutar || 0), 0);
     if (totalPaid + 0.005 < effectiveTotal) {
@@ -229,7 +235,8 @@ export async function recordPayment({
     // İndirim bilgisini order doc'a yaz
     const orderPatch = {};
     if (indirimAmount > 0) {
-      orderPatch.indirim = indirimAmount;
+      // Platform (Trendyol/YS) indirimini EZME — üstüne ekle
+      orderPatch.indirim = toplamIndirim;
       orderPatch.toplam = effectiveTotal;
       if (discount.type === 'kampanya') {
         orderPatch.kampanyaId = discount.kampanyaId || null;

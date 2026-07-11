@@ -613,8 +613,12 @@ export async function cancelActiveOrder({ orderId, sebep, kullaniciId, kullanici
       throw new Error('Bu sipariş zaten iptal edilmiş');
     }
 
-    // Stoğu geri yüklemek için ürünleri oku
-    const productRefs = (order.items || []).map((it) => doc(db, 'products', it.productId));
+    // Stoğu geri yüklemek için ürünleri oku.
+    // NOT: Platform (Trendyol/Yemeksepeti) siparişlerinin kalemlerinde `productId` YOKTUR
+    // (menü eşleşmesi olmadan düz metin gelir). productId'siz kalemleri atla — yoksa
+    // doc(db,'products', undefined) geçersiz referans hatası verir ve iptal hiç çalışmaz.
+    const stokluItems = (order.items || []).filter((it) => it.productId);
+    const productRefs = stokluItems.map((it) => doc(db, 'products', it.productId));
     const productSnaps = await Promise.all(productRefs.map((r) => txn.get(r)));
 
     // Masa kontrolü
@@ -641,7 +645,7 @@ export async function cancelActiveOrder({ orderId, sebep, kullaniciId, kullanici
       if (!snap.exists()) return; // silinmiş ürün, atla
       const data = snap.data();
       if (data.stokTakipli === false) return; // takipsiz ürün
-      const item = order.items[idx];
+      const item = stokluItems[idx];
       const oncekiStok = Number(data.stok || 0);
       const yeniStok = oncekiStok + Number(item.adet || 0);
       txn.update(snap.ref, { stok: yeniStok });

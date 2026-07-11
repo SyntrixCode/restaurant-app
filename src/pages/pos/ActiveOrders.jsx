@@ -18,7 +18,7 @@ import { watchCollection, where, orderBy, patchDoc, serverTimestamp } from '../.
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL, minutesSince, formatAdet } from '../../utils/format';
-import { updateOrderStatus } from '../../firebase/orders';
+import { updateOrderStatus, cancelActiveOrder } from '../../firebase/orders';
 import { recordPayment } from '../../firebase/payments';
 import { awardLoyaltyPoints, computeEarnedPoints } from '../../firebase/customers';
 import { confirmPosentegraOrder, rejectPosentegraOrder, fetchPosentegraReasons } from '../../firebase/posentegra';
@@ -121,6 +121,57 @@ export default function ActiveOrders() {
     } catch (err) {
       console.error(err);
       toast.error(err.message || 'Kabul edilemedi', { id: t });
+    }
+  };
+
+  /**
+   * Paket siparişini İPTAL et (ciroya girmez).
+   * Önce platforma (Posentegra) bildirmeyi dener — eski/kapanmış siparişlerde bu API
+   * hata verir. O durumda kullanıcıya sorup YEREL iptal yapar; böylece sipariş
+   * "Aktif Siparişler"de takılı kalmaz.
+   */
+  const handleIptalPaket = async (order) => {
+    const sebep = prompt('İptal sebebi (zorunlu):', 'Platformda iptal / teslim edilmedi');
+    if (!sebep || !sebep.trim()) return;
+
+    const t = toast.loading('İptal ediliyor…');
+    let platformOk = false;
+    if (order.posentegraPid) {
+      try {
+        await rejectPosentegraOrder(order.id, { reason: '', note: sebep.trim() });
+        platformOk = true;
+      } catch (err) {
+        console.warn('Posentegra iptali başarısız:', err?.message);
+      }
+    }
+
+    if (platformOk) {
+      toast.success('Sipariş iptal edildi (platforma da bildirildi)', { id: t });
+      return; // posentegraReject order'ı zaten 'iptal'e aldı
+    }
+
+    // Platforma ulaşılamadı → yerel iptal teklifi
+    toast.dismiss(t);
+    const yerel = confirm(
+      `${order.paketKaynakAd || 'Platform'} tarafına iptal bildirilemedi ` +
+        `(sipariş eski/kapanmış olabilir).\n\n` +
+        `Yine de sistemden İPTAL edilsin mi?\n` +
+        `• Sipariş listeden düşer\n• Ciroya GİRMEZ\n• Platform tarafı etkilenmez`,
+    );
+    if (!yerel) return;
+
+    const t2 = toast.loading('Yerel olarak iptal ediliyor…');
+    try {
+      await cancelActiveOrder({
+        orderId: order.id,
+        sebep: sebep.trim(),
+        kullaniciId: user?.uid,
+        kullaniciAd: profile?.ad || 'Personel',
+      });
+      toast.success('Sipariş iptal edildi (ciroya girmedi)', { id: t2 });
+    } catch (err) {
+      console.error(err);
+      toast.error(err?.message || 'İptal edilemedi', { id: t2 });
     }
   };
 
@@ -304,6 +355,7 @@ export default function ActiveOrders() {
                       onYolaCikar={() => handleYolaCikar(o)}
                       onAppPaid={() => handleAppPaid(o)}
                       onManuelPay={() => navigate(`/pos/payment?orderId=${o.id}`)}
+                      onIptal={() => handleIptalPaket(o)}
                     />
                   ))}
                 </div>
@@ -516,6 +568,7 @@ function PaketOrderCard({
   onYolaCikar,
   onAppPaid,
   onManuelPay,
+  onIptal,
 }) {
   const mins = minutesSince(order.olusturmaZamani);
   const late = mins > gecikmeEsigi;
@@ -701,6 +754,19 @@ function PaketOrderCard({
           <p className="rounded-lg bg-purple-50 py-2 text-center text-xs font-medium text-purple-700">
             Yolda · ödeme yetkisi yok
           </p>
+        )}
+
+        {/* İPTAL — kabul edilmiş ama teslim edilmeyen/takılı kalan paket siparişleri için.
+            Önce platforma bildirilir; ulaşılamazsa (eski sipariş) yerel iptal önerilir.
+            İptal edilen sipariş CİROYA GİRMEZ. */}
+        {canReject && !needsConfirm && onIptal && (
+          <button
+            onClick={onIptal}
+            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 active:scale-95"
+            title="Siparişi iptal et — ciroya girmez, listeden düşer"
+          >
+            <X size={13} /> İptal Et
+          </button>
         )}
       </div>
     </div>
