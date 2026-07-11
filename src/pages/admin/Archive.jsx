@@ -10,13 +10,19 @@ import {
   StickyNote,
   Save,
   Wallet,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import Modal from '../../components/ui/Modal';
 import { watchCollection, orderBy, patchDoc, where } from '../../firebase/firestore';
-import { cancelArchivedOrder, uncancelArchivedOrder } from '../../firebase/orders';
+import {
+  cancelArchivedOrder,
+  uncancelArchivedOrder,
+  updateArchivedOrderItems,
+} from '../../firebase/orders';
 import { updateOdemeYontemi } from '../../firebase/payments';
 import { useAuthStore } from '../../store/authStore';
 import { exportArchivedOrders } from '../../utils/excelExport';
@@ -289,6 +295,12 @@ function ArchiveDetailModal({ open, order, onClose }) {
   const [not, setNot] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [pays, setPays] = useState([]); // bu siparişin tahsilat kayıtları
+  // ── Ürün düzeltme (yanlış girilen ürünü sil / adet düzelt / unutulanı ekle) ──
+  const [editMode, setEditMode] = useState(false);
+  const [editItems, setEditItems] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [confirmEdit, setConfirmEdit] = useState(false); // ödeme sorusu modalı
+  const [savingEdit, setSavingEdit] = useState(false);
   const [payEdits, setPayEdits] = useState({}); // paymentId -> yontem
   const [savingPay, setSavingPay] = useState(false);
   const isAdmin = rol === 'admin';
@@ -313,6 +325,78 @@ function ArchiveDetailModal({ open, order, onClose }) {
   }, [pays]);
 
   const payDirty = pays.some((p) => payEdits[p.id] && payEdits[p.id] !== p.yontem);
+
+  // Ürün listesi (düzenlemede "ürün ekle" için)
+  useEffect(() => watchCollection('products', setProducts), []);
+
+  // Başka sipariş açılınca düzenleme modunu kapat
+  useEffect(() => {
+    setEditMode(false);
+    setEditItems([]);
+    setConfirmEdit(false);
+  }, [order?.id]);
+
+  const startEdit = () => {
+    setEditItems((order?.items || []).map((it) => ({ ...it })));
+    setEditMode(true);
+  };
+  const cancelEdit = () => {
+    setEditMode(false);
+    setEditItems([]);
+  };
+  const setItemAdet = (idx, val) =>
+    setEditItems((arr) => arr.map((it, i) => (i === idx ? { ...it, adet: val } : it)));
+  const removeItem = (idx) => setEditItems((arr) => arr.filter((_, i) => i !== idx));
+  const addItem = (p) =>
+    setEditItems((arr) => [
+      ...arr,
+      { productId: p.id, ad: p.ad, fiyat: Number(p.fiyat) || 0, adet: 1, notlar: '' },
+    ]);
+
+  const yeniAraToplam = editItems.reduce(
+    (s, it) => s + (Number(it.fiyat) || 0) * (Number(it.adet) || 0),
+    0,
+  );
+  const yeniToplam = Math.max(0, yeniAraToplam - Number(order?.indirim || 0));
+  const fark = yeniToplam - Number(order?.toplam || 0);
+  const itemsDirty =
+    editItems.length !== (order?.items || []).length ||
+    editItems.some((it, i) => Number(it.adet) !== Number(order.items[i]?.adet)) ||
+    fark !== 0;
+
+  /** @param {boolean} odemeyiDuzelt ödeme kayıtları da yeni toplama çekilsin mi */
+  const handleSaveItems = async (odemeyiDuzelt) => {
+    setSavingEdit(true);
+    try {
+      const res = await updateArchivedOrderItems({
+        archivedId: order.id,
+        newItems: editItems.map((it) => ({
+          productId: it.productId,
+          ad: it.ad,
+          fiyat: Number(it.fiyat) || 0,
+          adet: Number(it.adet),
+          notlar: it.notlar || '',
+        })),
+        odemeyiDuzelt,
+        paymentIds: pays.map((p) => p.id),
+        kullaniciId: user?.uid,
+        kullaniciAd: profile?.ad || 'Admin',
+      });
+      toast.success(
+        `Sipariş düzeltildi: ${formatTL(res.eskiToplam)} → ${formatTL(res.yeniToplam)}` +
+          (res.odemeDuzeltildi ? ' · ödeme de güncellendi' : ' · ödemeye dokunulmadı'),
+        { duration: 6000 },
+      );
+      setConfirmEdit(false);
+      setEditMode(false);
+      onClose();
+    } catch (err) {
+      console.error(err);
+      toast.error(err?.message || 'Düzeltme kaydedilemedi');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   const handleSavePayments = async () => {
     setSavingPay(true);
@@ -441,27 +525,153 @@ function ArchiveDetailModal({ open, order, onClose }) {
             <Info label="Ödeme" value={(order.odemeYontemleri || []).join(' + ') || '—'} />
           </div>
           <div className="rounded-lg border border-slate-200">
-            <div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium uppercase text-slate-500">
-              İçerik
+            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
+              <span className="text-xs font-medium uppercase text-slate-500">İçerik</span>
+              {isAdmin && !cancelled && (
+                editMode ? (
+                  <div className="flex gap-1">
+                    <button onClick={cancelEdit} className="btn-ghost px-2 py-1 text-xs">
+                      Vazgeç
+                    </button>
+                    <button
+                      onClick={() => setConfirmEdit(true)}
+                      disabled={!itemsDirty}
+                      className="btn-primary px-2 py-1 text-xs disabled:opacity-40"
+                    >
+                      <Save size={13} /> Düzeltmeyi Kaydet
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={startEdit}
+                    className="btn-ghost px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
+                    title="Yanlış girilen ürünü sil / adedi düzelt / unutulanı ekle"
+                  >
+                    <Pencil size={13} /> Ürünleri Düzenle
+                  </button>
+                )
+              )}
             </div>
-            <ul className="divide-y divide-slate-100">
-              {order.items?.map((it, idx) => (
-                <li key={idx} className="flex justify-between px-3 py-2 text-sm">
-                  <span>
-                    <strong>{formatAdet(it.adet)}×</strong> {it.ad}
-                    {it.notlar && <em className="ml-2 text-xs text-slate-500">({it.notlar})</em>}
+
+            {!editMode ? (
+              <>
+                <ul className="divide-y divide-slate-100">
+                  {order.items?.map((it, idx) => (
+                    <li key={idx} className="flex justify-between px-3 py-2 text-sm">
+                      <span>
+                        <strong>{formatAdet(it.adet)}×</strong> {it.ad}
+                        {it.notlar && <em className="ml-2 text-xs text-slate-500">({it.notlar})</em>}
+                      </span>
+                      <span className="font-semibold">{formatTL(it.fiyat * it.adet)}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="border-t border-slate-200 bg-slate-50 px-3 py-2 text-right">
+                  <span className="text-slate-500">Toplam: </span>
+                  <span className={`text-lg font-bold ${cancelled ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+                    {formatTL(order.toplam)}
                   </span>
-                  <span className="font-semibold">{formatTL(it.fiyat * it.adet)}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="border-t border-slate-200 bg-slate-50 px-3 py-2 text-right">
-              <span className="text-slate-500">Toplam: </span>
-              <span className={`text-lg font-bold ${cancelled ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
-                {formatTL(order.toplam)}
-              </span>
-            </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <ul className="divide-y divide-slate-100">
+                  {editItems.map((it, idx) => (
+                    <li key={idx} className="flex items-center gap-2 px-3 py-2 text-sm">
+                      <span className="flex-1 truncate">
+                        {it.ad}
+                        {it.notlar && <em className="ml-1 text-xs text-slate-500">({it.notlar})</em>}
+                        <span className="ml-1 text-xs text-slate-400">{formatTL(it.fiyat)}/adet</span>
+                      </span>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={it.adet}
+                        onChange={(e) => setItemAdet(idx, e.target.value)}
+                        className="input max-w-[70px] py-1 text-center text-sm"
+                      />
+                      <span className="w-20 shrink-0 text-right font-semibold">
+                        {formatTL((Number(it.fiyat) || 0) * (Number(it.adet) || 0))}
+                      </span>
+                      <button
+                        onClick={() => removeItem(idx)}
+                        title="Bu ürünü siparişten sil"
+                        className="rounded p-1 text-red-500 hover:bg-red-50"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+
+                {/* Ürün ekle */}
+                <div className="border-t border-slate-100 bg-slate-50 px-3 py-2">
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const p = products.find((x) => x.id === e.target.value);
+                      if (p) addItem(p);
+                      e.target.value = '';
+                    }}
+                    className="input py-1 text-sm"
+                  >
+                    <option value="">+ Ürün ekle (unutulan / sonradan servis edilen)…</option>
+                    {[...products]
+                      .filter((p) => p.aktif !== false)
+                      .sort((a, b) => (a.ad || '').localeCompare(b.ad || '', 'tr'))
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.ad} — {formatTL(p.fiyat)}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div className="border-t border-slate-200 bg-slate-50 px-3 py-2 text-right text-sm">
+                  <span className="text-slate-500">Eski: </span>
+                  <span className="text-slate-400 line-through">{formatTL(order.toplam)}</span>
+                  <span className="mx-2 text-slate-400">→</span>
+                  <span className="text-slate-500">Yeni: </span>
+                  <span
+                    className={`text-lg font-bold ${
+                      yeniToplam < Number(order.toplam || 0)
+                        ? 'text-red-600'
+                        : yeniToplam > Number(order.toplam || 0)
+                          ? 'text-emerald-600'
+                          : 'text-slate-900'
+                    }`}
+                  >
+                    {formatTL(yeniToplam)}
+                  </span>
+                  {fark !== 0 && (
+                    <span className={`ml-2 text-xs font-medium ${fark < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                      ({fark > 0 ? '+' : ''}
+                      {formatTL(fark)})
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
           </div>
+
+          {/* Önceki düzeltmeler (denetim izi) */}
+          {(order.duzeltmeler || []).length > 0 && (
+            <details className="rounded-lg border border-amber-200 bg-amber-50">
+              <summary className="cursor-pointer px-3 py-1.5 text-xs font-medium text-amber-800">
+                ✎ Bu fişte {order.duzeltmeler.length} düzeltme yapılmış
+              </summary>
+              <ul className="space-y-1 px-3 pb-2 text-[11px] text-amber-700">
+                {order.duzeltmeler.map((d, i) => (
+                  <li key={i}>
+                    {formatDate(d.zaman, 'dd.MM HH:mm')} · <strong>{d.kullaniciAd}</strong> ·{' '}
+                    {formatTL(d.oncekiToplam)} → {formatTL(d.yeniToplam)} ·{' '}
+                    {d.odemeDuzeltildi ? 'ödeme de düzeltildi' : 'ödemeye dokunulmadı'}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
 
           {/* ÖDEME YÖNTEMİ DÜZELTME — kasiyer yanlış girdiyse (nakit ödendi ama kart işaretlendi).
               payments dokümanı güncellenir → Gün Sonu / Raporlar dağılımı düzelir. Tutar değişmez. */}
@@ -570,6 +780,81 @@ function ArchiveDetailModal({ open, order, onClose }) {
         submitting={submitting}
         orderTotal={order.toplam}
       />
+
+      {/* Düzeltmeyi kaydederken: ödeme kaydı da düzeltilsin mi? */}
+      <Modal
+        open={confirmEdit}
+        onClose={() => setConfirmEdit(false)}
+        title="Düzeltmeyi Kaydet — Ödeme ne olacak?"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg bg-slate-50 p-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-slate-500">Eski toplam</span>
+              <span className="font-medium text-slate-500 line-through">{formatTL(order.toplam)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-700">Yeni toplam</span>
+              <span className="text-lg font-bold text-slate-900">{formatTL(yeniToplam)}</span>
+            </div>
+            <div className="mt-1 flex justify-between border-t border-slate-200 pt-1">
+              <span className="font-medium text-slate-700">Fark</span>
+              <span className={`font-bold ${fark < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                {fark > 0 ? '+' : ''}
+                {formatTL(fark)}
+              </span>
+            </div>
+          </div>
+
+          <p className="text-sm text-slate-600">
+            Tahsil edilen tutar şu an <strong>{formatTL(pays.reduce((s, p) => s + (p.tutar || 0), 0))}</strong>.
+            Ödeme kaydı da yeni toplama çekilsin mi?
+          </p>
+
+          <div className="space-y-2">
+            <button
+              onClick={() => handleSaveItems(true)}
+              disabled={savingEdit}
+              className="w-full rounded-lg border-2 border-emerald-500 bg-emerald-50 p-3 text-left transition hover:bg-emerald-100 disabled:opacity-50"
+            >
+              <p className="font-semibold text-emerald-800">
+                ✅ Ödemeden de düşülsün ({formatTL(yeniToplam)} olsun)
+              </p>
+              <p className="mt-0.5 text-xs text-emerald-700">
+                Para {fark < 0 ? 'iade edildi / hiç alınmadı' : 'ek olarak tahsil edildi'}. Gün sonu ve
+                kasa <strong>tutar</strong>. (Genelde doğru olan bu)
+              </p>
+            </button>
+
+            <button
+              onClick={() => handleSaveItems(false)}
+              disabled={savingEdit}
+              className="w-full rounded-lg border-2 border-slate-300 bg-white p-3 text-left transition hover:bg-slate-50 disabled:opacity-50"
+            >
+              <p className="font-semibold text-slate-800">Ödemeye dokunma</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Müşteri zaten doğru parayı ödemişti, sadece ürün listesi yanlıştı.{' '}
+                <strong className="text-amber-700">⚠️ Ciro ile tahsilat arasında fark oluşur.</strong>
+              </p>
+            </button>
+          </div>
+
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            ℹ️ Her iki durumda da: silinen/azalan ürünlerin <strong>stoğu geri verilir</strong>
+            (reçete malzemeleri dahil), eklenenlerin stoğu düşer. İşlem <strong>iz bırakır</strong>
+            (kim, ne zaman, ne değişti).
+          </p>
+
+          <button
+            onClick={() => setConfirmEdit(false)}
+            disabled={savingEdit}
+            className="btn-secondary w-full"
+          >
+            Vazgeç
+          </button>
+        </div>
+      </Modal>
     </>
   );
 }

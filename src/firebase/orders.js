@@ -9,6 +9,10 @@ import { db } from './config';
 import { toBaseQty } from '../utils/units';
 import { isTestAccount } from '../utils/testAccount';
 
+function gunString(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 export async function createOrder({
   masaId,
   masaAd,
@@ -767,6 +771,220 @@ export async function cancelArchivedOrder({ archivedId, sebep, kullaniciId, kull
 /**
  * İptal kararını geri al (yanlışlıkla iptal edilmişse).
  */
+/**
+ * ARŞİVLENMİŞ (tamamlanmış) siparişin ÜRÜNLERİNİ düzeltir — yanlış girilen ürünü sil,
+ * adedi düzelt veya unutulan ürünü ekle.
+ *
+ * Yaptıkları (tek transaction):
+ *  1. archivedOrders.items + araToplam + toplam güncellenir → CİRO değişir
+ *  2. Stok geri verilir / düşülür: ürün stoğu + REÇETE malzemeleri (createOrder'ın
+ *     düştüğü her şey geri gelir) + izlenebilirlik için stockMovements kaydı
+ *  3. odemeyiDuzelt=true ise `payments` dokümanları yeni toplama göre oranlanır →
+ *     Gün Sonu / kasa tutar. false ise ödemeye DOKUNULMAZ (ciro ile tahsilat arasında
+ *     fark oluşur — çağıran bunu bilerek seçer).
+ *  4. archivedOrders.duzeltmeler[] alanına denetim izi yazılır (kim, ne zaman, ne değişti)
+ *
+ * NOT: Firestore transaction'ında sorgu yapılamaz — bu yüzden siparişin ödeme
+ * doküman id'leri (paymentIds) çağıran tarafından verilmelidir.
+ *
+ * @param {{ archivedId: string,
+ *           newItems: Array<{productId, ad, fiyat, adet, notlar?}>,
+ *           odemeyiDuzelt: boolean,
+ *           paymentIds?: string[],
+ *           kullaniciId?: string, kullaniciAd?: string }} params
+ */
+export async function updateArchivedOrderItems({
+  archivedId,
+  newItems,
+  odemeyiDuzelt = true,
+  paymentIds = [],
+  kullaniciId,
+  kullaniciAd,
+}) {
+  if (!archivedId) throw new Error('archivedId gerekli');
+  if (!Array.isArray(newItems) || newItems.length === 0) {
+    throw new Error('Sipariş boş olamaz — tümünü silmek için "Fişi İptal Et" kullanın');
+  }
+  for (const it of newItems) {
+    if (!(Number(it.adet) > 0)) throw new Error(`Geçersiz adet: ${it.ad || '?'}`);
+  }
+
+  const archiveRef = doc(db, 'archivedOrders', archivedId);
+
+  return runTransaction(db, async (txn) => {
+    // ═══ READS (tüm yazımlardan ÖNCE) ═══
+    const archSnap = await txn.get(archiveRef);
+    if (!archSnap.exists()) throw new Error('Arşiv siparişi bulunamadı');
+    const arch = archSnap.data();
+    if (arch.iptal?.edildi) throw new Error('İptal edilmiş fiş düzenlenemez');
+
+    const oldItems = arch.items || [];
+
+    // Ürün bazında net adet farkı: (eski - yeni)
+    //   pozitif → o kadar geri verilecek (silindi/azaldı)
+    //   negatif → o kadar düşülecek (eklendi/arttı)
+    const delta = {};
+    for (const it of oldItems) {
+      if (!it.productId) continue;
+      delta[it.productId] = (delta[it.productId] || 0) + Number(it.adet || 0);
+    }
+    for (const it of newItems) {
+      if (!it.productId) continue;
+      delta[it.productId] = (delta[it.productId] || 0) - Number(it.adet || 0);
+    }
+    const changedIds = Object.keys(delta).filter((pid) => delta[pid] !== 0);
+
+    // Ürünler + reçeteler
+    const prodRefs = changedIds.map((pid) => doc(db, 'products', pid));
+    const prodSnaps = await Promise.all(prodRefs.map((r) => txn.get(r)));
+    const recipeSnaps = await Promise.all(
+      changedIds.map((pid) => txn.get(doc(db, 'recipes', pid))),
+    );
+
+    // Reçetelerden etkilenen malzemeler
+    const ingDelta = {}; // ingredientId → ana birim cinsinden fark (+geri ver / -düş)
+    recipeSnaps.forEach((rs, i) => {
+      if (!rs.exists()) return;
+      const d = delta[changedIds[i]];
+      (rs.data().items || []).forEach((r) => {
+        if (!r.ingredientId) return;
+        ingDelta[r.ingredientId] = ingDelta[r.ingredientId] || { lines: [], toplam: 0 };
+        ingDelta[r.ingredientId].lines.push({ miktar: r.miktar, birim: r.birim, adetFarki: d });
+      });
+    });
+    const ingIds = Object.keys(ingDelta);
+    const ingRefs = ingIds.map((id) => doc(db, 'ingredients', id));
+    const ingSnaps = await Promise.all(ingRefs.map((r) => txn.get(r)));
+
+    // Ödemeler (id'ler dışarıdan geldi — transaction'da sorgu yapılamaz)
+    const paySnaps = [];
+    if (odemeyiDuzelt && paymentIds.length > 0) {
+      for (const pid of paymentIds) {
+        const s = await txn.get(doc(db, 'payments', pid));
+        if (s.exists() && s.data().orderId === archivedId) paySnaps.push(s);
+      }
+    }
+
+    // ═══ HESAP ═══
+    const yeniAraToplam =
+      Math.round(newItems.reduce((s, it) => s + Number(it.fiyat || 0) * Number(it.adet || 0), 0) * 100) / 100;
+    const indirim = Number(arch.indirim || 0);
+    const yeniToplam = Math.max(0, Math.round((yeniAraToplam - indirim) * 100) / 100);
+    const eskiToplam = Number(arch.toplam || 0);
+
+    // Stok yeterlilik (ürün EKLENİYORSA stok düşecek)
+    prodSnaps.forEach((snap, i) => {
+      if (!snap.exists()) return;
+      const d = snap.data();
+      if (d.stokTakipli === false) return;
+      const df = delta[changedIds[i]];
+      if (df < 0 && Number(d.stok || 0) < -df) {
+        throw new Error(`Yetersiz stok: ${d.ad} (gereken ${-df}, mevcut ${d.stok})`);
+      }
+    });
+    ingSnaps.forEach((snap, i) => {
+      if (!snap.exists()) return;
+      const base = snap.data().birim;
+      let fark = 0;
+      for (const l of ingDelta[ingIds[i]].lines) {
+        fark += toBaseQty(l.miktar || 0, l.birim, base) * l.adetFarki;
+      }
+      ingDelta[ingIds[i]].toplam = fark;
+      if (fark < 0 && Number(snap.data().stok || 0) < -fark) {
+        throw new Error(`Malzeme yetersiz: ${snap.data().ad} (gereken ${-fark})`);
+      }
+    });
+
+    // ═══ WRITES ═══
+    const gun = arch.gun || gunString();
+
+    // 1) Ürün stokları + hareket izi
+    prodSnaps.forEach((snap, i) => {
+      if (!snap.exists()) return;
+      const d = snap.data();
+      if (d.stokTakipli === false) return;
+      const df = delta[changedIds[i]];
+      const onceki = Number(d.stok || 0);
+      const yeni = onceki + df;
+      txn.update(snap.ref, { stok: yeni, updatedAt: serverTimestamp() });
+      txn.set(doc(collection(db, 'stockMovements')), {
+        productId: changedIds[i],
+        productAd: d.ad,
+        tip: df > 0 ? 'giris' : 'cikis',
+        miktar: Math.abs(df),
+        oncekiStok: onceki,
+        yeniStok: yeni,
+        kaynak: 'sayim',
+        ilgiliId: archivedId,
+        kullaniciId: kullaniciId || null,
+        kullaniciAd: kullaniciAd || null,
+        zaman: serverTimestamp(),
+        aciklama: 'Arşiv siparişi düzeltmesi',
+      });
+    });
+
+    // 2) Reçete malzemeleri
+    ingSnaps.forEach((snap, i) => {
+      if (!snap.exists()) return;
+      const fark = ingDelta[ingIds[i]].toplam;
+      if (!fark) return;
+      const onceki = Number(snap.data().stok || 0);
+      txn.update(snap.ref, { stok: onceki + fark, updatedAt: serverTimestamp() });
+    });
+
+    // 3) Ödemeleri yeni toplama oranla (gün sonu/kasa tutsun)
+    let odemeDuzeltildi = false;
+    if (odemeyiDuzelt && paySnaps.length > 0) {
+      const odenen = paySnaps.reduce((s, p) => s + Number(p.data().tutar || 0), 0);
+      if (odenen > 0) {
+        let kalan = yeniToplam;
+        paySnaps.forEach((p, idx) => {
+          const pay = Number(p.data().tutar || 0);
+          // Son satır kalanı alsın → yuvarlama farkı oluşmasın, toplam birebir tutsun
+          const yeniTutar =
+            idx === paySnaps.length - 1
+              ? Math.round(kalan * 100) / 100
+              : Math.round(((pay / odenen) * yeniToplam) * 100) / 100;
+          kalan = Math.round((kalan - yeniTutar) * 100) / 100;
+          txn.update(p.ref, {
+            tutar: yeniTutar,
+            duzeltme: {
+              oncekiTutar: pay,
+              yeniTutar,
+              sebep: 'Arşiv siparişi ürün düzeltmesi',
+              kullaniciId: kullaniciId || null,
+              kullaniciAd: kullaniciAd || null,
+              zaman: serverTimestamp(),
+            },
+          });
+        });
+        odemeDuzeltildi = true;
+      }
+    }
+
+    // 4) Arşiv dokümanı + denetim izi
+    const iz = {
+      zaman: new Date(), // serverTimestamp() dizi içinde kullanılamaz
+      kullaniciId: kullaniciId || null,
+      kullaniciAd: kullaniciAd || 'Bilinmiyor',
+      oncekiToplam: eskiToplam,
+      yeniToplam,
+      oncekiUrunSayisi: oldItems.length,
+      yeniUrunSayisi: newItems.length,
+      odemeDuzeltildi,
+    };
+    txn.update(archiveRef, {
+      items: newItems,
+      araToplam: yeniAraToplam,
+      toplam: yeniToplam,
+      duzeltmeler: [...(arch.duzeltmeler || []), iz],
+      sonDuzeltmeZamani: serverTimestamp(),
+    });
+
+    return { yeniToplam, eskiToplam, odemeDuzeltildi, gun };
+  });
+}
+
 export async function uncancelArchivedOrder(archivedId) {
   if (!archivedId) throw new Error('archivedId gerekli');
   const ref = doc(db, 'archivedOrders', archivedId);
