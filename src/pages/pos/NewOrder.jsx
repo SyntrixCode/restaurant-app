@@ -22,6 +22,9 @@ export default function NewOrder() {
   const isPaket = params.get('paket') === '1';
   // Paket, bir masanın "Kaç kişi?" modalından açıldıysa o masa etiketi taşınır (ekranda gösterilir).
   const masaEtiket = params.get('masa') || '';
+  // Paket-kalem modu: masadan "Paket Sipariş" ile açıldı → eklenen kalemler O MASANIN
+  // siparişine "paket" (paket servis/pakete gidecek) olarak eklenir; ayrı sipariş oluşmaz.
+  const paketKalem = params.get('paketKalem') === '1';
   const { user, profile, rol, logout } = useAuthStore();
   const { masaAd, items, start, addItem, changeQuantity, toggleHalf, removeItem, setNote, clear, total } =
     useCartStore();
@@ -193,6 +196,7 @@ export default function NewOrder() {
         ad: it.ad,
         adet: it.adet,
         notlar: it.notlar,
+        paket: paketKalem,
         // Mutfak yazıcı yönlendirmesi (anlık fiş kategoriye/ürüne göre bölünsün)
         categoryId: it.categoryId || null,
         yaziciIds: Array.isArray(it.yaziciIds) ? it.yaziciIds : [],
@@ -256,6 +260,7 @@ export default function NewOrder() {
               adet: it.adet,
               notlar: it.notlar,
               opsiyonProductIds: it.opsiyonProductIds || [],
+              paket: paketKalem,
             })),
           });
           addedCount = result.added;
@@ -325,6 +330,7 @@ export default function NewOrder() {
             adet: it.adet,
             notlar: it.notlar,
             opsiyonProductIds: it.opsiyonProductIds || [],
+            paket: paketKalem,
           })),
         });
         toast.success(
@@ -485,6 +491,12 @@ export default function NewOrder() {
           </div>
         </div>
 
+        {paketKalem && (
+          <div className="border-b border-emerald-200 bg-emerald-50 px-5 py-2 text-center text-sm font-semibold text-emerald-800">
+            🛍 Paket kalemi modu — eklenenler <span className="uppercase">paket</span> işaretli olarak masanın hesabına yazılır
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto p-3">
           {/* Mevcut sipariş — düzenlenebilir */}
           {existingOrder?.items?.length > 0 && (
@@ -524,6 +536,11 @@ export default function NewOrder() {
                             }`}
                           >
                             {it.ad}
+                            {it.paket && (
+                              <span className="ml-1.5 rounded bg-emerald-100 px-1 py-0.5 text-[9px] font-bold uppercase text-emerald-700">
+                                Paket
+                              </span>
+                            )}
                           </p>
                           <p className="mt-0.5 text-xs text-slate-500">
                             {formatTL(it.fiyat)} / adet

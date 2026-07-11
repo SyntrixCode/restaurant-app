@@ -224,9 +224,13 @@ export default function KitchenTicket({
   };
   const isPaket = !!order?.paketMi;
   const paketKaynakAd = order?.paketKaynakAd || '';
-  // Masadan açılan paket masaAd'ı "Masa 6 · Paket" → başlıkta "PAKET - MASA 6"
+  // Masaya paket: ek sipariş ama eklenen kalemlerin hepsi paket → PAKET stili
+  const paketEk = isAddendum && Array.isArray(items) && items.length > 0 && items.every((it) => it?.paket);
+  const paketMode = isPaket || paketEk;
   let paketMasaRef = '';
-  if (isPaket && !paketKaynakAd && typeof order?.masaAd === 'string' && order.masaAd.endsWith(' · Paket')) {
+  if (paketEk) {
+    paketMasaRef = String(order?.masaAd || '').trim(); // "Masa 6"
+  } else if (isPaket && !paketKaynakAd && typeof order?.masaAd === 'string' && order.masaAd.endsWith(' · Paket')) {
     paketMasaRef = order.masaAd.slice(0, order.masaAd.length - ' · Paket'.length).trim();
   }
   const paketBaslik = paketKaynakAd
@@ -235,13 +239,13 @@ export default function KitchenTicket({
       ? `PAKET - ${paketMasaRef.toLocaleUpperCase('tr-TR')}`
       : 'PAKET';
   const heading = isCancellation
-    ? '*** SİPARİŞ İPTAL ***'
+    ? '!!! SİPARİŞ İPTAL !!!'
     : isCorrection
       ? '🔄 SİPARİŞ DÜZELTME'
-      : isAddendum
-        ? '*** EK SİPARİŞ ***'
-        : isPaket
-          ? paketBaslik
+      : paketMode
+        ? paketBaslik
+        : isAddendum
+          ? '!!! EK SİPARİŞ !!!'
           : 'YENİ SİPARİŞ';
   const shortId =
     typeof order.id === 'string' ? order.id.slice(0, 8).toUpperCase() : '';
@@ -255,10 +259,10 @@ export default function KitchenTicket({
               ? '❌ İptal Fişi'
               : isCorrection
                 ? '🔄 Düzeltme Fişi'
-                : isAddendum
-                  ? 'Ek Sipariş Fişi'
-                  : isPaket
-                    ? 'Paket Fişi'
+                : paketMode
+                  ? 'Paket Fişi'
+                  : isAddendum
+                    ? 'Ek Sipariş Fişi'
                     : 'Mutfak Fişi'}
             {nativeAvailable && (
               <span className="ml-2 text-xs font-normal text-emerald-600">
@@ -317,22 +321,16 @@ export default function KitchenTicket({
             )}
           </div>
 
-          {/* Dine-in: eski Mutfak/Bar satırının yerine BÜYÜK masa + numarası */}
-          {!isPaket && (
+          {/* Dine-in: BÜYÜK masa + numarası (paket modunda masa zaten başlıkta) */}
+          {!paketMode && (
             <div className="mb-3 text-center text-3xl font-extrabold tracking-wider">
               {(order.masaAd || 'Paket').toLocaleUpperCase('tr-TR')}
             </div>
           )}
 
           <div className="mb-2 border-t border-dashed border-slate-400 pt-2 text-base">
-            {!isPaket ? (
+            {!paketMode ? (
               <>
-                {order.kisiSayisi != null && (
-                  <div className="flex justify-between">
-                    <span>Kişi:</span>
-                    <span>{order.kisiSayisi}</span>
-                  </div>
-                )}
                 <div className="flex justify-between">
                   <span>Garson:</span>
                   <span>{order.garsonAd}</span>
@@ -385,6 +383,11 @@ export default function KitchenTicket({
               <div key={idx} className="mb-1.5">
                 <div className={`text-base font-bold ${isCorrection ? 'text-emerald-700' : ''}`}>
                   {isCorrection ? '+ ' : ''}{formatAdet(it.adet)}× {it.ad}
+                  {it.paket && !paketMode && (
+                    <span className="ml-1 rounded bg-emerald-100 px-1 text-xs font-bold uppercase text-emerald-700">
+                      Paket
+                    </span>
+                  )}
                 </div>
                 {it.notlar && (
                   <div className="pl-4 text-xs italic text-slate-600">

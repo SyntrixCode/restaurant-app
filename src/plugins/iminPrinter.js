@@ -75,13 +75,19 @@ export function buildKitchenTicketLines({
   cancellationReason = '',
 }) {
   const lines = [];
-  // Başlık: yeni sipariş / ek / iptal / paket. Paket ise "PAKET"
-  // (online: "PAKET - <platform>", masadan açıldıysa: "PAKET - MASA 6").
+  // Başlık: yeni sipariş / ek / iptal / paket.
+  //  - Paket sipariş (order.paketMi) → "PAKET" (online: "PAKET - <platform>")
+  //  - Masaya paket (ek sipariş ama eklenen kalemlerin HEPSİ paket) → "PAKET - MASA 6"
   const isPaket = !!order?.paketMi;
   const paketKaynakAd = order?.paketKaynakAd || '';
-  // Masadan açılan paket masaAd'ı "Masa 6 · Paket" formatındadır → masa etiketini ayıkla.
+  const paketEk = isAddendum && Array.isArray(items) && items.length > 0 && items.every((it) => it?.paket);
+  const paketMode = isPaket || paketEk;
+
+  // Masa/müşteri etiketi (başlıkta "PAKET - MASA 6" / "PAKET - <platform>" için)
   let paketMasaRef = '';
-  if (isPaket && !paketKaynakAd && typeof order?.masaAd === 'string' && order.masaAd.endsWith(' · Paket')) {
+  if (paketEk) {
+    paketMasaRef = String(order?.masaAd || '').trim(); // "Masa 6"
+  } else if (isPaket && !paketKaynakAd && typeof order?.masaAd === 'string' && order.masaAd.endsWith(' · Paket')) {
     paketMasaRef = order.masaAd.slice(0, order.masaAd.length - ' · Paket'.length).trim();
   }
   const paketBaslik = paketKaynakAd
@@ -90,11 +96,11 @@ export function buildKitchenTicketLines({
       ? `PAKET - ${paketMasaRef.toLocaleUpperCase('tr-TR')}`
       : 'PAKET';
   const heading = isCancellation
-    ? '*** SİPARİŞ İPTAL ***'
-    : isAddendum
-      ? '*** EK SİPARİŞ ***'
-      : isPaket
-        ? paketBaslik
+    ? '!!! SİPARİŞ İPTAL !!!'
+    : paketMode
+      ? paketBaslik
+      : isAddendum
+        ? '!!! EK SİPARİŞ !!!'
         : 'YENİ SİPARİŞ';
   lines.push({
     type: 'text',
@@ -104,10 +110,8 @@ export function buildKitchenTicketLines({
     bold: true,
   });
 
-  // Dine-in: eski » MUTFAK «/» BAR « satırının yerine BÜYÜK masa + numarası.
-  // (Kalemler hâlâ kategoriye göre mutfak/bar yazıcısına bölünür; fişin geldiği
-  //  fiziksel yazıcı zaten istasyonu belli eder.)
-  if (!isPaket) {
+  // Dine-in: BÜYÜK masa + numarası (paket modunda masa zaten başlıkta).
+  if (!paketMode) {
     lines.push({
       type: 'text',
       text: String(order.masaAd || 'Paket').toLocaleUpperCase('tr-TR'),
@@ -121,13 +125,10 @@ export function buildKitchenTicketLines({
   }
   lines.push({ type: 'divider' });
 
-  // Meta blok — yazılar büyütüldü. Masa artık üstteki büyük satırda.
-  if (!isPaket) {
-    if (order.kisiSayisi != null) lines.push({ type: 'text', text: `Kişi: ${order.kisiSayisi}`, size: 32 });
+  // Meta blok. Dine-in → Garson; paket → sadece Saat (Paket Servis'te müşteri ref korunur).
+  if (!paketMode) {
     lines.push({ type: 'text', text: `Garson: ${order.garsonAd || '-'}`, size: 32 });
   } else if (order.masaAd && order.masaAd !== 'Paket' && !paketMasaRef && !paketKaynakAd) {
-    // Paket (Paket Servis): müşteri referansı (ör. "Paket - Ahmet") korunur.
-    // Masadan açılan paket ve online paketlerde referans zaten başlıkta olduğu için tekrar yazılmaz.
     lines.push({ type: 'text', text: order.masaAd, size: 32 });
   }
   const now = new Date();
@@ -138,7 +139,8 @@ export function buildKitchenTicketLines({
 
   for (const it of items || []) {
     const adet = it.adet % 1 === 0 ? String(it.adet) : it.adet.toFixed(1).replace('.', ',');
-    lines.push({ type: 'text', text: `${adet}x ${it.ad}`, size: 32, bold: true });
+    // Paket modunda başlık zaten PAKET diyor → kalemde tekrar [PAKET] yazma.
+    lines.push({ type: 'text', text: `${adet}x ${it.ad}${it.paket && !paketMode ? ' [PAKET]' : ''}`, size: 32, bold: true });
     if (it.notlar) {
       lines.push({ type: 'text', text: `   (${it.notlar})`, size: 24, italic: true });
     }

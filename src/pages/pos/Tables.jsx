@@ -892,10 +892,11 @@ export default function PosTables() {
             defaultKisi: k.defaultKisi,
           });
         }}
-        onPaket={() => {
-          const masa = kisiPrompt?.masaAd || '';
+        onPaket={(kisi) => {
+          const masaId = kisiPrompt?.masaId;
           setKisiPrompt(null);
-          navigate(`/pos/order/new?paket=1&masa=${encodeURIComponent(masa)}`);
+          // Boş masadan paket: masanın siparişini paket-kalem modunda aç (masa açılır, kalemler PAKET işaretli)
+          navigate(`/pos/order/new?masaId=${masaId}&kisi=${kisi || 1}&paketKalem=1`);
         }}
       />
 
@@ -1170,7 +1171,7 @@ function KisiSayisiModal({ open, masaAd, defaultKisi, groupId, onClose, onConfir
             {onPaket && (
               <button
                 type="button"
-                onClick={onPaket}
+                onClick={() => onPaket(kisi)}
                 className="inline-flex items-center justify-center gap-1.5 rounded-lg border-2 border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 active:scale-95"
               >
                 <Truck size={16} /> Paket Sipariş
@@ -1526,6 +1527,11 @@ function FullTableModal({ open, onClose, table, tables = [], rol, navigate, onDi
                 <li key={idx} className="flex justify-between px-3 py-2 text-sm">
                   <span>
                     <strong>{formatAdet(it.adet)}×</strong> {it.ad}
+                    {it.paket && (
+                      <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-700">
+                        Paket
+                      </span>
+                    )}
                     {it.notlar && <em className="ml-2 text-xs text-slate-500">({it.notlar})</em>}
                   </span>
                   <span className="font-semibold">{formatTL(it.fiyat * it.adet)}</span>
@@ -1571,11 +1577,12 @@ function FullTableModal({ open, onClose, table, tables = [], rol, navigate, onDi
             </button>
           )}
 
-          {/* Paket Sipariş — bu masadan ayrı bir paket siparişi başlat (masayı meşgul etmez) */}
+          {/* Paket Sipariş — bu MASANIN siparişine "paket" kalemi ekler (ayrı sipariş oluşmaz;
+              mutfak paketlesin diye işaretli, hesapta PAKET rozetiyle görünür) */}
           <button
             onClick={() => {
               onClose();
-              navigate(`/pos/order/new?paket=1&masa=${encodeURIComponent(table.ad || '')}`);
+              navigate(`/pos/order/new?masaId=${order.masaId}&orderId=${order.id}&paketKalem=1`);
             }}
             className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
           >

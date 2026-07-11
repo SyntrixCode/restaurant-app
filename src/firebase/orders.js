@@ -105,6 +105,9 @@ export async function createOrder({
         categoryId: data.categoryId || null, // yazıcı yönlendirmesi (mutfak/bar) için
         yaziciIds: Array.isArray(data.yaziciIds) ? data.yaziciIds : [], // ürün-bazlı çoklu yazıcı
         opsiyonProductIds: Array.isArray(it.opsiyonProductIds) ? it.opsiyonProductIds : [],
+        // Paket kalemi mi? Masadan "Paket Sipariş" ile eklendiyse true → mutfak paketlesin,
+        // hesapta "PAKET" rozetiyle görünsün (ayrı paket siparişi OLUŞMAZ).
+        paket: !!it.paket,
         eklenmeZamani: new Date(),
       };
     });
@@ -277,6 +280,9 @@ export async function addItemsToOrder({ orderId, garsonId, newItems }) {
         categoryId: data.categoryId || null,
         yaziciIds: Array.isArray(data.yaziciIds) ? data.yaziciIds : [], // ürün-bazlı çoklu yazıcı
         opsiyonProductIds: Array.isArray(it.opsiyonProductIds) ? it.opsiyonProductIds : [],
+        // Paket kalemi mi? Masadan "Paket Sipariş" ile eklendiyse true → mutfak paketlesin,
+        // hesapta "PAKET" rozetiyle görünsün (ayrı paket siparişi OLUŞMAZ).
+        paket: !!it.paket,
         eklenmeZamani: new Date(),
       };
     });
