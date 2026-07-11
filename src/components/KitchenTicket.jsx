@@ -31,6 +31,9 @@ export default function KitchenTicket({
   const [printing, setPrinting] = useState(false);
   const [networkPrinters, setNetworkPrinters] = useState([]);
   const [categories, setCategories] = useState([]);
+  // Platform (Trendyol/Yemeksepeti) kalemlerinde categoryId/yaziciIds YOKTUR —
+  // ürün adından eşleştirip doğru istasyona (fırın/ızgara/bar) yönlendirmek için gerekli.
+  const [products, setProducts] = useState([]);
 
   useEffect(() => {
     const handleEsc = (e) => {
@@ -40,15 +43,17 @@ export default function KitchenTicket({
     return () => document.removeEventListener('keydown', handleEsc);
   }, [open, onClose]);
 
-  // Aktif ağ yazıcıları + kategoriler (yazıcı yönlendirmesi için)
+  // Aktif ağ yazıcıları + kategoriler + ürünler (yazıcı yönlendirmesi için)
   useEffect(() => watchCollection('printers', setNetworkPrinters), []);
   useEffect(() => watchCollection('categories', setCategories), []);
+  useEffect(() => watchCollection('products', setProducts), []);
   // Eklenen kalemleri + düzeltme farkını (silinen/azalan) hedef yazıcılara göre
   // grupla. Böylece bir ürün çıkarılınca/azaltılınca o istasyona düzeltme fişi basılır.
   const ticketGroups = groupTicketByPrinter(
     { items: items || [], removed: correctionDiff?.removed || [], changed: correctionDiff?.changed || [] },
     categories,
     networkPrinters,
+    products,
   );
   const hasNetworkPrinter = ticketGroups.length > 0;
 
