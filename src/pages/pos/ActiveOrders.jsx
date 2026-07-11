@@ -36,21 +36,20 @@ const KAYNAK_LABELS = {
   migros: 'Migros',
 };
 
-// Paket siparişleri kaynak tipine göre gruplanır. Platform siparişleri kendi başlıkları
-// altında, geri kalan her şey (Paket Servis / manuel / telefon) "Dış Paket" altında toplanır.
-const PAKET_GRUP_INDEX = { trendyol: 1, yemeksepeti: 2, getir: 3, migros: 4 };
+// Paket siparişleri iki gruba ayrılır:
+//  - "Online Paketler": platform (Getir/Yemeksepeti/Trendyol/Migros) veya Posentegra siparişleri
+//  - "Dış Paket": Paket Servis ekranından girilen manuel / telefon siparişleri
 const PAKET_GRUP_TANIMI = [
   { key: 'dis', baslik: 'Dış Paket' },
-  { key: 'trendyol', baslik: 'Trendyol' },
-  { key: 'yemeksepeti', baslik: 'Yemeksepeti' },
-  { key: 'getir', baslik: 'Getir' },
-  { key: 'migros', baslik: 'Migros' },
+  { key: 'online', baslik: 'Online Paketler' },
 ];
+const paketOnlineMi = (o) => APP_KAYNAKLAR.includes(o.paketKaynak) || !!o.posentegraPid;
 
 export default function ActiveOrders() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [, setTick] = useState(0); // canlı süre güncellemesi için
+  const [aktifTab, setAktifTab] = useState('dis'); // seçili paket kategorisi
   const { user, profile, rol } = useAuthStore();
   const { settings } = useSettingsStore();
   const gecikmeEsigi = settings.gecikmeEsigiDk || 15;
@@ -82,9 +81,12 @@ export default function ActiveOrders() {
   const paketOrders = visible.filter((o) => o.paketMi);
   const isKurye = rol === 'kurye';
 
-  // Paket siparişlerini tipe göre gruplara böl — boş gruplar render'da atlanır
+  // Paket siparişlerini tipe göre gruplara böl — boş gruplar sekmelerde/listede atlanır
   const paketGruplari = PAKET_GRUP_TANIMI.map((g) => ({ ...g, list: [] }));
-  paketOrders.forEach((o) => paketGruplari[PAKET_GRUP_INDEX[o.paketKaynak] ?? 0].list.push(o));
+  paketOrders.forEach((o) => paketGruplari[paketOnlineMi(o) ? 1 : 0].list.push(o));
+
+  // Sabit kategori sekmeleri — her paket tipi (siparişi olsa da olmasa da) her zaman görünür.
+  const seciliGrup = paketGruplari.find((g) => g.key === aktifTab) || paketGruplari[0];
   // Kurye sadece KENDİSİNE atanmış "yolda" paketleri görür
   const kuryeYoldaOrders = paketOrders.filter(
     (o) => o.durum === 'masayaGitti' && o.kuryeId === user?.uid,
@@ -312,20 +314,51 @@ export default function ActiveOrders() {
 
   return (
     <div className="flex h-full flex-col bg-slate-100">
-      <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2">
-        <h2 className="text-sm font-semibold text-slate-700">
-          {isKurye ? 'Siparişlerim' : 'Paket Siparişleri'}
-          <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
-            {isKurye ? kuryeYoldaOrders.length : paketOrders.length}
-          </span>
-        </h2>
-        <p className="text-xs text-slate-500">
-          {isKurye
-            ? 'Sana atanan teslimatlar'
-            : rol === 'garson'
-              ? 'Sadece sizin paket siparişleriniz'
-              : 'Paket servis & platform siparişleri'}
-        </p>
+      <div className="border-b border-slate-200 bg-white">
+        <div className="flex items-center justify-between px-4 py-2">
+          <h2 className="text-sm font-semibold text-slate-700">
+            {isKurye ? 'Siparişlerim' : 'Paket Siparişleri'}
+            <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
+              {isKurye ? kuryeYoldaOrders.length : paketOrders.length}
+            </span>
+          </h2>
+          <p className="text-xs text-slate-500">
+            {isKurye
+              ? 'Sana atanan teslimatlar'
+              : rol === 'garson'
+                ? 'Sadece sizin paket siparişleriniz'
+                : 'Paket servis & platform siparişleri'}
+          </p>
+        </div>
+
+        {/* KATEGORİ SEKMELERİ — sabit; her paket tipi her zaman görünür */}
+        {!isKurye && (
+          <div className="flex items-center gap-1.5 overflow-x-auto px-4 pb-2">
+            {paketGruplari.map((g) => {
+              const aktif = seciliGrup.key === g.key;
+              return (
+                <button
+                  key={g.key}
+                  onClick={() => setAktifTab(g.key)}
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition active:scale-95 ${
+                    aktif
+                      ? 'bg-blue-600 text-white shadow'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {g.baslik}
+                  <span
+                    className={`rounded-full px-1.5 text-xs ${
+                      aktif ? 'bg-white/25 text-white' : 'bg-white text-slate-500'
+                    }`}
+                  >
+                    {g.list.length}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
@@ -353,40 +386,32 @@ export default function ActiveOrders() {
               ))}
             </div>
           )
-        ) : paketOrders.length === 0 ? (
+        ) : seciliGrup.list.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-400">
             <Truck size={40} />
-            <p>Paket sipariş yok.</p>
+            <p>Bu kategoride paket yok.</p>
           </div>
         ) : (
-          <>
-            {paketGruplari
-              .filter((g) => g.list.length > 0)
-              .map((g) => (
-                <Section key={g.key} title={g.baslik} count={g.list.length} icon={Truck}>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {g.list.map((o) => (
-                      <PaketOrderCard
-                        key={o.id}
-                        order={o}
-                        gecikmeEsigi={gecikmeEsigi}
-                        canPay={canPay}
-                        canReject={['admin', 'kasiyer'].includes(rol)}
-                        onConfirm={() => handleConfirmPosentegra(o)}
-                        onReject={() => setRejectFor(o)}
-                        onYolaCikar={() => handleYolaCikar(o)}
-                        onAppPaid={() => handleAppPaid(o)}
-                        onManuelPay={() => navigate(`/pos/payment?orderId=${o.id}`)}
-                        onIptal={() => handleIptalPaket(o)}
-                        onDuzenle={() =>
-                          navigate(`/pos/order/new?orderId=${o.id}&masa=${encodeURIComponent(o.masaAd || 'Paket')}`)
-                        }
-                      />
-                    ))}
-                  </div>
-                </Section>
-              ))}
-          </>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {seciliGrup.list.map((o) => (
+              <PaketOrderCard
+                key={o.id}
+                order={o}
+                gecikmeEsigi={gecikmeEsigi}
+                canPay={canPay}
+                canReject={['admin', 'kasiyer'].includes(rol)}
+                onConfirm={() => handleConfirmPosentegra(o)}
+                onReject={() => setRejectFor(o)}
+                onYolaCikar={() => handleYolaCikar(o)}
+                onAppPaid={() => handleAppPaid(o)}
+                onManuelPay={() => navigate(`/pos/payment?orderId=${o.id}`)}
+                onIptal={() => handleIptalPaket(o)}
+                onDuzenle={() =>
+                  navigate(`/pos/order/new?orderId=${o.id}&masa=${encodeURIComponent(o.masaAd || 'Paket')}`)
+                }
+              />
+            ))}
+          </div>
         )}
       </div>
 
