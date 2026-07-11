@@ -98,7 +98,7 @@ export default function PosLayout() {
           <PosNavLink
             to="/pos/orders/active"
             icon={ClipboardList}
-            label={isKurye ? 'Teslimat Bekleyen' : 'Aktif Siparişler'}
+            label={isKurye ? 'Teslimat Bekleyen' : 'Paket Siparişleri'}
           />
           {isKasiyer && (
             <PosNavLink to="/pos/packages" icon={Truck} label="Paket Servis" />

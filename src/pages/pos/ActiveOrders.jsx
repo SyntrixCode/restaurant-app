@@ -36,6 +36,17 @@ const KAYNAK_LABELS = {
   migros: 'Migros',
 };
 
+// Paket siparişleri kaynak tipine göre gruplanır. Platform siparişleri kendi başlıkları
+// altında, geri kalan her şey (Paket Servis / manuel / telefon) "Dış Paket" altında toplanır.
+const PAKET_GRUP_INDEX = { trendyol: 1, yemeksepeti: 2, getir: 3, migros: 4 };
+const PAKET_GRUP_TANIMI = [
+  { key: 'dis', baslik: 'Dış Paket' },
+  { key: 'trendyol', baslik: 'Trendyol' },
+  { key: 'yemeksepeti', baslik: 'Yemeksepeti' },
+  { key: 'getir', baslik: 'Getir' },
+  { key: 'migros', baslik: 'Migros' },
+];
+
 export default function ActiveOrders() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
@@ -68,9 +79,12 @@ export default function ActiveOrders() {
     return list;
   }, [orders, rol, user]);
 
-  const masaOrders = visible.filter((o) => !o.paketMi);
   const paketOrders = visible.filter((o) => o.paketMi);
   const isKurye = rol === 'kurye';
+
+  // Paket siparişlerini tipe göre gruplara böl — boş gruplar render'da atlanır
+  const paketGruplari = PAKET_GRUP_TANIMI.map((g) => ({ ...g, list: [] }));
+  paketOrders.forEach((o) => paketGruplari[PAKET_GRUP_INDEX[o.paketKaynak] ?? 0].list.push(o));
   // Kurye sadece KENDİSİNE atanmış "yolda" paketleri görür
   const kuryeYoldaOrders = paketOrders.filter(
     (o) => o.durum === 'masayaGitti' && o.kuryeId === user?.uid,
@@ -300,17 +314,17 @@ export default function ActiveOrders() {
     <div className="flex h-full flex-col bg-slate-100">
       <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2">
         <h2 className="text-sm font-semibold text-slate-700">
-          {isKurye ? 'Siparişlerim' : 'Açık Siparişler'}
+          {isKurye ? 'Siparişlerim' : 'Paket Siparişleri'}
           <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
-            {isKurye ? kuryeYoldaOrders.length : visible.length}
+            {isKurye ? kuryeYoldaOrders.length : paketOrders.length}
           </span>
         </h2>
         <p className="text-xs text-slate-500">
           {isKurye
             ? 'Sana atanan teslimatlar'
             : rol === 'garson'
-              ? 'Sadece sizin siparişleriniz'
-              : 'Tüm açık siparişler'}
+              ? 'Sadece sizin paket siparişleriniz'
+              : 'Paket servis & platform siparişleri'}
         </p>
       </div>
 
@@ -339,53 +353,39 @@ export default function ActiveOrders() {
               ))}
             </div>
           )
-        ) : visible.length === 0 ? (
+        ) : paketOrders.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-400">
-            <Receipt size={40} />
-            <p>Açık sipariş yok.</p>
+            <Truck size={40} />
+            <p>Paket sipariş yok.</p>
           </div>
         ) : (
           <>
-            {masaOrders.length > 0 && (
-              <Section title="Masa Siparişleri" count={masaOrders.length}>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {masaOrders.map((o) => (
-                    <MasaOrderCard
-                      key={o.id}
-                      order={o}
-                      gecikmeEsigi={gecikmeEsigi}
-                      canPay={canPay}
-                      onPay={() => navigate(`/pos/payment?orderId=${o.id}`)}
-                    />
-                  ))}
-                </div>
-              </Section>
-            )}
-
-            {paketOrders.length > 0 && (
-              <Section title="Paket Siparişleri" count={paketOrders.length} icon={Truck}>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {paketOrders.map((o) => (
-                    <PaketOrderCard
-                      key={o.id}
-                      order={o}
-                      gecikmeEsigi={gecikmeEsigi}
-                      canPay={canPay}
-                      canReject={['admin', 'kasiyer'].includes(rol)}
-                      onConfirm={() => handleConfirmPosentegra(o)}
-                      onReject={() => setRejectFor(o)}
-                      onYolaCikar={() => handleYolaCikar(o)}
-                      onAppPaid={() => handleAppPaid(o)}
-                      onManuelPay={() => navigate(`/pos/payment?orderId=${o.id}`)}
-                      onIptal={() => handleIptalPaket(o)}
-                      onDuzenle={() =>
-                        navigate(`/pos/order/new?orderId=${o.id}&masa=${encodeURIComponent(o.masaAd || 'Paket')}`)
-                      }
-                    />
-                  ))}
-                </div>
-              </Section>
-            )}
+            {paketGruplari
+              .filter((g) => g.list.length > 0)
+              .map((g) => (
+                <Section key={g.key} title={g.baslik} count={g.list.length} icon={Truck}>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {g.list.map((o) => (
+                      <PaketOrderCard
+                        key={o.id}
+                        order={o}
+                        gecikmeEsigi={gecikmeEsigi}
+                        canPay={canPay}
+                        canReject={['admin', 'kasiyer'].includes(rol)}
+                        onConfirm={() => handleConfirmPosentegra(o)}
+                        onReject={() => setRejectFor(o)}
+                        onYolaCikar={() => handleYolaCikar(o)}
+                        onAppPaid={() => handleAppPaid(o)}
+                        onManuelPay={() => navigate(`/pos/payment?orderId=${o.id}`)}
+                        onIptal={() => handleIptalPaket(o)}
+                        onDuzenle={() =>
+                          navigate(`/pos/order/new?orderId=${o.id}&masa=${encodeURIComponent(o.masaAd || 'Paket')}`)
+                        }
+                      />
+                    ))}
+                  </div>
+                </Section>
+              ))}
           </>
         )}
       </div>
@@ -635,6 +635,9 @@ function PaketOrderCard({
   const yoldaMins = yolda && order.masayaGittiZamani ? minutesSince(order.masayaGittiZamani) : null;
   const appOrder = APP_KAYNAKLAR.includes(order.paketKaynak);
   const isPosentegra = !!order.posentegraPid;
+  // Dış Paket = Paket Servis ekranından girilen manuel sipariş (platform/posentegra değil).
+  // Bunlarda kurye "Yola Çıkar" akışı yerine doğrudan kasada "Ödeme Al" yapılır.
+  const disPaket = !isPosentegra && !appOrder;
   const needsConfirm = isPosentegra && !order.posentegraOnayli;
   // Platform kuryesi (Getir Kuryesi vb.) bu siparişi teslim edecek → bizden kurye atamayız
   const platformDelivery = order.teslimatTipi === 'platform';
@@ -795,12 +798,22 @@ function PaketOrderCard({
                 <Plus size={15} /> Sipariş Ekle / Düzenle
               </button>
             )}
+            {/* Yola Çıkar — tüm paketlerde, mevcut kurye atama akışı */}
             <button
               onClick={onYolaCikar}
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow hover:bg-blue-700 active:scale-95"
             >
               <Send size={15} /> Yola Çıkar
             </button>
+            {/* Ödeme Al — sadece Dış Paket (Paket Servis) siparişlerinde, normal ödeme akışı */}
+            {disPaket && canPay && (
+              <button
+                onClick={onManuelPay}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow hover:bg-emerald-700 active:scale-95"
+              >
+                <CreditCard size={15} /> Ödeme Al
+              </button>
+            )}
           </div>
         ) : platformDelivery ? (
           // Yola çıktı + platform kuryesi → pasif gösterge + canlı sayaç + manuel kapat butonu
