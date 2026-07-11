@@ -558,6 +558,37 @@ const PLATFORM_THEME = {
   diger: { accent: 'bg-slate-400', badge: 'bg-slate-100 text-slate-700' },
 };
 
+/**
+ * Platform (Trendyol/Yemeksepeti) müşterinin GERÇEK numarasını vermez — maskeli bir
+ * "aktarma hattı" gönderir: santral no + sipariş dahilisi.
+ *   clientPhoneNumber : "0212 365 34 03 11356836601"   (gösterim)
+ *   contactPhoneNumber: "02123653403,,11356836601"     (ÇEVİRİLEBİLİR — ,, = bekleme)
+ * `,,` ile arayınca santral açılır ve dahili otomatik tuşlanır → müşteriye bağlanır.
+ * Bu yüzden tel: linkinde ham `contactPhoneNumber` kullanılmalı.
+ */
+function dialHref(order) {
+  const raw = order?.posentegraRaw?.client?.contactPhoneNumber;
+  const tel = String(raw || order?.musteriTel || '').replace(/\s+/g, '');
+  return tel ? `tel:${tel}` : null;
+}
+
+/**
+ * Platform KENDİ kuryesiyle teslim ediyorsa (deliveryType=1) müşteri adresini MASKELER:
+ * tüm alanlar platform adına eşitlenir → "Trendyol Yemek, No: Trendyol Yemek, Kat: ...".
+ * Bunu adres sanıp göstermek kafa karıştırıyor; tespit edip anlamlı mesaj gösteriyoruz.
+ */
+function isMaskedAddress(adres, platformAd) {
+  if (!adres || !platformAd) return false;
+  const p = platformAd.toLocaleLowerCase('tr');
+  const kalan = adres
+    .toLocaleLowerCase('tr')
+    .split(p)
+    .join(' ')
+    .replace(/no:|kat:|daire:|blok:|kapı:/g, '')
+    .replace(/[,()\-.\s]/g, '');
+  return kalan.length === 0;
+}
+
 function PaketOrderCard({
   order,
   gecikmeEsigi,
@@ -581,6 +612,8 @@ function PaketOrderCard({
   const platformDelivery = order.teslimatTipi === 'platform';
   const onceden = !!order.oncedenOdendi;
   const theme = PLATFORM_THEME[order.paketKaynak] || PLATFORM_THEME.diger;
+  // Platform kendi kuryesiyle teslim ederken adresi maskeler ("Trendyol Yemek, No: Trendyol Yemek...")
+  const maskeliAdres = isMaskedAddress(order.musteriAdres, order.paketKaynakAd);
 
   // Kart çerçevesi durum-bilinçli
   const wrapperCls = needsConfirm
@@ -602,10 +635,18 @@ function PaketOrderCard({
           </h3>
           {order.musteriTel && (
             <a
-              href={`tel:${order.musteriTel}`}
+              href={dialHref(order) || undefined}
+              title={
+                isPosentegra
+                  ? 'Platform aktarma hattı — arayınca santral seni müşteriye bağlar (dahili otomatik tuşlanır)'
+                  : undefined
+              }
               className="mt-0.5 inline-block text-xs font-medium text-blue-600 hover:underline"
             >
               📞 {order.musteriTel}
+              {isPosentegra && (
+                <span className="ml-1 text-[10px] font-normal text-slate-400">(aktarma hattı)</span>
+              )}
             </a>
           )}
         </div>
@@ -658,8 +699,24 @@ function PaketOrderCard({
         )}
       </div>
 
+      {/* Adres MASKELİ (platform kendi kuryesiyle teslim ediyor) → çöp metin yerine açıklama */}
+      {maskeliAdres && (
+        <div className="mx-4 mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs leading-snug text-slate-600">
+            🛵 <strong>Adres gizli</strong> — {order.paketKaynakAd || 'Platform'} kendi kuryesiyle
+            teslim ediyor, müşteri adresini paylaşmıyor.
+          </p>
+          {order.musteriNotu && (
+            <p className="mt-2 rounded-md bg-white px-2 py-1 text-xs italic text-slate-700">
+              <StickyNote size={11} className="mr-1 inline" />
+              {order.musteriNotu}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* ADRES BLOĞU — harita butonu sadece kuryede gösterilir */}
-      {order.musteriAdres && (
+      {order.musteriAdres && !maskeliAdres && (
         <div className="mx-4 mb-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
           <p className="line-clamp-2 text-xs leading-snug text-amber-900">
             <span className="mr-1">📍</span>

@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { watchCollection, where } from '../firebase/firestore';
-import { playNewOrderSound, playNewPackageSound } from '../utils/sound';
+import { playNewOrderSound, playNewPackageSound, playPlatformOrderSound } from '../utils/sound';
+
+// Trendyol / Yemeksepeti / Getir / Migros — kaçırılırsa ceza/iptal riski olan siparişler
+const PLATFORM_KAYNAKLAR = ['trendyol', 'yemeksepeti', 'getir', 'migros'];
 import { useSettingsStore } from '../store/settingsStore';
 
 /**
@@ -31,8 +34,15 @@ export function useNewOrderAlert() {
         knownIdsRef.current = currentIds;
 
         if (newOrders.length > 0 && sesliUyari) {
+          const paketAcik = settings?.bildirimAyarlari?.yeniPaket !== false;
+          // Trendyol/Yemeksepeti/Getir → EN YÜKSEK, ayırt edici alarm (kaçırılmamalı)
+          const hasPlatform = newOrders.some(
+            (o) => o.paketMi && PLATFORM_KAYNAKLAR.includes(o.paketKaynak),
+          );
           const hasPackage = newOrders.some((o) => o.paketMi);
-          if (hasPackage && settings?.bildirimAyarlari?.yeniPaket !== false) {
+          if (hasPlatform && paketAcik) {
+            playPlatformOrderSound();
+          } else if (hasPackage && paketAcik) {
             playNewPackageSound();
           } else {
             playNewOrderSound();
