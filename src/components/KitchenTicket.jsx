@@ -14,6 +14,7 @@ function buzzerPatternFor({ isCancellation, isCorrection, isAddendum, isPackage 
 }
 import { watchCollection } from '../firebase/firestore';
 import { groupTicketByPrinter } from '../utils/printerRouting';
+import { platformAd } from '../utils/platform';
 
 export default function KitchenTicket({
   open,
@@ -31,6 +32,9 @@ export default function KitchenTicket({
   const [printing, setPrinting] = useState(false);
   const [networkPrinters, setNetworkPrinters] = useState([]);
   const [categories, setCategories] = useState([]);
+  // Platform (Trendyol/Yemeksepeti) kalemlerinde categoryId/yaziciIds YOKTUR —
+  // ürün adından eşleştirip doğru istasyona (fırın/ızgara/bar) yönlendirmek için gerekli.
+  const [products, setProducts] = useState([]);
 
   useEffect(() => {
     const handleEsc = (e) => {
@@ -40,15 +44,17 @@ export default function KitchenTicket({
     return () => document.removeEventListener('keydown', handleEsc);
   }, [open, onClose]);
 
-  // Aktif ağ yazıcıları + kategoriler (yazıcı yönlendirmesi için)
+  // Aktif ağ yazıcıları + kategoriler + ürünler (yazıcı yönlendirmesi için)
   useEffect(() => watchCollection('printers', setNetworkPrinters), []);
   useEffect(() => watchCollection('categories', setCategories), []);
+  useEffect(() => watchCollection('products', setProducts), []);
   // Eklenen kalemleri + düzeltme farkını (silinen/azalan) hedef yazıcılara göre
   // grupla. Böylece bir ürün çıkarılınca/azaltılınca o istasyona düzeltme fişi basılır.
   const ticketGroups = groupTicketByPrinter(
     { items: items || [], removed: correctionDiff?.removed || [], changed: correctionDiff?.changed || [] },
     categories,
     networkPrinters,
+    products,
   );
   const hasNetworkPrinter = ticketGroups.length > 0;
 
@@ -223,10 +229,13 @@ export default function KitchenTicket({
     }
   };
   const isPaket = !!order?.paketMi;
-  const paketKaynakAd = order?.paketKaynakAd || '';
+  // Platform siparişinde başlıkta bizim temiz etiketimiz ("Trendyol Paket") — ham
+  // paketKaynakAd ("Trendyol Yemek") değil. platformAd online değilse '' döner.
+  const paketKaynakAd = platformAd(order);
   // Masaya paket: ek sipariş ama eklenen kalemlerin hepsi paket → PAKET stili
   const paketEk = isAddendum && Array.isArray(items) && items.length > 0 && items.every((it) => it?.paket);
   const paketMode = isPaket || paketEk;
+  // Masadan açılan paket masaAd'ı "Masa 6 · Paket" → başlıkta "PAKET - MASA 6"
   let paketMasaRef = '';
   if (paketEk) {
     paketMasaRef = String(order?.masaAd || '').trim(); // "Masa 6"
@@ -295,22 +304,20 @@ export default function KitchenTicket({
 
         <div className="p-6 font-mono leading-snug" id="kitchen-ticket">
           <div
-            className={`mb-3 text-center ${
-              isCancellation
+            className={`mb-3 text-center ${isCancellation
                 ? 'rounded-md bg-red-50 py-2 border-2 border-red-300'
                 : isCorrection
                   ? 'rounded-md bg-amber-50 py-2 border-2 border-amber-300'
                   : ''
-            }`}
+              }`}
           >
             <h1
-              className={`text-lg font-bold tracking-widest ${
-                isCancellation
+              className={`text-lg font-bold tracking-widest ${isCancellation
                   ? 'text-red-700'
                   : isCorrection
                     ? 'text-amber-700'
                     : ''
-              }`}
+                }`}
             >
               {heading}
             </h1>

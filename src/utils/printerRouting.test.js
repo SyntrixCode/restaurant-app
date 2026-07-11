@@ -172,3 +172,53 @@ describe('groupTicketByPrinter (düzeltme farkı yönlendirme)', () => {
     expect(groups).toEqual([]);
   });
 });
+
+// ── Platform (Trendyol/Yemeksepeti) siparişleri ──────────────────────────────
+// Platform kalemleri DÜZ METİN gelir: productId/categoryId/yaziciIds YOKTUR.
+// Bu yüzden eskiden hepsi varsayılan yazıcıya düşüyordu (ör. sadece çorba).
+// Artık kalem ADI menüdeki ürünle eşleştirilip doğru istasyona yönlendirilir.
+describe('platform siparişi — ürün adından yazıcı yönlendirme', () => {
+  const firin = { id: 'p3', ad: 'Fırın', ip: '192.168.1.52', aktif: true };
+  const pList = [mutfak, bar, firin];
+  const cats = [
+    { id: 'c1', ad: 'Çorbalar', yaziciId: null }, // → varsayılan (mutfak)
+    { id: 'c2', ad: 'İçecekler', yaziciId: 'p2' }, // → bar
+    { id: 'c3', ad: 'Pideler', yaziciId: 'p3' }, // → fırın
+  ];
+  const products = [
+    { id: 'u1', ad: 'Etli Ekmek İri Kıymalı', categoryId: 'c3', yaziciIds: [] },
+    { id: 'u2', ad: 'Ayran', categoryId: 'c2', yaziciIds: [] },
+    { id: 'u3', ad: 'Mercimek Çorbası', categoryId: 'c1', yaziciIds: [] },
+  ];
+
+  it('platform kalemini adından eşleştirip doğru istasyona yollar', () => {
+    const items = [
+      { ad: 'Etli Ekmek İri Kıymalı', adet: 2 }, // → fırın
+      { ad: 'Ayran', adet: 1 }, // → bar
+      { ad: 'Mercimek Çorbası', adet: 1 }, // → mutfak (varsayılan)
+    ];
+    const groups = groupTicketByPrinter({ items }, cats, pList, products);
+    const byId = Object.fromEntries(groups.map((g) => [g.printer.id, g.items.map((i) => i.ad)]));
+    expect(byId.p3).toEqual(['Etli Ekmek İri Kıymalı']); // fırın
+    expect(byId.p2).toEqual(['Ayran']); // bar
+    expect(byId.p1).toEqual(['Mercimek Çorbası']); // mutfak
+  });
+
+  it('ad tam eşleşmese de (porsiyon/ek ibare) doğru istasyona gider', () => {
+    const items = [{ ad: 'Etli Ekmek İri Kıymalı (Büyük)', adet: 1 }];
+    const groups = groupTicketByPrinter({ items }, cats, pList, products);
+    expect(groups[0].printer.id).toBe('p3'); // fırın
+  });
+
+  it('menüde olmayan ürün varsayılan yazıcıya düşer (eski davranış korunur)', () => {
+    const items = [{ ad: 'Bilinmeyen Ürün XYZ', adet: 1 }];
+    const groups = groupTicketByPrinter({ items }, cats, pList, products);
+    expect(groups[0].printer.id).toBe('p1'); // varsayılan
+  });
+
+  it('ürünler verilmezse eski davranış (varsayılan) bozulmaz', () => {
+    const items = [{ ad: 'Etli Ekmek İri Kıymalı', adet: 1 }];
+    const groups = groupTicketByPrinter({ items }, cats, pList);
+    expect(groups[0].printer.id).toBe('p1');
+  });
+});
