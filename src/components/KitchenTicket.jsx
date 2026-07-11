@@ -14,6 +14,7 @@ function buzzerPatternFor({ isCancellation, isCorrection, isAddendum, isPackage 
 }
 import { watchCollection } from '../firebase/firestore';
 import { groupTicketByPrinter } from '../utils/printerRouting';
+import { platformAd } from '../utils/platform';
 
 export default function KitchenTicket({
   open,
@@ -228,7 +229,8 @@ export default function KitchenTicket({
     }
   };
   const isPaket = !!order?.paketMi;
-  const paketKaynakAd = order?.paketKaynakAd || '';
+  // Platformun kendi adı ("Trendyol Yemek") yerine bizim etiketimiz ("Trendyol Paket")
+  const paketKaynakAd = platformAd(order);
   // Masadan açılan paket masaAd'ı "Masa 6 · Paket" → başlıkta "PAKET - MASA 6"
   let paketMasaRef = '';
   if (isPaket && !paketKaynakAd && typeof order?.masaAd === 'string' && order.masaAd.endsWith(' · Paket')) {

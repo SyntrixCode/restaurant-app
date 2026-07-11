@@ -19,6 +19,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL, minutesSince, formatAdet } from '../../utils/format';
 import { updateOrderStatus, cancelActiveOrder } from '../../firebase/orders';
+import { platformAd, platformKuryeAd } from '../../utils/platform';
 import { recordPayment } from '../../firebase/payments';
 import { awardLoyaltyPoints, computeEarnedPoints } from '../../firebase/customers';
 import { confirmPosentegraOrder, rejectPosentegraOrder, fetchPosentegraReasons } from '../../firebase/posentegra';
@@ -97,7 +98,7 @@ export default function ActiveOrders() {
   const [kitchenTicket, setKitchenTicket] = useState(null);
 
   const handleConfirmPosentegra = async (order) => {
-    if (!confirm(`${order.paketKaynakAd || 'Posentegra'} siparişi kabul edilsin mi?`)) return;
+    if (!confirm(`${platformAd(order) || 'Posentegra'} siparişi kabul edilsin mi?`)) return;
     const t = toast.loading('Kabul ediliyor…');
     try {
       await confirmPosentegraOrder(order.id);
@@ -106,9 +107,9 @@ export default function ActiveOrders() {
       setKitchenTicket({
         order: {
           id: order.id,
-          masaAd: order.masaAd || `Paket - ${order.paketKaynakAd || 'Posentegra'}`,
+          masaAd: order.masaAd || `Paket - ${platformAd(order) || 'Posentegra'}`,
           kisiSayisi: null,
-          garsonAd: order.paketKaynakAd || order.garsonAd || 'Posentegra',
+          garsonAd: platformAd(order) || order.garsonAd || 'Posentegra',
           paketMi: true,
           paketKaynakAd: order.paketKaynakAd || null,
         },
@@ -155,7 +156,7 @@ export default function ActiveOrders() {
     // Platforma ulaşılamadı → yerel iptal teklifi
     toast.dismiss(t);
     const yerel = confirm(
-      `${order.paketKaynakAd || 'Platform'} tarafına iptal bildirilemedi ` +
+      `${platformAd(order) || 'Platform'} tarafına iptal bildirilemedi ` +
         `(sipariş eski/kapanmış olabilir).\n\n` +
         `Yine de sistemden İPTAL edilsin mi?\n` +
         `• Sipariş listeden düşer\n• Ciroya GİRMEZ\n• Platform tarafı etkilenmez`,
@@ -203,7 +204,7 @@ export default function ActiveOrders() {
           durum: 'masayaGitti',
           masayaGittiZamani: serverTimestamp(),
         });
-        toast.success(`${order.platformKuryeAdi || 'Platform kuryesi'} teslim ediyor`, { id: t });
+        toast.success(`${platformKuryeAd(order)} teslim ediyor`, { id: t });
       } catch (err) {
         console.error(err);
         toast.error(err.message || 'İşlem başarısız', { id: t });
@@ -405,7 +406,7 @@ export default function ActiveOrders() {
                   yontem,
                   kartTipi:
                     yontem === 'uygulama'
-                      ? teslimFor.paketKaynakAd || 'Uygulama'
+                      ? platformAd(teslimFor) || 'Uygulama'
                       : yontem === 'kart'
                         ? 'Banka Kartı'
                         : null,
@@ -696,7 +697,7 @@ function PaketOrderCard({
         )}
         {platformDelivery && (
           <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${theme.badge}`}>
-            🛵 {order.platformKuryeAdi || `${KAYNAK_LABELS[order.paketKaynak] || ''} Kuryesi`}
+            🛵 {platformKuryeAd(order)}
           </span>
         )}
       </div>
@@ -705,7 +706,7 @@ function PaketOrderCard({
       {maskeliAdres && (
         <div className="mx-4 mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
           <p className="text-xs leading-snug text-slate-600">
-            🛵 <strong>Adres gizli</strong> — {order.paketKaynakAd || 'Platform'} kendi kuryesiyle
+            🛵 <strong>Adres gizli</strong> — {platformAd(order) || 'Platform'} kendi kuryesiyle
             teslim ediyor, müşteri adresini paylaşmıyor.
           </p>
           {order.musteriNotu && (
@@ -770,7 +771,7 @@ function PaketOrderCard({
           // Yola çıktı + platform kuryesi → pasif gösterge + canlı sayaç + manuel kapat butonu
           <div className="space-y-2">
             <div className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800">
-              🛵 {order.platformKuryeAdi || 'Platform Kuryesi'} Teslim Ediyor
+              🛵 {platformKuryeAd(order)} Teslim Ediyor
               {order.masayaGittiZamani && (
                 <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-white/80 px-2 py-0.5 text-xs text-amber-900 tabular-nums">
                   <Clock size={11} />
@@ -782,7 +783,7 @@ function PaketOrderCard({
               <button
                 onClick={onAppPaid}
                 className="flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-white px-4 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 active:scale-95"
-                title={`${order.paketKaynakAd || 'Platform'} uygulamasından teslim edildi gördüysen tıkla`}
+                title={`${platformAd(order) || 'Platform'} uygulamasından teslim edildi gördüysen tıkla`}
               >
                 <Check size={13} /> Teslim Edildi · Siparişi Kapat
               </button>
@@ -907,7 +908,7 @@ function PosentegraRejectModal({ order, submitting, onClose, onConfirm }) {
     >
       <div className="space-y-4">
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-          ⚠️ Bu sipariş <strong>{order.paketKaynakAd || 'Posentegra'}</strong> üzerinde de iptal
+          ⚠️ Bu sipariş <strong>{platformAd(order) || 'Posentegra'}</strong> üzerinde de iptal
           edilir. Müşteriye iptal bildirimi gider.
         </div>
         <div>
@@ -1058,9 +1059,9 @@ function KuryeOrderCard({ order, onTeslim }) {
 
       {/* ROZETLER ŞERİDİ */}
       <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
-        {order.paketKaynakAd && (
+        {platformAd(order) && (
           <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${theme.badge}`}>
-            <Smartphone size={11} /> {order.paketKaynakAd}
+            <Smartphone size={11} /> {platformAd(order)}
           </span>
         )}
         {onceden ? (
@@ -1149,7 +1150,7 @@ function KuryeTeslimModal({ order, onClose, onConfirm }) {
         <div className={`rounded-lg p-3 text-sm ${onceden ? 'bg-emerald-50 text-emerald-900' : 'bg-amber-50 text-amber-900'}`}>
           {onceden ? (
             <>
-              ✓ Bu sipariş <strong>{order.paketKaynakAd}</strong> üzerinden{' '}
+              ✓ Bu sipariş <strong>{platformAd(order)}</strong> üzerinden{' '}
               <strong>önceden ödenmiş</strong>. Müşteriden para almıyorsun, sadece teslim et.
             </>
           ) : (
