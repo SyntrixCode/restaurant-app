@@ -100,7 +100,7 @@ export default function PosLayout() {
             icon={ClipboardList}
             label={isKurye ? 'Teslimat Bekleyen' : 'Paket Siparişleri'}
           />
-          {isKasiyer && (
+          {!isKurye && (
             <PosNavLink to="/pos/packages" icon={Truck} label="Paket Servis" />
           )}
           <ShiftButton />

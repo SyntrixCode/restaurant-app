@@ -343,7 +343,7 @@ export default function PosPackages() {
             <ul className="space-y-2.5">
               {items.map((it) => (
                 <li
-                  key={it.productId}
+                  key={it.lineId}
                   className="rounded-xl border-2 border-slate-200 bg-white p-3 shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -362,7 +362,7 @@ export default function PosPackages() {
                   </div>
                   <div className="mt-3 flex items-center gap-2">
                     <button
-                      onClick={() => changeQuantity(it.productId, -1)}
+                      onClick={() => changeQuantity(it.lineId, -1)}
                       className="rounded-lg bg-slate-100 p-2.5 hover:bg-slate-200 active:scale-95"
                     >
                       <Minus size={20} />
@@ -371,13 +371,13 @@ export default function PosPackages() {
                       {formatAdet(it.adet)}
                     </span>
                     <button
-                      onClick={() => changeQuantity(it.productId, 1)}
+                      onClick={() => changeQuantity(it.lineId, 1)}
                       className="rounded-lg bg-slate-100 p-2.5 hover:bg-slate-200 active:scale-95"
                     >
                       <Plus size={20} />
                     </button>
                     <button
-                      onClick={() => toggleHalf(it.productId)}
+                      onClick={() => toggleHalf(it.lineId)}
                       title="Yarım porsiyon"
                       className={`rounded-lg px-3 py-2 text-lg font-bold transition active:scale-95 ${
                         it.adet % 1 !== 0
@@ -394,7 +394,7 @@ export default function PosPackages() {
                       <MessageSquare size={18} />
                     </button>
                     <button
-                      onClick={() => removeItem(it.productId)}
+                      onClick={() => removeItem(it.lineId)}
                       className="rounded-lg p-2.5 text-red-500 hover:bg-red-50 active:scale-95"
                     >
                       <Trash2 size={18} />
@@ -440,7 +440,7 @@ export default function PosPackages() {
         item={noteFor}
         onClose={() => setNoteFor(null)}
         onSave={(note) => {
-          if (noteFor) setNote(noteFor.productId, note);
+          if (noteFor) setNote(noteFor.lineId, note);
           setNoteFor(null);
         }}
       />
