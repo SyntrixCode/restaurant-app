@@ -21,6 +21,7 @@ import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL, minutesSince, formatAdet } from '../../utils/format';
 import { updateOrderStatus, cancelActiveOrder } from '../../firebase/orders';
 import { platformAd, platformKuryeAd } from '../../utils/platform';
+import { isIminPrinterAvailable, printReceipt, buildPaketFisiLines } from '../../plugins/iminPrinter';
 import { recordPayment } from '../../firebase/payments';
 import { awardLoyaltyPoints, computeEarnedPoints } from '../../firebase/customers';
 import { confirmPosentegraOrder, rejectPosentegraOrder, fetchPosentegraReasons } from '../../firebase/posentegra';
@@ -114,12 +115,36 @@ export default function ActiveOrders() {
   // Mutfak fişi (Posentegra kabul sonrası açılır, otomatik basar)
   const [kitchenTicket, setKitchenTicket] = useState(null);
 
+  /**
+   * PAKET FİŞİ — TABLETİN KENDİ yazıcısından basılır, paketin üzerine zımbalanır.
+   * Mutfak fişlerinden ayrıdır: onlar ürün bazında ağdaki istasyonlara (fırın/çorba)
+   * bölünür; bu fiş siparişin TAMAMINI tek sayfada verir (kurye/müşteri kontrolü için).
+   * Yazıcı yoksa (web/tablet değil) sessizce atlanır — sipariş akışını asla bozmaz.
+   */
+  const printPaketFisi = async (order) => {
+    try {
+      if (!(await isIminPrinterAvailable())) return;
+      const lines = buildPaketFisiLines({
+        order,
+        items: order.items || [],
+        platformAd: platformAd(order),
+        settings,
+      });
+      await printReceipt({ lines, cut: true, feedLines: 3 });
+    } catch (err) {
+      console.warn('Paket fişi basılamadı:', err?.message || err);
+      toast('Paket fişi basılamadı (tablet yazıcısı)', { icon: '🖨️' });
+    }
+  };
+
   const handleConfirmPosentegra = async (order) => {
     if (!confirm(`${platformAd(order) || 'Posentegra'} siparişi kabul edilsin mi?`)) return;
     const t = toast.loading('Kabul ediliyor…');
     try {
       await confirmPosentegraOrder(order.id);
       toast.success('Sipariş kabul edildi, mutfağa gönderildi', { id: t });
+      // Pakete zımbalanacak fiş — tabletin kendi yazıcısından (mutfak fişlerinden ayrı)
+      printPaketFisi(order);
       // Mutfak fişini otomatik bas — KitchenTicket modal kendi yazıcı yönlendirmesini yapar
       setKitchenTicket({
         order: {

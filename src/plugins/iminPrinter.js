@@ -170,6 +170,81 @@ export function buildKitchenTicketLines({
 }
 
 /**
+ * PAKET FİŞİ — platform (Trendyol/Yemeksepeti/Getir) siparişi kabul edilince
+ * TABLETİN KENDİ yazıcısından basılır ve paketin üzerine zımbalanır.
+ *
+ * Mutfak fişinden AYRIDIR: mutfak fişleri ürün bazında ağdaki istasyon
+ * yazıcılarına (fırın/çorba/meşrubat) bölünür; bu fiş ise siparişin TAMAMINI
+ * tek sayfada gösterir — kurye/müşteri paketi kontrol edebilsin.
+ *
+ * @param {{ order: Object, items: Array, platformAd?: string, settings?: Object }} opts
+ */
+export function buildPaketFisiLines({ order, items = [], platformAd = '', settings = {} }) {
+  const lines = [];
+  const tl = (n) => `${(Number(n) || 0).toFixed(2).replace('.', ',')} TL`;
+
+  // Başlık — restoran adı
+  const baslik = settings.fisBasligi || settings.restoranAd || 'PAKET';
+  lines.push({ type: 'text', text: baslik, align: 'center', size: 28, bold: true });
+
+  // Platform adı — büyük, kurye uzaktan görsün
+  if (platformAd) {
+    lines.push({ type: 'text', text: platformAd.toLocaleUpperCase('tr-TR'), align: 'center', size: 42, bold: true });
+  }
+  lines.push({ type: 'text', text: 'PAKET FISI', align: 'center', size: 22 });
+  lines.push({ type: 'divider' });
+
+  // Sipariş kodu — platformun kısa kodu varsa o (kurye onu arar), yoksa iç id
+  const kod = order.posentegraShortCode || order.posentegraConfirmationId || String(order.id || '').slice(0, 8).toUpperCase();
+  if (kod) {
+    lines.push({ type: 'text', text: `SIPARIS: ${kod}`, align: 'center', size: 36, bold: true });
+  }
+
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  lines.push({ type: 'text', text: `Saat: ${hh}:${mm}`, size: 26 });
+
+  if (order.musteriAd) {
+    lines.push({ type: 'text', text: `Musteri: ${order.musteriAd}`, size: 30, bold: true });
+  }
+  if (order.musteriTel) {
+    lines.push({ type: 'text', text: `Tel: ${order.musteriTel}`, size: 26 });
+  }
+  lines.push({ type: 'divider' });
+
+  // İçerik — kontrol edilebilsin diye net ve büyük
+  for (const it of items) {
+    const adet = Number(it.adet) % 1 === 0 ? String(it.adet) : Number(it.adet).toFixed(1).replace('.', ',');
+    lines.push({ type: 'text', text: `${adet}x ${it.ad}`, size: 32, bold: true });
+    if (it.notlar) {
+      lines.push({ type: 'text', text: `   (${it.notlar})`, size: 24, italic: true });
+    }
+  }
+  lines.push({ type: 'divider' });
+
+  // Tutar + ödeme durumu — kurye para alacak mı, bunu görmeli
+  lines.push({ type: 'text', text: `TOPLAM: ${tl(order.toplam)}`, align: 'center', size: 36, bold: true });
+  if (order.oncedenOdendi) {
+    lines.push({ type: 'text', text: '*** ONCEDEN ODENDI ***', align: 'center', size: 30, bold: true });
+    lines.push({ type: 'text', text: 'Kuryeden para ALINMAZ', align: 'center', size: 24 });
+  } else {
+    lines.push({ type: 'text', text: '!!! KAPIDA ODEME !!!', align: 'center', size: 30, bold: true });
+  }
+
+  // Müşteri notu — genelde adres tarifi/özel istek içerir, en altta göze çarpsın
+  if (order.musteriNotu) {
+    lines.push({ type: 'divider' });
+    lines.push({ type: 'text', text: 'MUSTERI NOTU:', size: 24, bold: true });
+    lines.push({ type: 'text', text: order.musteriNotu, size: 26 });
+  }
+
+  lines.push({ type: 'divider' });
+  lines.push({ type: 'text', text: 'powered by {S} syntrixCode', align: 'center', size: 18 });
+  return lines;
+}
+
+/**
  * Bölünmüş (parça) ödeme fişi — bir müşterinin sadece yediği kısım için.
  * Tam fiş değil, "ara slip" niteliğinde. Sonunda ÖDEMEYİ TAMAMLA basıldığında
  * yine buildCustomerReceiptLines ile asıl tam fiş basılır.
