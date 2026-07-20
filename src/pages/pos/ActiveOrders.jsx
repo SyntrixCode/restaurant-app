@@ -22,6 +22,8 @@ import { formatTL, minutesSince, formatAdet } from '../../utils/format';
 import { updateOrderStatus, cancelActiveOrder } from '../../firebase/orders';
 import { platformAd, platformKuryeAd } from '../../utils/platform';
 import { isIminPrinterAvailable, printReceipt, buildPaketFisiLines } from '../../plugins/iminPrinter';
+import { printNetworkReceipt } from '../../plugins/networkPrinter';
+import { pickAdisyonPrinter } from '../../utils/posDeviceSettings';
 import { recordPayment } from '../../firebase/payments';
 import { awardLoyaltyPoints, computeEarnedPoints } from '../../firebase/customers';
 import { confirmPosentegraOrder, rejectPosentegraOrder, fetchPosentegraReasons } from '../../firebase/posentegra';
@@ -114,26 +116,49 @@ export default function ActiveOrders() {
   const [rejecting, setRejecting] = useState(false);
   // Mutfak fişi (Posentegra kabul sonrası açılır, otomatik basar)
   const [kitchenTicket, setKitchenTicket] = useState(null);
+  // Bu cihazın adisyon/kasa yazıcısı (paket fişi buradan basılır — müşteri fişiyle aynı yer)
+  const [networkPrinters, setNetworkPrinters] = useState([]);
+  useEffect(() => watchCollection('printers', setNetworkPrinters), []);
 
   /**
-   * PAKET FİŞİ — TABLETİN KENDİ yazıcısından basılır, paketin üzerine zımbalanır.
-   * Mutfak fişlerinden ayrıdır: onlar ürün bazında ağdaki istasyonlara (fırın/çorba)
-   * bölünür; bu fiş siparişin TAMAMINI tek sayfada verir (kurye/müşteri kontrolü için).
-   * Yazıcı yoksa (web/tablet değil) sessizce atlanır — sipariş akışını asla bozmaz.
+   * PAKET FİŞİ — TABLETE bağlı ADİSYON yazıcısından basılır, paketin üzerine zımbalanır.
+   * Müşteri fişiyle AYNI yazıcıyı hedefler (pickAdisyonPrinter) — mutfak fişleri ise
+   * ürün bazında ağdaki istasyonlara (fırın/çorba) bölünür, o ayrıdır.
+   * Öncelik: cihazın adisyon yazıcısı (ağ) → iMin dahili → uyarı.
    */
   const printPaketFisi = async (order) => {
+    const lines = buildPaketFisiLines({
+      order,
+      items: order.items || [],
+      platformAd: platformAd(order),
+      settings,
+    });
     try {
-      if (!(await isIminPrinterAvailable())) return;
-      const lines = buildPaketFisiLines({
-        order,
-        items: order.items || [],
-        platformAd: platformAd(order),
-        settings,
+      const adisyonPrinter = pickAdisyonPrinter(networkPrinters);
+      if (adisyonPrinter) {
+        await printNetworkReceipt({
+          ip: adisyonPrinter.ip,
+          model: adisyonPrinter.model || 'SRP-E300',
+          connection: adisyonPrinter.baglanti || 'ethernet',
+          lines,
+          cut: true,
+          feedLines: 4,
+        });
+        return;
+      }
+      // Ağ yazıcısı yoksa iMin dahili termal
+      if (await isIminPrinterAvailable()) {
+        await printReceipt({ lines, cut: true, feedLines: 4 });
+        return;
+      }
+      // Hiç yazıcı yok — cihaza adisyon yazıcısı tanımlanmalı
+      toast('Paket fişi basılamadı — bu cihaza yazıcı tanımlı değil (⚙️ ayarlardan seç)', {
+        icon: '🖨️',
+        duration: 6000,
       });
-      await printReceipt({ lines, cut: true, feedLines: 3 });
     } catch (err) {
       console.warn('Paket fişi basılamadı:', err?.message || err);
-      toast('Paket fişi basılamadı (tablet yazıcısı)', { icon: '🖨️' });
+      toast('Paket fişi basılamadı: ' + (err?.message || 'yazıcı hatası'), { icon: '🖨️' });
     }
   };
 
@@ -431,6 +456,7 @@ export default function ActiveOrders() {
                 onAppPaid={() => handleAppPaid(o)}
                 onManuelPay={() => navigate(`/pos/payment?orderId=${o.id}`)}
                 onIptal={() => handleIptalPaket(o)}
+                onPaketFisi={() => printPaketFisi(o)}
                 onDuzenle={() =>
                   navigate(`/pos/order/new?orderId=${o.id}&masa=${encodeURIComponent(o.masaAd || 'Paket')}`)
                 }
@@ -677,6 +703,7 @@ function PaketOrderCard({
   onAppPaid,
   onManuelPay,
   onIptal,
+  onPaketFisi,
   onDuzenle,
 }) {
   const mins = minutesSince(order.olusturmaZamani);
@@ -912,6 +939,17 @@ function PaketOrderCard({
           <p className="rounded-lg bg-purple-50 py-2 text-center text-xs font-medium text-purple-700">
             Yolda · ödeme yetkisi yok
           </p>
+        )}
+
+        {/* PAKET FİŞİ — pakete zımbalanacak fişi tekrar bas (kabul edilmiş siparişlerde). */}
+        {!needsConfirm && onPaketFisi && (
+          <button
+            onClick={onPaketFisi}
+            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 active:scale-95"
+            title="Pakete zımbalanacak fişi (tablet yazıcısından) tekrar bas"
+          >
+            <Receipt size={13} /> Paket Fişi Bas
+          </button>
         )}
 
         {/* İPTAL — kabul edilmiş ama teslim edilmeyen/takılı kalan paket siparişleri için.
