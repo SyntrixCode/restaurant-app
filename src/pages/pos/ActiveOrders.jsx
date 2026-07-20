@@ -77,7 +77,9 @@ export default function ActiveOrders() {
 
   const visible = useMemo(() => {
     let list = orders;
-    if (rol === 'garson') list = list.filter((o) => o.garsonId === user?.uid);
+    // Garson MASA siparişlerinde sadece kendininkini görür; ama PAKET siparişleri
+    // (elle girilen paket servis + platform) ortak iş akışıdır — tüm garsonlar görür.
+    if (rol === 'garson') list = list.filter((o) => o.paketMi || o.garsonId === user?.uid);
     return list;
   }, [orders, rol, user]);
 

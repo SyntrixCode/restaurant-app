@@ -71,6 +71,18 @@ export default function KitchenTicket({
     }
   }, [open]);
 
+  // GÜVENLİK KAPANIŞI: yazıcı bulunamaz/takılırsa (ağ yok + iMin yok, ya da yazıcı
+  // yanıt vermezse) modal sonsuza dek AÇIK kalıp akışı kilitlemesin. En fazla 10 sn
+  // sonra otomatik kapanır → bağlı akış (garson sipariş sonrası ÇIKIŞ / navigate) tetiklenir.
+  // Normal baskıda modal ~1 sn'de zaten kapanır, bu timer devreye girmez.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => onCloseRef.current?.(), 10000);
+    return () => clearTimeout(t);
+  }, [open]);
+
   // Modal açılınca yazıcı varsa OTOMATİK bas (garson tek tıkla işini bitirsin)
   useEffect(() => {
     if (!open || !order || !items) return;
