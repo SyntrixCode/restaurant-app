@@ -80,7 +80,7 @@ export default function App() {
       <Route
         path="/admin"
         element={
-          <ProtectedRoute roles={['admin', 'kasiyer']} fallback="/admin/login">
+          <ProtectedRoute roles={['admin', 'kasiyer', 'godmode']} fallback="/admin/login">
             <AdminLayout />
           </ProtectedRoute>
         }
@@ -122,7 +122,7 @@ export default function App() {
       <Route
         path="/pos"
         element={
-          <ProtectedRoute roles={['garson', 'kasiyer', 'admin', 'kurye']} fallback="/pos/login">
+          <ProtectedRoute roles={['garson', 'kasiyer', 'admin', 'kurye', 'godmode']} fallback="/pos/login">
             <PosLayout />
           </ProtectedRoute>
         }

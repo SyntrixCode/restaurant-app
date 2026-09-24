@@ -15,6 +15,8 @@ import { watchCollection, where, orderBy, removeDoc } from '../../firebase/fires
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL, formatDate, minutesSince, formatAdet } from '../../utils/format';
 import { excludeTest } from '../../utils/testAccount';
+import { useAuthStore } from '../../store/authStore';
+import { canCancelOrders } from '../../utils/roles';
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
@@ -186,6 +188,8 @@ export default function AdminOrders() {
 }
 
 function OrderDetailModal({ open, order, onClose, onCancel }) {
+  const { rol } = useAuthStore();
+  const canCancel = canCancelOrders(rol);
   if (!open || !order) return null;
   const mins = minutesSince(order.olusturmaZamani);
 
@@ -200,9 +204,11 @@ function OrderDetailModal({ open, order, onClose, onCancel }) {
           <button onClick={onClose} className="btn-secondary">
             Kapat
           </button>
-          <button onClick={onCancel} className="btn-danger">
-            <Trash2 size={14} /> Siparişi İptal Et
-          </button>
+          {canCancel && (
+            <button onClick={onCancel} className="btn-danger">
+              <Trash2 size={14} /> Siparişi İptal Et
+            </button>
+          )}
         </>
       }
     >

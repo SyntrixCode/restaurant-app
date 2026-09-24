@@ -25,6 +25,7 @@ import {
 } from '../../firebase/orders';
 import { updateOdemeYontemi } from '../../firebase/payments';
 import { useAuthStore } from '../../store/authStore';
+import { canCancelOrders } from '../../utils/roles';
 import { exportArchivedOrders } from '../../utils/excelExport';
 import { formatTL, formatDate, formatAdet } from '../../utils/format';
 import { excludeTest } from '../../utils/testAccount';
@@ -304,6 +305,7 @@ function ArchiveDetailModal({ open, order, onClose }) {
   const [payEdits, setPayEdits] = useState({}); // paymentId -> yontem
   const [savingPay, setSavingPay] = useState(false);
   const isAdmin = rol === 'admin';
+  const canCancel = canCancelOrders(rol); // iptal SADECE godmode (Sezgin)
 
   // Başka sipariş açılınca not alanını o siparişin notuyla doldur
   useEffect(() => {
@@ -481,7 +483,7 @@ function ArchiveDetailModal({ open, order, onClose }) {
         title={`${order.masaAd || 'Paket'} — Arşiv`}
         size="lg"
         footer={
-          isAdmin && (
+          canCancel && (
             cancelled ? (
               <button
                 onClick={handleUncancel}

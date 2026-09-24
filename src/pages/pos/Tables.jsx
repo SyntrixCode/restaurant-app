@@ -33,6 +33,7 @@ import Modal from '../../components/ui/Modal';
 import { createTableGroup, addTableToGroup, dissolveTableGroup } from '../../firebase/tableGroups';
 import { createReservation, cancelReservation } from '../../firebase/reservations';
 import { cancelActiveOrder, transferOrder } from '../../firebase/orders';
+import { canCancelOrders } from '../../utils/roles';
 import { reservationSchema } from '../../utils/validators';
 import KitchenTicket from '../../components/KitchenTicket';
 import AdisyonTicket from '../../components/AdisyonTicket';
@@ -1431,8 +1432,8 @@ function FullTableModal({ open, onClose, table, tables = [], rol, navigate, onDi
   if (!open || !table) return null;
   const order = table.order;
   const group = table.group;
-  const canPay = ['kasiyer', 'admin'].includes(rol);
-  const canCancel = ['kasiyer', 'admin'].includes(rol);
+  const canPay = ['kasiyer', 'admin', 'godmode'].includes(rol);
+  const canCancel = canCancelOrders(rol);
 
   const handleTransfer = async (targetTableId) => {
     // hata fırlatırsa alt modal yakalar ve toast gösterir, açık kalır

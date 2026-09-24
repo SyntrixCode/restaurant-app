@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { recordPayment } from '../../firebase/payments';
 import { useAuthStore } from '../../store/authStore';
+import { canCancelOrders } from '../../utils/roles';
 import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import Modal from '../../components/ui/Modal';
@@ -311,6 +312,8 @@ export default function AdminPackages() {
 }
 
 function PackageDetail({ open, order, onClose, onCancel, onStatusChange, onAppPaid }) {
+  const { rol } = useAuthStore();
+  const canCancel = canCancelOrders(rol);
   if (!open || !order) return null;
   const mins = minutesSince(order.olusturmaZamani);
   const yolda = order.durum === 'masayaGitti';
@@ -324,9 +327,11 @@ function PackageDetail({ open, order, onClose, onCancel, onStatusChange, onAppPa
       size="lg"
       footer={
         <>
-          <button onClick={onCancel} className="btn-danger">
-            <Trash2 size={14} /> İptal Et
-          </button>
+          {canCancel && (
+            <button onClick={onCancel} className="btn-danger">
+              <Trash2 size={14} /> İptal Et
+            </button>
+          )}
           <button onClick={onClose} className="btn-secondary">
             Kapat
           </button>

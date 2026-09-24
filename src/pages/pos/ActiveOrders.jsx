@@ -21,6 +21,7 @@ import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL, minutesSince, formatAdet } from '../../utils/format';
 import { updateOrderStatus, cancelActiveOrder } from '../../firebase/orders';
 import { platformAd, platformKuryeAd } from '../../utils/platform';
+import { canCancelOrders } from '../../utils/roles';
 import { isIminPrinterAvailable, printReceipt, buildPaketFisiLines } from '../../plugins/iminPrinter';
 import { printNetworkReceipt } from '../../plugins/networkPrinter';
 import { pickAdisyonPrinter } from '../../utils/posDeviceSettings';
@@ -451,7 +452,8 @@ export default function ActiveOrders() {
                 order={o}
                 gecikmeEsigi={gecikmeEsigi}
                 canPay={canPay}
-                canReject={['admin', 'kasiyer'].includes(rol)}
+                canReject={['admin', 'kasiyer', 'godmode'].includes(rol)}
+                canIptal={canCancelOrders(rol)}
                 onConfirm={() => handleConfirmPosentegra(o)}
                 onReject={() => setRejectFor(o)}
                 onYolaCikar={() => handleYolaCikar(o)}
@@ -699,6 +701,7 @@ function PaketOrderCard({
   gecikmeEsigi,
   canPay,
   canReject,
+  canIptal,
   onConfirm,
   onReject,
   onYolaCikar,
@@ -957,7 +960,7 @@ function PaketOrderCard({
         {/* İPTAL — kabul edilmiş ama teslim edilmeyen/takılı kalan paket siparişleri için.
             Önce platforma bildirilir; ulaşılamazsa (eski sipariş) yerel iptal önerilir.
             İptal edilen sipariş CİROYA GİRMEZ. */}
-        {canReject && !needsConfirm && onIptal && (
+        {canIptal && !needsConfirm && onIptal && (
           <button
             onClick={onIptal}
             className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 active:scale-95"

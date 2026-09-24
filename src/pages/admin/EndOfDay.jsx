@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Wallet, CreditCard, UtensilsCrossed, Calculator, Printer, Save } from 'lucide-react';
+import { Wallet, CreditCard, UtensilsCrossed, Calculator, Printer, Save, MessageCircle } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
-import { watchCollection, where, createDoc } from '../../firebase/firestore';
+import { watchCollection, where, createDoc, watchDoc, upsertDoc } from '../../firebase/firestore';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatTL } from '../../utils/format';
@@ -16,7 +16,8 @@ function todayISO() {
 }
 
 export default function EndOfDay() {
-  const { user, profile } = useAuthStore();
+  const { user, profile, rol } = useAuthStore();
+  const isAdmin = rol === 'admin';
   const { settings } = useSettingsStore();
   const [gun, setGun] = useState(todayISO());
   const [payments, setPayments] = useState([]);
@@ -24,6 +25,16 @@ export default function EndOfDay() {
   const [acilisKasa, setAcilisKasa] = useState('');
   const [sayilanNakit, setSayilanNakit] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // WhatsApp gün sonu rapor ayarı (CallMeBot) — sadece admin
+  const [waCfg, setWaCfg] = useState({
+    aktif: false,
+    telefon: '',
+    apikey: '',
+    siparisBildirimAktif: false,
+    iptalBildirimAktif: false,
+  });
+  const [waSaving, setWaSaving] = useState(false);
 
   useEffect(() => {
     const unsubP = watchCollection('payments', (l) => setPayments(excludeTest(l)), where('gun', '==', gun));
@@ -33,6 +44,39 @@ export default function EndOfDay() {
       unsubA();
     };
   }, [gun]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    const unsub = watchDoc('settings', 'whatsapp', (d) => {
+      if (d)
+        setWaCfg({
+          aktif: !!d.aktif,
+          telefon: d.telefon || '',
+          apikey: d.apikey || '',
+          siparisBildirimAktif: !!d.siparisBildirimAktif,
+          iptalBildirimAktif: !!d.iptalBildirimAktif,
+        });
+    });
+    return () => unsub && unsub();
+  }, [isAdmin]);
+
+  const handleSaveWa = async () => {
+    setWaSaving(true);
+    try {
+      await upsertDoc('settings', 'whatsapp', {
+        aktif: !!waCfg.aktif,
+        telefon: (waCfg.telefon || '').replace(/[^\d]/g, ''),
+        apikey: (waCfg.apikey || '').trim(),
+        siparisBildirimAktif: !!waCfg.siparisBildirimAktif,
+        iptalBildirimAktif: !!waCfg.iptalBildirimAktif,
+      });
+      toast.success('WhatsApp rapor ayarı kaydedildi');
+    } catch (err) {
+      toast.error(err.message || 'Kaydedilemedi');
+    } finally {
+      setWaSaving(false);
+    }
+  };
 
   // Ödeme yöntemine göre topla — kuruş aritmetik
   const totals = useMemo(() => {
@@ -233,6 +277,80 @@ export default function EndOfDay() {
           </div>
         </div>
       </div>
+
+      {isAdmin && (
+        <div className="card mt-6 print:hidden">
+          <div className="mb-3 flex items-center gap-2">
+            <MessageCircle size={18} className="text-green-600" />
+            <h3 className="text-lg font-semibold text-slate-900">WhatsApp Gün Sonu Raporu</h3>
+          </div>
+          <p className="mb-4 text-sm text-slate-500">
+            Aşağıdaki numaraya WhatsApp'tan bildirim gönderilir: (1) "Z Raporu Kaydet" ile gün
+            sonu kapatılınca Nakit / Kart / Yemek Kartı / Trendyol / Getir / Yemeksepeti kırılımlı
+            ciro raporu; (2) yeni platform siparişi düştüğünde anlık sipariş bildirimi. Ücretsiz{' '}
+            <b>CallMeBot</b> servisi kullanılır — apikey için Sezgin Bey CallMeBot numarasına bir
+            mesaj atıp anahtarı almalıdır. (Yoğun saatte ücretsiz serviste bildirimler gecikebilir.)
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Telefon (uluslararası, + yok)
+              </label>
+              <input
+                type="text"
+                value={waCfg.telefon}
+                onChange={(e) => setWaCfg((c) => ({ ...c, telefon: e.target.value }))}
+                placeholder="905321234567"
+                className="input"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                CallMeBot API Key
+              </label>
+              <input
+                type="text"
+                value={waCfg.apikey}
+                onChange={(e) => setWaCfg((c) => ({ ...c, apikey: e.target.value }))}
+                placeholder="123456"
+                className="input"
+              />
+            </div>
+          </div>
+          <label className="mt-4 flex items-center gap-2 text-sm font-medium text-slate-700">
+            <input
+              type="checkbox"
+              checked={waCfg.aktif}
+              onChange={(e) => setWaCfg((c) => ({ ...c, aktif: e.target.checked }))}
+              className="h-4 w-4"
+            />
+            Gün sonu ciro raporunu gönder
+          </label>
+          <label className="mt-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+            <input
+              type="checkbox"
+              checked={waCfg.siparisBildirimAktif}
+              onChange={(e) => setWaCfg((c) => ({ ...c, siparisBildirimAktif: e.target.checked }))}
+              className="h-4 w-4"
+            />
+            Yeni platform siparişi (Yemeksepeti/Getir/Trendyol) geldiğinde bildir
+          </label>
+          <label className="mt-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+            <input
+              type="checkbox"
+              checked={waCfg.iptalBildirimAktif}
+              onChange={(e) => setWaCfg((c) => ({ ...c, iptalBildirimAktif: e.target.checked }))}
+              className="h-4 w-4"
+            />
+            Bir sipariş iptal edildiğinde bildir
+          </label>
+          <div className="mt-4">
+            <button onClick={handleSaveWa} disabled={waSaving} className="btn-primary disabled:opacity-50">
+              <Save size={16} /> {waSaving ? 'Kaydediliyor...' : 'Ayarı Kaydet'}
+            </button>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @media print {

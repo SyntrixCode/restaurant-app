@@ -1,5 +1,5 @@
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
-import { onDocumentWritten, onDocumentUpdated } from 'firebase-functions/v2/firestore';
+import { onDocumentWritten, onDocumentUpdated, onDocumentCreated, onDocumentDeleted } from 'firebase-functions/v2/firestore';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import { defineSecret } from 'firebase-functions/params';
 import { initializeApp } from 'firebase-admin/app';
@@ -924,3 +924,247 @@ export const importMenu = onCall(
     return stats;
   },
 );
+
+// ============================================================================
+// GÜN SONU CİRO RAPORU → WhatsApp (CallMeBot)
+// ----------------------------------------------------------------------------
+// Gün sonu kapatılınca (zReports/{id} oluşunca) Sezgin Bey'e WhatsApp'tan
+// Nakit / Kredi Kartı / Yemek Kartı / Trendyol / Getir / Yemeksepeti kırılımlı
+// günlük ciro raporu gönderir.
+//
+// Yapılandırma (Firestore): settings/whatsapp = {
+//   aktif: true,
+//   telefon: '905xxxxxxxxx',   // uluslararası, + ve boşluk YOK
+//   apikey:  '<CallMeBot apikey>' // Sezgin CallMeBot'a mesaj atıp alır
+// }
+// CallMeBot ücretsizdir, şablon onayı gerektirmez, mesajı Sezgin'in numarasına yollar.
+// ============================================================================
+
+const PLATFORM_KAYNAKLAR = ['trendyol', 'getir', 'yemeksepeti', 'migros'];
+const PLATFORM_ETIKET = {
+  trendyol: 'Trendyol',
+  getir: 'Getir',
+  yemeksepeti: 'Yemeksepeti',
+  migros: 'Migros',
+};
+
+function tlFormat(n) {
+  return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
+    Number(n) || 0,
+  );
+}
+
+// settings/whatsapp yapılandırmasını döndürür (yoksa null)
+async function getWhatsappCfg() {
+  const snap = await db.doc('settings/whatsapp').get();
+  return snap.exists ? snap.data() : null;
+}
+
+// CallMeBot ile WhatsApp mesajı gönderir. { ok, body } döner.
+async function whatsappGonder(telefon, apikey, mesaj) {
+  const url =
+    `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(telefon)}` +
+    `&text=${encodeURIComponent(mesaj)}&apikey=${encodeURIComponent(apikey)}`;
+  const res = await fetch(url);
+  const body = await res.text();
+  return { ok: res.ok, status: res.status, body };
+}
+
+export const gunSonuWhatsappRapor = onDocumentCreated('zReports/{id}', async (event) => {
+  const z = event.data?.data();
+  if (!z || !z.gun) return;
+
+  // Yapılandırma
+  const cfgSnap = await db.doc('settings/whatsapp').get();
+  const cfg = cfgSnap.exists ? cfgSnap.data() : null;
+  if (!cfg || cfg.aktif === false || !cfg.telefon || !cfg.apikey) {
+    console.log('[gunSonuWhatsappRapor] yapılandırma yok/pasif — atlandı');
+    return;
+  }
+
+  const gun = z.gun;
+
+  // 1) Arşiv siparişleri → orderId -> paketKaynak haritası (iptal/test hariç)
+  const arsivSnap = await db.collection('archivedOrders').where('gun', '==', gun).get();
+  const kaynakMap = new Map();
+  for (const d of arsivSnap.docs) {
+    const o = d.data();
+    if (o.test === true) continue;
+    if (o.iptal?.edildi) continue;
+    kaynakMap.set(d.id, o.paketKaynak || null);
+  }
+
+  // 2) Ödemeler → kırılım (nakit/kart/yemekKarti + platform 'uygulama')
+  const paySnap = await db.collection('payments').where('gun', '==', gun).get();
+  let nakit = 0,
+    kart = 0,
+    yemekKarti = 0;
+  const platform = { trendyol: 0, getir: 0, yemeksepeti: 0, migros: 0, diger: 0 };
+  for (const d of paySnap.docs) {
+    const p = d.data();
+    if (p.test === true) continue;
+    const t = Number(p.tutar) || 0;
+    if (p.yontem === 'nakit') nakit += t;
+    else if (p.yontem === 'kart') kart += t;
+    else if (p.yontem === 'yemekKarti') yemekKarti += t;
+    else if (p.yontem === 'uygulama') {
+      const kaynak = kaynakMap.get(p.orderId);
+      if (kaynak && PLATFORM_KAYNAKLAR.includes(kaynak)) platform[kaynak] += t;
+      else platform.diger += t;
+    } else if (p.yontem !== 'cari') {
+      // bilinmeyen tahsilat → nakit say (EndOfDay ile tutarlı)
+      nakit += t;
+    }
+  }
+
+  const platformToplam =
+    platform.trendyol + platform.getir + platform.yemeksepeti + platform.migros + platform.diger;
+  const toplam = nakit + kart + yemekKarti + platformToplam;
+
+  // 3) Mesajı oluştur
+  const satirlar = [
+    `📊 *GÜN SONU CİRO* — ${gun}`,
+    '',
+    `💵 Nakit: ${tlFormat(nakit)} ₺`,
+    `💳 Kredi Kartı: ${tlFormat(kart)} ₺`,
+    `🍽️ Yemek Kartı: ${tlFormat(yemekKarti)} ₺`,
+  ];
+  if (platform.trendyol > 0) satirlar.push(`🛵 Trendyol: ${tlFormat(platform.trendyol)} ₺`);
+  if (platform.getir > 0) satirlar.push(`🛵 Getir: ${tlFormat(platform.getir)} ₺`);
+  if (platform.yemeksepeti > 0) satirlar.push(`🛵 Yemeksepeti: ${tlFormat(platform.yemeksepeti)} ₺`);
+  if (platform.migros > 0) satirlar.push(`🛵 Migros: ${tlFormat(platform.migros)} ₺`);
+  if (platform.diger > 0) satirlar.push(`🛵 Diğer Uygulama: ${tlFormat(platform.diger)} ₺`);
+  satirlar.push('', `🧾 *TOPLAM: ${tlFormat(toplam)} ₺*`);
+  satirlar.push(`Sipariş: ${z.siparisSayisi ?? '-'} · İptal: ${z.iptalSayisi ?? 0}`);
+  if (typeof z.fark === 'number' && z.fark !== 0) {
+    satirlar.push(`Kasa farkı: ${tlFormat(z.fark)} ₺`);
+  }
+  const mesaj = satirlar.join('\n');
+
+  // 4) CallMeBot ile gönder
+  const url =
+    `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(cfg.telefon)}` +
+    `&text=${encodeURIComponent(mesaj)}&apikey=${encodeURIComponent(cfg.apikey)}`;
+  try {
+    const res = await fetch(url);
+    const body = await res.text();
+    const ok = res.ok;
+    console.log('[gunSonuWhatsappRapor] CallMeBot yanıtı:', res.status, body.slice(0, 200));
+    await event.data.ref.update({
+      whatsappGonderildi: ok,
+      whatsappZaman: FieldValue.serverTimestamp(),
+      whatsappYanit: body.slice(0, 300),
+    });
+  } catch (err) {
+    console.error('[gunSonuWhatsappRapor] gönderim hatası:', err.message);
+    await event.data.ref.update({
+      whatsappGonderildi: false,
+      whatsappHata: err.message,
+      whatsappZaman: FieldValue.serverTimestamp(),
+    });
+  }
+});
+
+// ============================================================================
+// YENİ PLATFORM SİPARİŞİ → WhatsApp bildirimi (CallMeBot)
+// ----------------------------------------------------------------------------
+// Yemeksepeti / Getir / Trendyol / Migros'tan yeni sipariş DÜŞTÜĞÜNDE Sezgin Bey'e
+// anlık WhatsApp bildirimi yollar. settings/whatsapp.siparisBildirimAktif ile açılır.
+// NOT: CallMeBot ücretsiz sürümde sık mesajda hız sınırı olabilir; yoğun saatte
+// bazı bildirimler gecikebilir.
+// ============================================================================
+export const yeniPaketSiparisBildirimi = onDocumentCreated('orders/{id}', async (event) => {
+  const o = event.data?.data();
+  if (!o) return;
+  // Sadece platform paket siparişleri
+  if (!o.paketMi) return;
+  if (!PLATFORM_KAYNAKLAR.includes(o.paketKaynak)) return;
+  if (o.test === true) return;
+
+  const cfg = await getWhatsappCfg();
+  // Sipariş bildirimi gün sonu raporundan BAĞIMSIZ — sadece siparisBildirimAktif'e bakar
+  if (!cfg || cfg.siparisBildirimAktif !== true) return;
+  if (!cfg.telefon || !cfg.apikey) return;
+
+  const kaynakAd = o.paketKaynakAd || PLATFORM_ETIKET[o.paketKaynak] || 'Paket';
+  const items = Array.isArray(o.items) ? o.items : [];
+  const kalemSatir = items
+    .slice(0, 10)
+    .map((it) => `• ${it.ad || it.urunAd || 'Ürün'} x${it.adet || 1}`)
+    .join('\n');
+  const kalemFazla = items.length > 10 ? `\n… +${items.length - 10} kalem daha` : '';
+
+  const satirlar = [
+    `🔔 *YENİ PAKET SİPARİŞİ*`,
+    `📦 Kaynak: ${kaynakAd}`,
+    o.musteriAd ? `👤 Müşteri: ${o.musteriAd}` : null,
+    `💰 Tutar: ${tlFormat(o.toplam)} ₺`,
+    o.oncedenOdendi ? '✅ Online ödenmiş' : '💵 Kapıda/kasada ödenecek',
+    '',
+    kalemSatir + kalemFazla,
+  ].filter(Boolean);
+  const mesaj = satirlar.join('\n');
+
+  try {
+    const r = await whatsappGonder(cfg.telefon, cfg.apikey, mesaj);
+    console.log('[yeniPaketSiparisBildirimi] CallMeBot:', r.status, r.body.slice(0, 120));
+  } catch (err) {
+    console.error('[yeniPaketSiparisBildirimi] gönderim hatası:', err.message);
+  }
+});
+
+// ============================================================================
+// SİPARİŞ İPTALİ → WhatsApp bildirimi (CallMeBot)
+// ----------------------------------------------------------------------------
+// Bir sipariş iptal edildiğinde Sezgin Bey'e bilgi verir. İki yol kapsanır:
+//  1) archivedOrders'a iptal damgası düşünce (POS masa iptali + arşivden fiş iptali)
+//  2) Sipariş Yönetimi/Paket ekranından sipariş sert silinince (orders doc delete)
+// settings/whatsapp.iptalBildirimAktif ile açılır.
+// ============================================================================
+async function iptalBildirimGonder(baslikSatirlari) {
+  const cfg = await getWhatsappCfg();
+  if (!cfg || cfg.iptalBildirimAktif !== true) return;
+  if (!cfg.telefon || !cfg.apikey) return;
+  const mesaj = baslikSatirlari.filter(Boolean).join('\n');
+  try {
+    const r = await whatsappGonder(cfg.telefon, cfg.apikey, mesaj);
+    console.log('[iptalBildirim] CallMeBot:', r.status, r.body.slice(0, 120));
+  } catch (err) {
+    console.error('[iptalBildirim] gönderim hatası:', err.message);
+  }
+}
+
+export const siparisIptalBildirimi = onDocumentWritten('archivedOrders/{id}', async (event) => {
+  const before = event.data?.before?.data();
+  const after = event.data?.after?.data();
+  if (!after) return; // silme
+  if (after.test === true) return;
+  const oncedenIptal = before?.iptal?.edildi === true;
+  const simdiIptal = after?.iptal?.edildi === true;
+  // Sadece iptal DURUMUNA GEÇİŞTE bildir (tekrar yazımlarda değil)
+  if (simdiIptal && !oncedenIptal) {
+    const yer = after.paketMi ? after.paketKaynakAd || 'Paket' : after.masaAd || 'Masa';
+    await iptalBildirimGonder([
+      `❌ *SİPARİŞ İPTAL EDİLDİ*`,
+      `📍 ${yer}`,
+      `💰 Tutar: ${tlFormat(after.toplam)} ₺`,
+      after.iptal?.edenAd ? `👤 İptal eden: ${after.iptal.edenAd}` : null,
+      after.iptal?.sebep ? `📝 Sebep: ${after.iptal.sebep}` : null,
+    ]);
+  }
+});
+
+export const siparisSilmeBildirimi = onDocumentDeleted('orders/{id}', async (event) => {
+  const o = event.data?.data();
+  if (!o) return;
+  if (o.test === true) return;
+  // Tamamlanmış/zaten iptal olan siparişin silinmesi bildirim gerektirmez
+  if (o.durum === 'tamamlandi' || o.durum === 'iptal') return;
+  const yer = o.paketMi ? o.paketKaynakAd || 'Paket' : o.masaAd || 'Masa';
+  await iptalBildirimGonder([
+    `❌ *SİPARİŞ SİLİNDİ (İptal)*`,
+    `📍 ${yer}`,
+    `💰 Tutar: ${tlFormat(o.toplam)} ₺`,
+    `ℹ️ Yönetim panelinden silindi`,
+  ]);
+});

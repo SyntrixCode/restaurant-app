@@ -106,7 +106,10 @@ service cloud.firestore {
     }
 
     match /settings/{id} {
-      allow read: if isStaff() || id == 'public';
+      // WhatsApp rapor ayarı (CallMeBot apikey) sadece admin okuyabilir; diğer ayarlar personele açık
+      allow read: if id == 'public'
+                  || (id == 'whatsapp' && isAdmin())
+                  || (id != 'whatsapp' && isStaff());
       allow write: if isAdmin();
     }
 

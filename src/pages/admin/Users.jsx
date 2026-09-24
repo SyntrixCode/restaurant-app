@@ -19,7 +19,7 @@ import { derivePosCredentials } from '../../utils/hash';
 import { POS_EMAIL_DOMAIN } from '../../firebase/config';
 import { useAuthStore } from '../../store/authStore';
 
-const ROLE_LABEL = { admin: 'Admin', kasiyer: 'Kasiyer', garson: 'Garson', kurye: 'Kurye' };
+const ROLE_LABEL = { admin: 'Admin', kasiyer: 'Kasiyer', garson: 'Garson', kurye: 'Kurye', godmode: 'Godmode' };
 
 export default function Users() {
   const [users, setUsers] = useState([]);
@@ -308,6 +308,7 @@ function UserModal({ open, onClose, editing }) {
             <option value="garson">Garson</option>
             <option value="kasiyer">Kasiyer</option>
             <option value="kurye">Kurye</option>
+            <option value="godmode">Godmode (Yetkili)</option>
           </select>
         </div>
 
