@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Wallet, CreditCard, UtensilsCrossed, Calculator, Printer, Save, MessageCircle } from 'lucide-react';
+import { Wallet, CreditCard, UtensilsCrossed, Calculator, Printer, Save, MessageCircle, Smartphone } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import { watchCollection, where, createDoc, watchDoc, upsertDoc } from '../../firebase/firestore';
@@ -14,6 +14,15 @@ function todayISO() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+// Platform ödeme kaynakları (yontem='uygulama' olan ödemeler bu kaynaklara göre ayrılır)
+const PLATFORM_KAYNAKLAR = ['trendyol', 'getir', 'yemeksepeti', 'migros'];
+const PLATFORM_ETIKET = {
+  trendyol: 'Trendyol',
+  getir: 'Getir',
+  yemeksepeti: 'Yemeksepeti',
+  migros: 'Migros',
+};
 
 export default function EndOfDay() {
   const { user, profile, rol } = useAuthStore();
@@ -79,26 +88,45 @@ export default function EndOfDay() {
   };
 
   // Ödeme yöntemine göre topla — kuruş aritmetik
+  // Platform (uygulama) ödemeleri ARTIK nakite yazılmaz; kaynağına göre ayrı kalem olur.
   const totals = useMemo(() => {
-    let nakitK = 0, kartK = 0, yemekK = 0, count = 0;
+    // orderId -> paketKaynak haritası (platform ödemesini doğru platforma yazmak için)
+    const kaynakMap = new Map(archived.map((a) => [a.id, a.paketKaynak]));
+    let nakitK = 0, kartK = 0, yemekK = 0, digerK = 0, count = 0;
+    const platK = { trendyol: 0, getir: 0, yemeksepeti: 0, migros: 0 };
     for (const p of payments) {
       const k = toKurus(p.tutar);
       count++;
       if (p.yontem === 'nakit') nakitK += k;
       else if (p.yontem === 'kart') kartK += k;
       else if (p.yontem === 'yemekKarti') yemekK += k;
-      else nakitK += k; // bilinmeyen → nakit say
+      else if (p.yontem === 'uygulama') {
+        const kaynak = kaynakMap.get(p.orderId);
+        if (kaynak && PLATFORM_KAYNAKLAR.includes(kaynak)) platK[kaynak] += k;
+        else digerK += k; // kaynağı bulunamayan platform ödemesi
+      } else {
+        digerK += k; // bilinmeyen yöntem — NAKİT'e yazMIYORUZ
+      }
     }
-    const toplamK = nakitK + kartK + yemekK;
+    const platformToplamK = platK.trendyol + platK.getir + platK.yemeksepeti + platK.migros;
+    const toplamK = nakitK + kartK + yemekK + platformToplamK + digerK;
     return {
       nakit: fromKurus(nakitK),
       kart: fromKurus(kartK),
       yemek: fromKurus(yemekK),
+      diger: fromKurus(digerK),
+      platform: {
+        trendyol: fromKurus(platK.trendyol),
+        getir: fromKurus(platK.getir),
+        yemeksepeti: fromKurus(platK.yemeksepeti),
+        migros: fromKurus(platK.migros),
+      },
+      platformToplam: fromKurus(platformToplamK),
       toplam: fromKurus(toplamK),
       count,
       nakitK,
     };
-  }, [payments]);
+  }, [payments, archived]);
 
   // İptal edilmeyen arşiv siparişleri
   const validArchived = archived.filter((o) => !o.iptal?.edildi);
@@ -142,6 +170,12 @@ export default function EndOfDay() {
         toplamNakit: totals.nakit,
         toplamKart: totals.kart,
         toplamYemekKarti: totals.yemek,
+        toplamTrendyol: totals.platform.trendyol,
+        toplamGetir: totals.platform.getir,
+        toplamYemeksepeti: totals.platform.yemeksepeti,
+        toplamMigros: totals.platform.migros,
+        toplamPlatform: totals.platformToplam,
+        toplamDiger: totals.diger,
         toplamCiro: totals.toplam,
         odemeSayisi: totals.count,
         siparisSayisi: validArchived.length,
@@ -195,6 +229,21 @@ export default function EndOfDay() {
           <StatCard label="Yemek Kartı" value={formatTL(totals.yemek)} color="amber" icon={UtensilsCrossed} />
         </div>
 
+        {/* Platform (uygulama) dökümü — sadece tutarı olanlar */}
+        {totals.platformToplam > 0 && (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            {PLATFORM_KAYNAKLAR.filter((k) => totals.platform[k] > 0).map((k) => (
+              <StatCard
+                key={k}
+                label={PLATFORM_ETIKET[k]}
+                value={formatTL(totals.platform[k])}
+                color="rose"
+                icon={Smartphone}
+              />
+            ))}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Özet */}
           <div className="card">
@@ -218,6 +267,10 @@ export default function EndOfDay() {
               <Row label="Nakit" value={formatTL(totals.nakit)} />
               <Row label="Kart" value={formatTL(totals.kart)} />
               <Row label="Yemek Kartı" value={formatTL(totals.yemek)} />
+              {PLATFORM_KAYNAKLAR.filter((k) => totals.platform[k] > 0).map((k) => (
+                <Row key={k} label={PLATFORM_ETIKET[k]} value={formatTL(totals.platform[k])} />
+              ))}
+              {totals.diger > 0 && <Row label="Diğer" value={formatTL(totals.diger)} />}
               <div className="my-2 border-t border-slate-200" />
               <Row label="TOPLAM CİRO" value={formatTL(totals.toplam)} bold />
             </dl>

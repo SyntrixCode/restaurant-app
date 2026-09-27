@@ -2,7 +2,9 @@ export default function StatCard({ label, value, color = 'slate', icon: Icon }) 
   const tones = {
     slate: 'text-slate-900',
     green: 'text-emerald-600',
+    emerald: 'text-emerald-600',
     red: 'text-red-600',
+    rose: 'text-rose-600',
     amber: 'text-amber-600',
     blue: 'text-blue-600',
   };
