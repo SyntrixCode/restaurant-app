@@ -7,13 +7,22 @@ const confirmFn = httpsCallable(functions, 'posentegraConfirm');
 const rejectFn = httpsCallable(functions, 'posentegraReject');
 const reasonsFn = httpsCallable(functions, 'posentegraReasons');
 const tamamlaPlatformFn = httpsCallable(functions, 'tamamlaPlatformSiparis');
+const hazirlaVeKapatFn = httpsCallable(functions, 'hazirlaVeKapat');
 
 /**
  * Önceden ödenmiş platform siparişini tamamlar (sunucu tarafı arşiv).
- * "Yola Çıkart ve Siparişi Tamamla" — garson da çağırabilir.
  */
 export async function tamamlaPlatformSiparis(orderId) {
   const res = await tamamlaPlatformFn({ orderId });
+  return res.data;
+}
+
+/**
+ * "Hazırlandı" tek tuş: platforma (Trendyol/YS) "hazırlandı" bildirir (kurye çağrılır)
+ * + siparişi bizim tarafta tamamlar/kapatır. Kuryeye verildi = restoranın işi bitti.
+ */
+export async function hazirlaVeKapat(orderId) {
+  const res = await hazirlaVeKapatFn({ orderId });
   return res.data;
 }
 

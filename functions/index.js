@@ -1,6 +1,5 @@
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentWritten, onDocumentUpdated, onDocumentCreated, onDocumentDeleted } from 'firebase-functions/v2/firestore';
-import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import { defineSecret } from 'firebase-functions/params';
 import { initializeApp } from 'firebase-admin/app';
@@ -629,50 +628,37 @@ export const tamamlaPlatformSiparis = onCall({ region: 'europe-west1' }, async (
   return await arsivlePlatformSiparis(orderId, req.auth.uid, userData.ad || 'Personel');
 });
 
-// ============================================================================
-// PLATFORM SİPARİŞ DURUM TAKİBİ (polling) → kurye alınca OTOMATİK KAPAT
-// ----------------------------------------------------------------------------
-// Personel platform ekranından "teslim edildi" yapmadığı için, Posentegra'dan
-// siparişin durumunu periyodik sorarız (getOrder). Kurye "yola çıktı/teslim
-// edildi" olunca siparişi otomatik kapatırız.
-//
-// GÜVENLİK: Yanlış kodda erken kapatmamak için, "kapat" sayılan Posentegra durum
-// kodları settings/posentegra.autoCloseStatuses (dizi) ile YAPILANDIRILIR.
-// Boş/tanımsızsa YALNIZCA LOG atar (kapatmaz) — doğru kodu loglardan öğrenip
-// ayara girince otomatik kapatma redeploy'suz aktifleşir.
-// ============================================================================
-export const platformSiparisDurumTakip = onSchedule(
-  { schedule: 'every 3 minutes', region: 'europe-west1', secrets: [POSENTEGRA_API_KEY] },
-  async () => {
-    const cfgSnap = await db.doc('settings/posentegra').get();
-    const cfg = cfgSnap.exists ? cfgSnap.data() : {};
-    const closeCodes = new Set((Array.isArray(cfg.autoCloseStatuses) ? cfg.autoCloseStatuses : []).map(Number));
+// "Hazırlandı" tek tuş: Trendyol/YS'ye "hazırlandı" bildir (kurye çağrılsın) + bizim
+// tarafta siparişi TAMAMLA. Kuryeye verildi = restoranın işi bitti. Platforma
+// "teslim edildi" GÖNDERMEZ (onu platform kuryesi yapar); posentegraOnStatusChange
+// platform siparişlerinde push atlar, o yüzden hazırlandı'yı burada elle push ederiz.
+export const hazirlaVeKapat = onCall(
+  { region: 'europe-west1', secrets: [POSENTEGRA_API_KEY] },
+  async (req) => {
+    if (!req.auth) throw new HttpsError('unauthenticated', 'Giriş gerekli');
+    const userSnap = await db.collection('users').doc(req.auth.uid).get();
+    const userData = userSnap.exists ? userSnap.data() : {};
+    if (!userData.aktif || !['admin', 'kasiyer', 'garson', 'godmode'].includes(userData.rol)) {
+      throw new HttpsError('permission-denied', 'Yetki yok');
+    }
+    const orderId = String(req.data?.orderId || '');
+    if (!orderId) throw new HttpsError('invalid-argument', 'orderId gerekli');
 
-    const snap = await db
-      .collection('orders')
-      .where('durum', 'in', ['aktif', 'hazirlandi'])
-      .get();
+    const snap = await db.collection('orders').doc(orderId).get();
+    if (!snap.exists) throw new HttpsError('not-found', 'Sipariş bulunamadı');
+    const order = snap.data();
+    const pid = order.posentegraPid;
 
-    for (const d of snap.docs) {
-      const o = d.data();
-      if (o.teslimatTipi !== 'platform' || !o.posentegraPid || !o.posentegraOnayli) continue;
+    // 1) Platforma "hazırlandı" bildir (kurye çağrılır). Hata olsa da kapatmaya devam.
+    if (pid) {
       try {
-        const res = await posentegraApi.getOrder(POSENTEGRA_API_KEY.value(), o.posentegraPid);
-        // Status alanı Posentegra'da farklı isimlerde olabilir — hepsini dene + logla.
-        const status = res?.status ?? res?.orderStatus ?? res?.state ?? res?.data?.status ?? res?.order?.status;
-        console.log('[durumTakip]', {
-          id: d.id, pid: o.posentegraPid, durum: o.durum, status,
-          statusText: res?.statusText ?? res?.statusName ?? res?.orderStatusText,
-          keys: Object.keys(res || {}),
-        });
-        if (status != null && closeCodes.has(Number(status))) {
-          await arsivlePlatformSiparis(d.id, null, 'Otomatik (kurye teslim)');
-          console.log('[durumTakip] OTOMATİK KAPATILDI', { id: d.id, status });
-        }
+        await posentegraApi.changeStatus(POSENTEGRA_API_KEY.value(), pid, POSENTEGRA_STATUS_MAP.hazirlandi);
       } catch (err) {
-        console.warn('[durumTakip] getOrder hata', o.posentegraPid, err.message);
+        console.warn('[hazirlaVeKapat] changeStatus hata', pid, err.message);
       }
     }
+    // 2) Bizim tarafta tamamla/arşivle
+    return await arsivlePlatformSiparis(orderId, req.auth.uid, userData.ad || 'Personel');
   },
 );
 
@@ -830,6 +816,10 @@ export const posentegraOnStatusChange = onDocumentUpdated(
     if (!before || !after) return;
     const pid = after.posentegraPid;
     if (!pid) return;
+    // Platform kuryeli siparişlerde durum push'u ELLE yönetilir (hazirlaVeKapat 'hazırlandı' gönderir).
+    // Otomatik push YAPMA — yoksa bizim tarafta "tamamlandı" yapınca platforma yanlışlıkla
+    // "teslim edildi" (900) gider (kurye daha teslim etmeden).
+    if (after.teslimatTipi === 'platform') return;
     if (before.durum === after.durum) return;
     const statusCode = POSENTEGRA_STATUS_MAP[after.durum];
     if (statusCode == null) return;

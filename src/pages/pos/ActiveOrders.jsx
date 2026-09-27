@@ -27,7 +27,7 @@ import { printNetworkReceipt } from '../../plugins/networkPrinter';
 import { pickAdisyonPrinter } from '../../utils/posDeviceSettings';
 import { recordPayment } from '../../firebase/payments';
 import { awardLoyaltyPoints, computeEarnedPoints } from '../../firebase/customers';
-import { confirmPosentegraOrder, rejectPosentegraOrder, fetchPosentegraReasons, tamamlaPlatformSiparis } from '../../firebase/posentegra';
+import { confirmPosentegraOrder, rejectPosentegraOrder, fetchPosentegraReasons, tamamlaPlatformSiparis, hazirlaVeKapat } from '../../firebase/posentegra';
 import Modal from '../../components/ui/Modal';
 import KitchenTicket from '../../components/KitchenTicket';
 
@@ -326,17 +326,18 @@ export default function ActiveOrders() {
     setYolaCikarFor(order);
   };
 
-  // "Hazırlandı" → order durumunu hazirlandi yap. Sunucudaki posentegraOnStatusChange
-  // trigger'ı Posentegra'ya (Trendyol/YS) "hazırlandı" (status 400) push eder → kurye çağrılır.
-  // Personel platform uygulamasına girmeden, buradan bildirir.
+  // "Hazırlandı" tek tuş: platforma (Trendyol/YS) "hazırlandı" bildirir (kurye çağrılır)
+  // + siparişi bizim tarafta TAMAMLAR/kapatır. Kuryeye verildi = restoranın işi bitti.
+  // (Sunucu tarafı: changeStatus 400 push + arşiv. Garson da yapabilir.)
   const handleHazirla = async (order) => {
-    const t = toast.loading('Hazırlandı bildiriliyor…');
+    const t = toast.loading('Hazırlandı bildirilip kapatılıyor…');
     try {
-      await patchDoc('orders', order.id, {
-        durum: 'hazirlandi',
-        hazirlandiZamani: serverTimestamp(),
-      });
-      toast.success(`Hazırlandı — ${platformAd(order) || 'platform'} bilgilendirildi`, { id: t });
+      await hazirlaVeKapat(order.id);
+      if (settings?.sadakatAktif && order.musteriTel) {
+        const earned = computeEarnedPoints(order.toplam, settings);
+        if (earned > 0) awardLoyaltyPoints({ tel: order.musteriTel, tutar: order.toplam, settings }).catch(() => {});
+      }
+      toast.success(`Hazırlandı — ${platformAd(order) || 'platform'} bilgilendirildi, sipariş kapatıldı`, { id: t });
     } catch (err) {
       console.error(err);
       toast.error(err.message || 'İşlem başarısız', { id: t });
@@ -943,21 +944,13 @@ function PaketOrderCard({
                 • Restoran kuryeli platform: "Yola Çıkar" (kurye ata).
                 • Dış paket: buton yok → "Ödeme Al" ile kapatılır. */}
             {platformDelivery ? (
-              hazir ? (
-                <button
-                  onClick={onTamamla}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow hover:bg-emerald-700 active:scale-95"
-                >
-                  <Check size={15} /> Teslim Edildi · Siparişi Kapat
-                </button>
-              ) : (
-                <button
-                  onClick={onHazirla}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow hover:bg-blue-700 active:scale-95"
-                >
-                  <Check size={15} /> Hazırlandı — {platformAd(order) || 'Platforma'} Bildir
-                </button>
-              )
+              // Tek tuş: platforma "hazırlandı" bildir (kurye çağrılır) + siparişi kapat.
+              <button
+                onClick={onHazirla}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow hover:bg-emerald-700 active:scale-95"
+              >
+                <Check size={15} /> Hazırlandı · Siparişi Kapat
+              </button>
             ) : !disPaket ? (
               <button
                 onClick={onYolaCikar}
