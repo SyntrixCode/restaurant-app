@@ -6,6 +6,16 @@ const functions = getFunctions(app, 'europe-west1');
 const confirmFn = httpsCallable(functions, 'posentegraConfirm');
 const rejectFn = httpsCallable(functions, 'posentegraReject');
 const reasonsFn = httpsCallable(functions, 'posentegraReasons');
+const tamamlaPlatformFn = httpsCallable(functions, 'tamamlaPlatformSiparis');
+
+/**
+ * Önceden ödenmiş platform siparişini tamamlar (sunucu tarafı arşiv).
+ * "Yola Çıkart ve Siparişi Tamamla" — garson da çağırabilir.
+ */
+export async function tamamlaPlatformSiparis(orderId) {
+  const res = await tamamlaPlatformFn({ orderId });
+  return res.data;
+}
 
 /**
  * Posentegra siparişini kabul et — order'da posentegraOnayli=true olur,

@@ -176,6 +176,31 @@ function birlestirAdres(da) {
   return (main + desc).trim();
 }
 
+// Bir opsiyon adı "porsiyon" bilgisi mi? ("1,5 Porsiyon"→1.5, "Yarım"→0.5, "Tam/1 Porsiyon"→1)
+// Porsiyon opsiyonu NOT olarak yazılmaz; kalemin ADEDİNE taşınır (masa formatı: "1,5x Etli Ekmek").
+function parsePorsiyon(ad) {
+  const s = String(ad || '').toLocaleLowerCase('tr-TR').trim();
+  if (!s) return null;
+  if (/yar[ıi]m/.test(s)) return 0.5;
+  const m = s.match(/(\d+(?:[.,]\d+)?)\s*por[sş]iyon/);
+  if (m) return parseFloat(m[1].replace(',', '.'));
+  if (/^tam\b/.test(s)) return 1;
+  return null;
+}
+
+// Bir üründeki porsiyon çarpanını bul (opsiyon kategorilerinden). Yoksa 1.
+function urunPorsiyon(p) {
+  if (Array.isArray(p.optionCategories)) {
+    for (const cat of p.optionCategories) {
+      for (const opt of Array.isArray(cat.options) ? cat.options : []) {
+        const v = parsePorsiyon(tr(opt.name));
+        if (v != null) return v;
+      }
+    }
+  }
+  return 1;
+}
+
 // Ürün opsiyon/ingredient bilgilerini tek bir not stringine düzleştir
 function urunNotlariBirlestir(p) {
   const parts = [];
@@ -186,6 +211,7 @@ function urunNotlariBirlestir(p) {
       const opsiyonlar = Array.isArray(cat.options) ? cat.options : [];
       for (const opt of opsiyonlar) {
         const ad = tr(opt.name);
+        if (parsePorsiyon(ad) != null) continue; // porsiyon → adete taşındı, not yazma
         const fiyat = Number(opt.price || 0);
         const fiyatTxt = fiyat > 0 ? ` (+${fiyat})` : '';
         if (ad) parts.push(`+ ${ad}${fiyatTxt}`);
@@ -237,13 +263,18 @@ function mapPosentegraOrder(body) {
 
   const items = products.map((p) => {
     const ad = tr(p.name) || 'Ürün';
-    const adet = Number(p.count || p.quantity || p.adet || 1);
+    const count = Number(p.count || p.quantity || p.adet || 1);
+    // Porsiyon opsiyonu ("1,5 Porsiyon") adete taşınır → masa formatı "1,5x Etli Ekmek"
+    const porsiyon = urunPorsiyon(p);
+    const adet = count * porsiyon;
     // Opsiyon dahil tek-birim fiyatı; yoksa düz price
-    const fiyatBirim = Number(p.priceWithOption || p.price || 0);
+    const birimFiyat = Number(p.priceWithOption || p.price || 0);
+    // adet'e porsiyon kattıysak birim fiyatı bölerek satır toplamını (fiyat*adet) koru
+    const fiyat = porsiyon > 0 && porsiyon !== 1 ? birimFiyat / porsiyon : birimFiyat;
     return {
       ad,
       adet,
-      fiyat: fiyatBirim,
+      fiyat,
       notlar: urunNotlariBirlestir(p),
     };
   });
@@ -517,6 +548,80 @@ export const posentegraConfirm = onCall(
     return { ok: true };
   },
 );
+
+/**
+ * Önceden ödenmiş PLATFORM (Getir/YS/Trendyol kendi kuryesi) siparişini TAMAMLAR.
+ * "Yola Çıkart ve Siparişi Tamamla" → ürün kuryeye verildi, restoranın işi bitti.
+ * Sunucu tarafında (admin yetkisiyle) arşivler; garson da tetikleyebilir (payments
+ * yazma yetkisi client'ta garsonda yok, o yüzden burada yapılır). Para ALINMAZ
+ * (zaten platformda ödendi); ciro/raporda platform kırılımına girsin diye
+ * yontem='uygulama' payment kaydı yazılır. Gün = siparişin AÇILIŞ tarihi.
+ */
+export const tamamlaPlatformSiparis = onCall({ region: 'europe-west1' }, async (req) => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Giriş gerekli');
+  const userSnap = await db.collection('users').doc(req.auth.uid).get();
+  const userData = userSnap.exists ? userSnap.data() : {};
+  if (!userData.aktif || !['admin', 'kasiyer', 'garson', 'godmode'].includes(userData.rol)) {
+    throw new HttpsError('permission-denied', 'Yetki yok');
+  }
+  const orderId = String(req.data?.orderId || '');
+  if (!orderId) throw new HttpsError('invalid-argument', 'orderId gerekli');
+
+  const orderRef = db.collection('orders').doc(orderId);
+  return await db.runTransaction(async (txn) => {
+    const snap = await txn.get(orderRef);
+    if (!snap.exists) throw new HttpsError('not-found', 'Sipariş bulunamadı');
+    const order = snap.data();
+    if (!order.paketMi || order.teslimatTipi !== 'platform') {
+      throw new HttpsError('failed-precondition', 'Sadece platform paket siparişi tamamlanır');
+    }
+    if (order.durum === 'tamamlandi') return { ok: true, already: true };
+    if (order.durum === 'iptal') throw new HttpsError('failed-precondition', 'İptal edilmiş sipariş');
+
+    // Gün = siparişin AÇILIŞ (oluşturma) tarihi — kapanma değil.
+    const olTs = order.olusturmaZamani;
+    const olDate = olTs?.toDate ? olTs.toDate() : new Date();
+    const gun = `${olDate.getFullYear()}-${String(olDate.getMonth() + 1).padStart(2, '0')}-${String(olDate.getDate()).padStart(2, '0')}`;
+
+    const isTA = (a) => String(a || '').toLowerCase().startsWith('syntrix');
+    const isTest = order.test === true || isTA(order.garsonAd) || isTA(userData.ad);
+    const kaynakAd = order.paketKaynakAd || order.paketKaynak || 'Uygulama';
+
+    const payRef = db.collection('payments').doc();
+    txn.set(payRef, {
+      orderId,
+      masaId: order.masaId || null,
+      tutar: Number(order.toplam) || 0,
+      yontem: 'uygulama',
+      kartTipi: kaynakAd,
+      kasiyerId: req.auth.uid,
+      kasiyerAd: userData.ad || 'Personel',
+      fisBasildi: false,
+      test: isTest,
+      zaman: FieldValue.serverTimestamp(),
+      gun,
+    });
+
+    const archiveRef = db.collection('archivedOrders').doc(orderId);
+    txn.set(archiveRef, {
+      ...order,
+      durum: 'tamamlandi',
+      test: isTest,
+      arsivZamani: FieldValue.serverTimestamp(),
+      tamamlandiZamani: FieldValue.serverTimestamp(),
+      gun,
+      odemeYontemleri: ['uygulama'],
+    });
+
+    txn.update(orderRef, {
+      durum: 'tamamlandi',
+      tamamlandiZamani: FieldValue.serverTimestamp(),
+      masayaGittiZamani: order.masayaGittiZamani || FieldValue.serverTimestamp(),
+    });
+
+    return { ok: true, gun };
+  });
+});
 
 /**
  * Garson/Kasiyer "Reddet" basınca → Posentegra'ya cancel gönderir, order'ı iptal'e alır.

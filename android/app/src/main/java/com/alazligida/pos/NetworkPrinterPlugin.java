@@ -60,6 +60,10 @@ public class NetworkPrinterPlugin extends Plugin {
         final JSArray lines = call.getArray("lines");
         final boolean cut = Boolean.TRUE.equals(call.getBoolean("cut", Boolean.TRUE));
         final int feedLines = call.getInt("feedLines", 3);
+        // Buzzer AYNI baskı işine gömülür (ayrı bağlantı açma → yarım fiş/erken kesim yapardı).
+        // { pulses } — kaç kez bip. 0/eksik → buzzer yok.
+        final JSObject buzzerCfg = call.getObject("buzzer");
+        final int buzzerPulses = buzzerCfg != null ? buzzerCfg.optInt("pulses", 0) : 0;
 
         if ("ethernet".equalsIgnoreCase(connection) && (ip == null || ip.isEmpty())) {
             call.reject("Ethernet bağlantısı için ip parametresi gerekli");
@@ -106,6 +110,15 @@ public class NetworkPrinterPlugin extends Plugin {
                     }
                 }
                 for (int j = 0; j < feedLines; j++) buf.append("\n");
+                // Buzzer: kesimden ÖNCE, AYNI iş içinde ham DK pulse (ESC p m t1 t2, t=0xFF maks süre).
+                // Ayrı triggerBuzzer bağlantısı açılmadığı için fiş yarım kalmaz + "1pP2p" metni basılmaz.
+                if (buzzerPulses > 0) {
+                    String pin1 = new String(new byte[]{0x1B, 0x70, 0x00, (byte) 0xFF, (byte) 0xFF});
+                    String pin2 = new String(new byte[]{0x1B, 0x70, 0x01, (byte) 0xFF, (byte) 0xFF});
+                    for (int b = 0; b < buzzerPulses; b++) {
+                        buf.append(pin1).append(pin2);
+                    }
+                }
                 if (cut) buf.append(ESC).append("90fP");
                 printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, buf.toString());
 
@@ -304,21 +317,17 @@ public class NetworkPrinterPlugin extends Plugin {
             POSPrinter printer = null;
             try {
                 printer = openPrinter(model, ip, connection);
-                // Raw ESC/POS uzun pulse: 500ms ON Drawer 1 (24V solenoid sürer).
-                // Bixolon ESC|1pP'den (50ms) ~10x daha uzun → buzzer çok daha duyulur.
-                // 0x1B 0x70 m t1 t2 — m=0 drawer 1, t1=0xFA (250×2ms=500ms ON), t2=0xFA OFF.
-                String longD1 = new String(new byte[]{0x1B, 0x70, 0x00, (byte) 0xFA, (byte) 0xFA});
-                String longD2 = new String(new byte[]{0x1B, 0x70, 0x01, (byte) 0xFA, (byte) 0xFA});
+                // SADECE raw ESC/POS pulse: ESC p m t1 t2 (m=pin, t1=ON, t2=OFF).
+                // t=0xFF → ~510ms, maksimum süre = en yüksek/duyulur ses.
+                // ÖNEMLİ: Bixolon markup "ESC|1pP" SDK tarafından TANINMIYOR → kağıda "1pP"/"2pP"
+                // METİN olarak basıyordu. O satırlar KALDIRILDI (fişte artık 1pP2p çıkmaz).
+                String longD1 = new String(new byte[]{0x1B, 0x70, 0x00, (byte) 0xFF, (byte) 0xFF});
+                String longD2 = new String(new byte[]{0x1B, 0x70, 0x01, (byte) 0xFF, (byte) 0xFF});
 
                 for (int i = 0; i < Math.max(1, pulses); i++) {
-                    // Önce kısa Bixolon ESC darbe (yedek)
-                    printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, ESC + "1pP");
-                    printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, ESC + "2pP");
-                    // Sonra raw uzun pulse — ana "yüksek ses" kaynağı
                     printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, longD1);
                     printer.printNormal(POSPrinterConst.PTR_S_RECEIPT, longD2);
                     if (i < pulses - 1) {
-                        // Pulse uzun olduğu için gap'i de kısalt — sürekli ses etkisi
                         try { Thread.sleep(Math.max(100, gap)); } catch (InterruptedException ignored) {}
                     }
                 }

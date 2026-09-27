@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Printer, X, Check } from 'lucide-react';
 import { formatAdet, formatDate } from '../utils/format';
 import { printReceipt, buildKitchenTicketLines, isIminPrinterAvailable } from '../plugins/iminPrinter';
-import { printNetworkReceipt, triggerBuzzer } from '../plugins/networkPrinter';
+import { printNetworkReceipt } from '../plugins/networkPrinter';
 
 // Sipariş tipine göre buzzer pattern'i (mutfak garsonu bip sayısından tipi anlasın).
 function buzzerPatternFor({ isCancellation, isCorrection, isAddendum, isPackage }) {
@@ -15,6 +15,24 @@ function buzzerPatternFor({ isCancellation, isCorrection, isAddendum, isPackage 
 import { watchCollection } from '../firebase/firestore';
 import { groupTicketByPrinter } from '../utils/printerRouting';
 import { platformAd } from '../utils/platform';
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Ağ yazıcısına RETRY'li baskı — anlık ağ kopması/yazıcı meşguliyetinde 1-2 sn sonra
+// tekrar dener. Böylece geçici kopmalar sipariş fişini düşürmez. Tüm denemeler
+// başarısız olursa hata fırlatır (çağıran görünür uyarı gösterir).
+async function printNetworkReceiptRetry(opts, { retries = 2, delayMs = 1200 } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await printNetworkReceipt(opts);
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries) await sleep(delayMs);
+    }
+  }
+  throw lastErr;
+}
 
 export default function KitchenTicket({
   open,
@@ -112,40 +130,32 @@ export default function KitchenTicket({
           // Her istasyon BAĞIMSIZ basılır — biri hata verse (offline/timeout) diğerleri
           // yine de bassın. (Eskiden tek try tüm döngüyü sarıyordu → bir yazıcı patlayınca
           // sonraki istasyonlar hiç basılmıyordu = sipariş eksik çıkıyordu.)
+          // Sipariş zili: buzzer AYNI baskı işine gömülür (ayrı bağlantı yok → yarım fiş/erken kesim yok).
+          const buzzer = group.printer.siparisZili
+            ? { pulses: buzzerPatternFor({ isCancellation, isCorrection: groupHasCorrection, isAddendum, isPackage: !!order?.paketMi }).pulses }
+            : undefined;
           try {
-            await printNetworkReceipt({
+            await printNetworkReceiptRetry({
               ip: group.printer.ip,
               model: group.printer.model || 'SRP-E300',
               connection: group.printer.baglanti || 'ethernet',
               lines,
               cut: true,
               feedLines: 3,
+              buzzer,
             });
-            // Sipariş zili: bu yazıcının DK portunda buzzer varsa, sipariş tipine göre bip pattern'i.
-            if (group.printer.siparisZili) {
-              const pattern = buzzerPatternFor({
-                isCancellation,
-                isCorrection: groupHasCorrection,
-                isAddendum,
-                isPackage: !!order?.paketMi,
-              });
-              triggerBuzzer({
-                ip: group.printer.ip,
-                model: group.printer.model || 'SRP-E300',
-                connection: group.printer.baglanti || 'ethernet',
-                pulses: pattern.pulses,
-                gap: pattern.gap,
-              }).catch((e) => console.warn('Buzzer tetiklenemedi:', e?.message || e));
-            }
           } catch (err) {
+            // 3 denemeye rağmen basılamadı → sessizce geç (arka planda retry yapıldı).
             hata++;
             console.warn(`Yazıcıya basılamadı (${group.printer.ad} @ ${group.printer.ip}):`, err?.message || err);
           }
         }
         if (!cancelled) {
           setPrinted(true);
-          setTimeout(() => !cancelled && onClose(), hata ? 1800 : 800);
           setPrinting(false);
+          // Kapanışı onCloseRef ile çağır — setPrinted effect'i yeniden çalıştırıp cancelled'ı
+          // true yapsa bile garson otomatik çıkışı GÜVENİLİR tetiklensin (yarış düzeltmesi).
+          setTimeout(() => onCloseRef.current?.(), hata ? 1800 : 800);
         }
         return;
       }
@@ -161,7 +171,7 @@ export default function KitchenTicket({
           await printReceipt({ lines, cut: true, feedLines: 3 });
           if (!cancelled) {
             setPrinted(true);
-            setTimeout(() => !cancelled && onClose(), 800);
+            setTimeout(() => onCloseRef.current?.(), 800);
           }
         } catch (err) {
           console.warn('iMin print failed:', err);
@@ -194,31 +204,20 @@ export default function KitchenTicket({
             correctionDiff: groupHasCorrection ? { removed: group.removed, changed: group.changed } : null,
             printerAd: group.printer.ad,
           });
-          // Her istasyon bağımsız — biri hata verse diğerleri yine de bassın.
+          // Buzzer aynı baskı işine gömülür (ayrı bağlantı yok). Her istasyon bağımsız + 3 denemeli retry.
+          const buzzer = group.printer.siparisZili
+            ? { pulses: buzzerPatternFor({ isCancellation, isCorrection: groupHasCorrection, isAddendum, isPackage: !!order?.paketMi }).pulses }
+            : undefined;
           try {
-            await printNetworkReceipt({
+            await printNetworkReceiptRetry({
               ip: group.printer.ip,
               model: group.printer.model || 'SRP-E300',
               connection: group.printer.baglanti || 'ethernet',
               lines,
               cut: true,
               feedLines: 3,
+              buzzer,
             });
-            if (group.printer.siparisZili) {
-              const pattern = buzzerPatternFor({
-                isCancellation,
-                isCorrection: groupHasCorrection,
-                isAddendum,
-                isPackage: !!order?.paketMi,
-              });
-              triggerBuzzer({
-                ip: group.printer.ip,
-                model: group.printer.model || 'SRP-E300',
-                connection: group.printer.baglanti || 'ethernet',
-                pulses: pattern.pulses,
-                gap: pattern.gap,
-              }).catch((e) => console.warn('Buzzer tetiklenemedi:', e?.message || e));
-            }
           } catch (err) {
             console.warn(`Yazıcıya basılamadı (${group.printer.ad} @ ${group.printer.ip}):`, err?.message || err);
           }

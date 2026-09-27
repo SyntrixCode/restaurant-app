@@ -13,6 +13,13 @@ function gunString(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
+// Gün, siparişin oluşturma (açılış) tarihine göre — kapanma/iptal tarihine göre değil.
+function gunFromOrder(order, fallback = new Date()) {
+  const ts = order?.olusturmaZamani;
+  const d = ts?.toDate ? ts.toDate() : ts instanceof Date ? ts : null;
+  return gunString(d || fallback);
+}
+
 export async function createOrder({
   masaId,
   masaAd,
@@ -669,11 +676,8 @@ export async function cancelActiveOrder({ orderId, sebep, kullaniciId, kullanici
       txn.update(tableRef, { durum: 'bos' });
     }
 
-    // Arşive iptal damgalı kopya — raporlamada görünsün
-    const gun = (() => {
-      const d = new Date();
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    })();
+    // Arşive iptal damgalı kopya — raporlamada görünsün. Gün = siparişin açılış tarihi.
+    const gun = gunFromOrder(order);
     const archiveRef = doc(db, 'archivedOrders', orderId);
     txn.set(archiveRef, {
       ...order,

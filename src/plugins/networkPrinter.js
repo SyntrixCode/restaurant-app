@@ -26,10 +26,11 @@ export async function printNetworkReceipt(opts) {
   if (!Capacitor.isNativePlatform()) {
     throw new Error('Bixolon yazıcı sadece cihazda kullanılabilir');
   }
-  const { ip, model = 'SRP-E300', connection = 'ethernet', lines, cut = true, feedLines = 3 } = opts || {};
+  const { ip, model = 'SRP-E300', connection = 'ethernet', lines, cut = true, feedLines = 3, buzzer } = opts || {};
   if (connection === 'ethernet' && !ip) throw new Error('Ethernet bağlantısı için IP gerekli');
   if (!Array.isArray(lines)) throw new Error('lines bir dizi olmalı');
-  return NetworkPrinter.printReceipt({ ip, model, connection, lines, cut, feedLines });
+  // buzzer: { pulses } → AYNI baskı işine gömülür (ayrı bağlantı yok = yarım fiş/erken kesim yok).
+  return NetworkPrinter.printReceipt({ ip, model, connection, lines, cut, feedLines, buzzer });
 }
 
 /**

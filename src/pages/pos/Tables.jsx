@@ -1078,10 +1078,22 @@ function ConfirmMergeModal({ open, dragged, target, group, submitting, onCancel,
 
 function KisiSayisiModal({ open, masaAd, defaultKisi, groupId, onClose, onConfirm, onDissolve, onSwitchToReserve, onPaket }) {
   const [kisi, setKisi] = useState(defaultKisi || 2);
+  // GHOST-TAP KORUMASI: Masayı açan dokunuş, modal açılır açılmaz tam altındaki
+  // "Paket/Rezervasyon" butonuna denk gelip (touchend sızması) yanlışlıkla tetikliyordu
+  // (özellikle masanın ekran konumu butonla çakışınca). Modal açıldıktan ~400ms sonrasına
+  // kadar navigasyon butonlarını pasif tutarız — açılış dokunuşu geçsin.
+  const [armed, setArmed] = useState(false);
 
   useEffect(() => {
     if (open) setKisi(defaultKisi || 2);
   }, [open, defaultKisi]);
+
+  useEffect(() => {
+    if (!open) { setArmed(false); return; }
+    setArmed(false);
+    const t = setTimeout(() => setArmed(true), 400);
+    return () => clearTimeout(t);
+  }, [open]);
 
   if (!open) return null;
 
@@ -1163,8 +1175,9 @@ function KisiSayisiModal({ open, masaAd, defaultKisi, groupId, onClose, onConfir
             {onSwitchToReserve && (
               <button
                 type="button"
-                onClick={onSwitchToReserve}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg border-2 border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-semibold text-amber-700 transition hover:bg-amber-100 active:scale-95"
+                disabled={!armed}
+                onClick={() => armed && onSwitchToReserve()}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border-2 border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-semibold text-amber-700 transition hover:bg-amber-100 active:scale-95 disabled:opacity-60"
               >
                 <CalendarClock size={16} /> Rezervasyon Yap
               </button>
@@ -1172,8 +1185,9 @@ function KisiSayisiModal({ open, masaAd, defaultKisi, groupId, onClose, onConfir
             {onPaket && (
               <button
                 type="button"
-                onClick={() => onPaket(kisi)}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg border-2 border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 active:scale-95"
+                disabled={!armed}
+                onClick={() => armed && onPaket(kisi)}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border-2 border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 active:scale-95 disabled:opacity-60"
               >
                 <Truck size={16} /> Paket Sipariş
               </button>

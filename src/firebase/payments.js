@@ -11,6 +11,15 @@ function gunString(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
+// Raporlarda gün, siparişin AÇILDIĞI (oluşturma) tarihine göre belirlenir — kapanma/ödeme
+// tarihine göre değil. Böylece günlerce açık kalıp geç kapatılan (özellikle platform)
+// siparişler doğru güne yazılır. olusturmaZamani yoksa bugüne düşer.
+function gunFromOrder(order, fallback = new Date()) {
+  const ts = order?.olusturmaZamani;
+  const d = ts?.toDate ? ts.toDate() : ts instanceof Date ? ts : null;
+  return gunString(d || fallback);
+}
+
 // Kasada tahsil edilen (gün sonu nakit/kart dağılımına giren) yöntemler
 export const TAHSIL_YONTEMLERI = ['nakit', 'kart', 'yemekKarti'];
 
@@ -190,7 +199,7 @@ export async function recordPayment({
     }
 
     // === WRITES ===
-    const gun = gunString();
+    const gun = gunFromOrder(order);
     const paymentIds = [];
     // Test/demo: sipariş test hesabından açıldıysa VEYA ödemeyi test hesabı aldıysa,
     // ödeme de test sayılır → ciroya/raporlara girmez.
@@ -341,7 +350,7 @@ export async function closeAsPatron({ orderId, kasiyerId, kasiyerAd, sebep = 'Pa
       }
     }
 
-    const gun = gunString();
+    const gun = gunFromOrder(order);
     const patch = {
       durum: 'tamamlandi',
       tamamlandiZamani: serverTimestamp(),
@@ -407,7 +416,7 @@ export async function closeIkramOrder({ orderId, kasiyerId, kasiyerAd }) {
       }
     }
 
-    const gun = gunString();
+    const gun = gunFromOrder(order);
     const patch = {
       durum: 'tamamlandi',
       tamamlandiZamani: serverTimestamp(),
