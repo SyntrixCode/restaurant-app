@@ -18,9 +18,14 @@ const NetworkPrinter = registerPlugin('NetworkPrinter', {
   }),
 });
 
+// Yazıcı başına baskı KUYRUĞU — aynı yazıcıya (IP/USB) aynı anda iki iş gönderilmez.
+// Termal yazıcılar tek bağlantılıdır; eşzamanlı iş gelince fiş yarıda kesilir / hiç çıkmaz /
+// küçük kağıt çıkar. Her hedef için işleri zincire dizip biri bitmeden diğerini başlatmayız.
+const _printQueues = new Map(); // key(ip|usb) -> son işin Promise'i
+
 /**
- * Bixolon yazıcıya fiş bas.
- * @param {{ ip?: string, port?: number, model?: string, connection?: 'ethernet'|'usb', lines: Array, cut?: boolean, feedLines?: number }} opts
+ * Bixolon yazıcıya fiş bas. Aynı yazıcıya işler SIRAYLA gider (queue).
+ * @param {{ ip?: string, port?: number, model?: string, connection?: 'ethernet'|'usb', lines: Array, cut?: boolean, feedLines?: number, buzzer?: {pulses:number} }} opts
  */
 export async function printNetworkReceipt(opts) {
   if (!Capacitor.isNativePlatform()) {
@@ -29,8 +34,24 @@ export async function printNetworkReceipt(opts) {
   const { ip, model = 'SRP-E300', connection = 'ethernet', lines, cut = true, feedLines = 3, buzzer } = opts || {};
   if (connection === 'ethernet' && !ip) throw new Error('Ethernet bağlantısı için IP gerekli');
   if (!Array.isArray(lines)) throw new Error('lines bir dizi olmalı');
-  // buzzer: { pulses } → AYNI baskı işine gömülür (ayrı bağlantı yok = yarım fiş/erken kesim yok).
-  return NetworkPrinter.printReceipt({ ip, model, connection, lines, cut, feedLines, buzzer });
+
+  const key = connection === 'usb' ? 'usb' : ip;
+  const prev = _printQueues.get(key) || Promise.resolve();
+  // Önceki iş hata verse bile sıradaki çalışsın; işler arasına küçük nefes payı bırak
+  // (yazıcı önceki fişi tam bitirsin, bağlantı serbest kalsın).
+  const run = prev
+    .catch(() => {})
+    .then(async () => {
+      const res = await NetworkPrinter.printReceipt({ ip, model, connection, lines, cut, feedLines, buzzer });
+      await new Promise((r) => setTimeout(r, 250));
+      return res;
+    });
+  _printQueues.set(key, run);
+  // Kuyruk referansı büyümesin: bu iş en sondaki ise temizle
+  run.finally(() => {
+    if (_printQueues.get(key) === run) _printQueues.delete(key);
+  });
+  return run;
 }
 
 /**
