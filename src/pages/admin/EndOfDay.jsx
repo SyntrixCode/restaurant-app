@@ -34,6 +34,8 @@ export default function EndOfDay() {
   const [acilisKasa, setAcilisKasa] = useState('');
   const [sayilanNakit, setSayilanNakit] = useState('');
   const [saving, setSaving] = useState(false);
+  // Açık (kapatılmamış) siparişler — kapatılmadan ciroya GİRMEZ. Gün sonunda uyar.
+  const [acikSiparisler, setAcikSiparisler] = useState([]);
 
   // WhatsApp gün sonu rapor ayarı (CallMeBot) — sadece admin
   const [waCfg, setWaCfg] = useState({
@@ -53,6 +55,16 @@ export default function EndOfDay() {
       unsubA();
     };
   }, [gun]);
+
+  // Açık siparişler (güne bağlı değil — o an kapatılmamış olan hepsi). Kapatılmadan ciroya girmez.
+  useEffect(() => {
+    const unsub = watchCollection(
+      'orders',
+      (l) => setAcikSiparisler(excludeTest(l)),
+      where('durum', 'in', ['aktif', 'hazirlandi', 'masayaGitti']),
+    );
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -157,6 +169,19 @@ export default function EndOfDay() {
   const fark = sayilan - beklenenNakit;
 
   const handleSave = async () => {
+    // Açık sipariş varsa uyar — kapatılmadan (ödeme alınmadan) ciroya GİRMEZ.
+    if (acikSiparisler.length > 0) {
+      const ozet = acikSiparisler
+        .slice(0, 12)
+        .map((o) => `• ${o.masaAd || o.musteriAd || o.paketKaynakAd || 'Sipariş'} — ${formatTL(o.toplam || 0)}`)
+        .join('\n');
+      const fazla = acikSiparisler.length > 12 ? `\n… +${acikSiparisler.length - 12} sipariş daha` : '';
+      const devam = window.confirm(
+        `⚠️ ${acikSiparisler.length} AÇIK sipariş var — bunlar KAPATILMADAN ciroya GİRMEZ!\n\n${ozet}${fazla}\n\n` +
+          `Önce bu siparişlerin ödemesini alıp kapatman önerilir.\n\nYine de Z raporunu kaydetmek istiyor musun?`,
+      );
+      if (!devam) return;
+    }
     setSaving(true);
     try {
       await createDoc('zReports', {
@@ -219,6 +244,31 @@ export default function EndOfDay() {
           </div>
         }
       />
+
+      {acikSiparisler.length > 0 && (
+        <div className="mb-4 rounded-xl border-2 border-red-300 bg-red-50 p-4 print:hidden">
+          <p className="text-base font-bold text-red-700">
+            ⚠️ {acikSiparisler.length} AÇIK sipariş var — kapatılmadan ciroya GİRMEZ!
+          </p>
+          <p className="mt-1 text-sm text-red-600">
+            Aşağıdaki siparişlerin önce ödemesini alıp kapatın; yoksa gün sonu cirosuna dahil olmazlar.
+          </p>
+          <ul className="mt-2 grid grid-cols-1 gap-1 text-sm text-red-800 sm:grid-cols-2">
+            {acikSiparisler.slice(0, 12).map((o) => (
+              <li key={o.id} className="flex justify-between rounded bg-white/70 px-2 py-1">
+                <span className="truncate">
+                  {o.masaAd || o.musteriAd || o.paketKaynakAd || 'Sipariş'}
+                  {o.garsonAd ? ` · ${o.garsonAd}` : ''}
+                </span>
+                <span className="ml-2 font-semibold tabular-nums">{formatTL(o.toplam || 0)}</span>
+              </li>
+            ))}
+          </ul>
+          {acikSiparisler.length > 12 && (
+            <p className="mt-1 text-xs text-red-600">… +{acikSiparisler.length - 12} sipariş daha</p>
+          )}
+        </div>
+      )}
 
       <div id="zrapor" className="space-y-6">
         {/* Ödeme yöntemi dökümü */}
