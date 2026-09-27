@@ -1443,6 +1443,16 @@ function FullTableModal({ open, onClose, table, tables = [], rol, navigate, onDi
   const [cancellingTicket, setCancellingTicket] = useState(null);
   const [adisyonOpen, setAdisyonOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
+  // GHOST-TAP KORUMASI: Masaya dokunuş modal açılır açılmaz tam altındaki butona
+  // (Ödeme Al vb.) sızıp yanlışlıkla tetikliyordu. Açılıştan 400ms sonrasına kadar
+  // aksiyon butonları pasif — açılış dokunuşu geçsin.
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!open) { setArmed(false); return; }
+    setArmed(false);
+    const t = setTimeout(() => setArmed(true), 400);
+    return () => clearTimeout(t);
+  }, [open]);
   if (!open || !table) return null;
   const order = table.order;
   const group = table.group;
@@ -1561,21 +1571,25 @@ function FullTableModal({ open, onClose, table, tables = [], rol, navigate, onDi
 
           <div className="grid grid-cols-2 gap-2">
             <button
+              disabled={!armed}
               onClick={() => {
+                if (!armed) return;
                 onClose();
                 navigate(`/pos/order/new?masaId=${order.masaId}&orderId=${order.id}`);
               }}
-              className="btn-primary"
+              className="btn-primary disabled:opacity-60"
             >
               <Plus size={16} /> Sipariş Ekle / Düzenle
             </button>
             {canPay && (
               <button
+                disabled={!armed}
                 onClick={() => {
+                  if (!armed) return;
                   onClose();
                   navigate(`/pos/payment?orderId=${order.id}`);
                 }}
-                className="btn-secondary"
+                className="btn-secondary disabled:opacity-60"
               >
                 Ödeme Al
               </button>
@@ -1585,8 +1599,9 @@ function FullTableModal({ open, onClose, table, tables = [], rol, navigate, onDi
           {/* Masayı Taşı / Aktar — siparişi başka boş masaya taşır (birleşik masada gizli) */}
           {!group && (
             <button
-              onClick={() => setTransferOpen(true)}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100"
+              disabled={!armed}
+              onClick={() => armed && setTransferOpen(true)}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100 disabled:opacity-60"
             >
               <ArrowLeftRight size={16} /> Masayı Taşı / Aktar
             </button>
@@ -1595,19 +1610,22 @@ function FullTableModal({ open, onClose, table, tables = [], rol, navigate, onDi
           {/* Paket Sipariş — bu MASANIN siparişine "paket" kalemi ekler (ayrı sipariş oluşmaz;
               mutfak paketlesin diye işaretli, hesapta PAKET rozetiyle görünür) */}
           <button
+            disabled={!armed}
             onClick={() => {
+              if (!armed) return;
               onClose();
               navigate(`/pos/order/new?masaId=${order.masaId}&orderId=${order.id}&paketKalem=1`);
             }}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60"
           >
             <Truck size={16} /> Paket Sipariş
           </button>
 
           {/* Hesap Fişi (Adisyon) — ödemeden önce müşteriye verilir */}
           <button
-            onClick={() => setAdisyonOpen(true)}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+            disabled={!armed}
+            onClick={() => armed && setAdisyonOpen(true)}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-60"
           >
             <Printer size={16} /> Hesap Fişi (Adisyon) Bas
           </button>
@@ -1615,8 +1633,9 @@ function FullTableModal({ open, onClose, table, tables = [], rol, navigate, onDi
           {/* Sipariş İptal — yetkili kullanıcılar için, ayrı blokta */}
           {canCancel && (
             <button
-              onClick={() => setCancelOpen(true)}
-              className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100"
+              disabled={!armed}
+              onClick={() => armed && setCancelOpen(true)}
+              className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-60"
             >
               <Ban size={14} /> Siparişi İptal Et
             </button>
