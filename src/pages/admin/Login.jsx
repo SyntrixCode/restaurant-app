@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
-import { Eye, EyeOff, ShieldCheck } from 'lucide-react';
-import { loginAdmin } from '../../firebase/auth';
+import { Eye, EyeOff, ShieldCheck, KeyRound } from 'lucide-react';
+import { loginAdmin, loginPos } from '../../firebase/auth';
 import { adminLoginSchema } from '../../utils/validators';
 import { useAuthStore } from '../../store/authStore';
 
@@ -18,6 +18,8 @@ export default function AdminLogin() {
   const [attempts, setAttempts] = useState(0);
   const [lockedUntil, setLockedUntil] = useState(0);
   const [now, setNow] = useState(Date.now());
+  const [pin, setPin] = useState('');
+  const [pinSubmitting, setPinSubmitting] = useState(false);
 
   const {
     register,
@@ -49,6 +51,29 @@ export default function AdminLogin() {
 
   const isLocked = lockedUntil > now;
   const remaining = Math.max(0, Math.ceil((lockedUntil - now) / 1000));
+
+  // Yetkili (godmode) PIN ile admin girişi — Sezgin gibi kullanıcılar aynı PIN'le girer.
+  // Yetki kontrolü ProtectedRoute'ta (admin/kasiyer/godmode) yapılır.
+  const handlePinLogin = async (e) => {
+    e.preventDefault();
+    if (isLocked) return;
+    if (!/^\d{4}$/.test(pin)) {
+      toast.error('PIN 4 haneli olmalı');
+      return;
+    }
+    setPinSubmitting(true);
+    try {
+      await loginPos(pin);
+      setPin('');
+      toast.success('Giriş başarılı');
+      // user set olunca üstteki useEffect /admin/dashboard'a yönlendirir
+    } catch (err) {
+      toast.error('PIN hatalı');
+      console.error(err);
+    } finally {
+      setPinSubmitting(false);
+    }
+  };
 
   const onSubmit = async ({ kullaniciAdi, password, rememberMe }) => {
     if (isLocked) return;
@@ -144,6 +169,37 @@ export default function AdminLogin() {
             {isSubmitting ? 'Giriş yapılıyor...' : 'Giriş Yap'}
           </button>
         </form>
+
+        {/* Yetkili PIN girişi (godmode — Sezgin) */}
+        <div className="mt-6">
+          <div className="mb-3 flex items-center gap-3">
+            <div className="h-px flex-1 bg-slate-200" />
+            <span className="text-xs font-medium uppercase tracking-wider text-slate-400">veya</span>
+            <div className="h-px flex-1 bg-slate-200" />
+          </div>
+          <form onSubmit={handlePinLogin} className="flex items-end gap-2">
+            <div className="flex-1">
+              <label className="mb-1 block text-sm font-medium text-slate-700">Yetkili PIN</label>
+              <input
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={4}
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/[^\d]/g, '').slice(0, 4))}
+                className="input tracking-[0.5em]"
+                placeholder="••••"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={pinSubmitting || isLocked || pin.length !== 4}
+              className="btn-secondary h-[42px] disabled:opacity-50"
+            >
+              <KeyRound size={16} /> {pinSubmitting ? '...' : 'PIN ile Gir'}
+            </button>
+          </form>
+        </div>
 
         <div className="mt-6 text-center">
           <a href="/pos/login" className="text-sm text-red-600 hover:underline">
