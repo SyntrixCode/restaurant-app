@@ -1,10 +1,39 @@
 import * as XLSX from 'xlsx';
 
+// Türk Lirası hücre biçimi — değer sayı kalır, Excel'de "1.234,56 ₺" gösterir.
+export const TL_FORMAT = '#,##0.00" ₺"';
+// Bu başlıklara sahip sütunlar otomatik TL biçimlenir.
+const CURRENCY_HEADERS = ['Ciro', 'Tutar', 'Toplam', 'Ara Toplam', 'İndirim'];
+
+/**
+ * Başlığı para sütunu olan hücrelere TL biçimi uygular (sayı değeri korunur).
+ * @param {Object} ws - worksheet
+ * @param {string[]} [headers] - para sütunu başlıkları (varsayılan: CURRENCY_HEADERS)
+ */
+export function applyCurrencyFormat(ws, headers = CURRENCY_HEADERS) {
+  if (!ws || !ws['!ref']) return;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const moneyCols = new Set();
+  for (let c = range.s.c; c <= range.e.c; c++) {
+    const head = ws[XLSX.utils.encode_cell({ r: range.s.r, c })];
+    if (head && headers.includes(head.v)) moneyCols.add(c);
+  }
+  for (const c of moneyCols) {
+    for (let r = range.s.r + 1; r <= range.e.r; r++) {
+      const cell = ws[XLSX.utils.encode_cell({ r, c })];
+      if (cell && typeof cell.v === 'number') {
+        cell.t = 'n';
+        cell.z = TL_FORMAT;
+      }
+    }
+  }
+}
+
 /**
  * Genel Excel (.xlsx) dışa aktarma yardımcısı.
  *
  * @param {string} fileName - dosya adı (.xlsx eklenir)
- * @param {Array<{name:string, rows:Array<Object>}>} sheets - her biri bir sayfa
+ * @param {Array<{name:string, rows:Array<Object>, currency?:string[]}>} sheets - her biri bir sayfa
  */
 export function exportExcel(fileName, sheets) {
   const wb = XLSX.utils.book_new();
@@ -13,6 +42,7 @@ export function exportExcel(fileName, sheets) {
     // Sütun genişliklerini otomatik ayarla (basit)
     const cols = Object.keys((sheet.rows && sheet.rows[0]) || {});
     ws['!cols'] = cols.map((c) => ({ wch: Math.max(12, c.length + 2) }));
+    applyCurrencyFormat(ws, sheet.currency || CURRENCY_HEADERS);
     XLSX.utils.book_append_sheet(wb, ws, (sheet.name || 'Sayfa').slice(0, 31));
   }
   const name = fileName.endsWith('.xlsx') ? fileName : `${fileName}.xlsx`;

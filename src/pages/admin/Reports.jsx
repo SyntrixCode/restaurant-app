@@ -33,6 +33,15 @@ import StatCard from '../../components/ui/StatCard';
 import { watchCollection, orderBy } from '../../firebase/firestore';
 import { formatTL } from '../../utils/format';
 import { excludeTest } from '../../utils/testAccount';
+import { exportExcel as exportSheets, applyCurrencyFormat, TL_FORMAT } from '../../utils/excelExport';
+
+// Platform (uygulama) ödeme kaynakları — yontem='uygulama' ödemeleri kaynağına göre ayrılır.
+const PLATFORM_ETIKET = {
+  trendyol: 'Trendyol',
+  getir: 'Getir',
+  yemeksepeti: 'Yemeksepeti',
+  migros: 'Migros',
+};
 
 const COLORS = [
   '#3b82f6',
@@ -77,6 +86,8 @@ export default function AdminReports() {
     [archived, from, to],
   );
   const filteredPayments = useMemo(() => payments.filter((p) => inRange(p.gun || '')), [payments, from, to]);
+  // orderId -> paketKaynak (platform ödemesini doğru platforma yazmak için)
+  const kaynakMap = useMemo(() => new Map(archived.map((a) => [a.id, a.paketKaynak])), [archived]);
 
   // === KPI ===
   const totals = useMemo(() => {
@@ -134,8 +145,8 @@ export default function AdminReports() {
     return Object.values(buckets).sort((a, b) => a.gun.localeCompare(b.gun));
   }, [orders]);
 
-  // === Garson performansı (top 8 BarChart) ===
-  const waiterPerf = useMemo(() => {
+  // === Garson performansı (tümü — grafikte top 8 gösterilir) ===
+  const waiterPerfAll = useMemo(() => {
     const buckets = {};
     orders.forEach((o) => {
       const ad = o.garsonAd || '—';
@@ -143,11 +154,12 @@ export default function AdminReports() {
       buckets[ad].ciro += o.toplam || 0;
       buckets[ad].siparis += 1;
     });
-    return Object.values(buckets).sort((a, b) => b.ciro - a.ciro).slice(0, 8);
+    return Object.values(buckets).sort((a, b) => b.ciro - a.ciro);
   }, [orders]);
+  const waiterPerf = useMemo(() => waiterPerfAll.slice(0, 8), [waiterPerfAll]);
 
-  // === Kategori dağılımı (PieChart) ===
-  const categoryDist = useMemo(() => {
+  // === Kategori dağılımı (tümü — grafikte top 10 gösterilir) ===
+  const categoryDistAll = useMemo(() => {
     const buckets = {};
     orders.forEach((o) => {
       (o.items || []).forEach((it) => {
@@ -159,8 +171,9 @@ export default function AdminReports() {
         buckets[key].value += value;
       });
     });
-    return Object.values(buckets).sort((a, b) => b.value - a.value).slice(0, 10);
+    return Object.values(buckets).sort((a, b) => b.value - a.value);
   }, [orders]);
+  const categoryDist = useMemo(() => categoryDistAll.slice(0, 10), [categoryDistAll]);
 
   // === Ödeme yöntemi dağılımı (PieChart) ===
   const paymentMethodDist = useMemo(() => {
@@ -173,15 +186,17 @@ export default function AdminReports() {
             ? 'Kredi/Banka Kartı'
             : p.yontem === 'yemekKarti'
               ? 'Yemek Kartı'
-              : p.yontem || 'Diğer';
+              : p.yontem === 'uygulama'
+                ? PLATFORM_ETIKET[kaynakMap.get(p.orderId)] || 'Uygulama (Diğer)'
+                : p.yontem || 'Diğer';
       if (!buckets[key]) buckets[key] = { name: key, value: 0 };
       buckets[key].value += p.tutar || 0;
     });
-    return Object.values(buckets);
-  }, [filteredPayments]);
+    return Object.values(buckets).sort((a, b) => b.value - a.value);
+  }, [filteredPayments, kaynakMap]);
 
-  // === Ürün performansı (top 10) ===
-  const productPerf = useMemo(() => {
+  // === Ürün performansı (tümü — tabloda top 10 gösterilir) ===
+  const productPerfAll = useMemo(() => {
     const buckets = {};
     orders.forEach((o) => {
       (o.items || []).forEach((it) => {
@@ -191,10 +206,38 @@ export default function AdminReports() {
         buckets[key].ciro += (it.fiyat || 0) * (it.adet || 0);
       });
     });
-    return Object.values(buckets).sort((a, b) => b.ciro - a.ciro).slice(0, 10);
+    // En çok satan = satış adedine göre çoktan aza (eşitlikte ciro yüksek olan önce)
+    return Object.values(buckets).sort((a, b) => b.adet - a.adet || b.ciro - a.ciro);
   }, [orders]);
+  const productPerf = useMemo(() => productPerfAll.slice(0, 10), [productPerfAll]);
 
-  // === Excel export ===
+  // Kart bazlı satırlar (Excel export'ta seçili tarih aralığı geçerli — TÜM veriyi kapsar)
+  const cardRows = {
+    dailyTrend: () => dailyTrend.map((d) => ({ Gün: d.gun, Ciro: d.ciro, 'Sipariş Sayısı': d.siparis })),
+    hourly: () => hourlySales.map((h) => ({ Saat: h.saat, Ciro: h.ciro, 'Sipariş Sayısı': h.siparis })),
+    waiters: () => waiterPerfAll.map((w) => ({ Garson: w.ad, Ciro: w.ciro, 'Sipariş Sayısı': w.siparis })),
+    categories: () => categoryDistAll.map((c) => ({ 'Ürün/Kategori': c.name, Ciro: c.value })),
+    payments: () => paymentMethodDist.map((p) => ({ Yöntem: p.name, Tutar: p.value })),
+    products: () => productPerfAll.map((p) => ({ Ürün: p.ad, 'Satış Adedi': p.adet, Ciro: p.ciro })),
+  };
+
+  // Tek bir kartı Excel'e aktar — grafik top 8/10 gösterse de TÜM satırlar aktarılır.
+  const exportCard = (sheetName, fileSlug) => () => {
+    try {
+      const rows = cardRows[fileSlug]();
+      if (!rows.length) {
+        toast.error('Aktarılacak veri yok');
+        return;
+      }
+      exportSheets(`${fileSlug}_${from}_${to}`, [{ name: sheetName, rows }]);
+      toast.success('Excel indirildi');
+    } catch (err) {
+      console.error(err);
+      toast.error('Excel oluşturulamadı');
+    }
+  };
+
+  // === Tüm raporu Excel'e aktar (tek dosya, tüm sayfalar) ===
   const exportExcel = () => {
     try {
       const wb = XLSX.utils.book_new();
@@ -209,52 +252,25 @@ export default function AdminReports() {
         ['Toplam Kişi', totals.kisi],
         ['Kişi Başı Ortalama', totals.kisiBasi],
       ];
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ozet), 'Özet');
+      const ozetWs = XLSX.utils.aoa_to_sheet(ozet);
+      // Özet'teki TL değerleri (Toplam Ciro / Ortalama Sepet / Kişi Başı) — B sütunu
+      for (const addr of ['B3', 'B5', 'B7']) {
+        if (ozetWs[addr] && typeof ozetWs[addr].v === 'number') ozetWs[addr].z = TL_FORMAT;
+      }
+      XLSX.utils.book_append_sheet(wb, ozetWs, 'Özet');
 
-      // Sheet 2: Günlük
-      XLSX.utils.book_append_sheet(
-        wb,
-        XLSX.utils.json_to_sheet(
-          dailyTrend.map((d) => ({ Gün: d.gun, Ciro: d.ciro, 'Sipariş Sayısı': d.siparis })),
-        ),
-        'Günlük',
-      );
+      const addSheet = (name, rows) => {
+        const ws = XLSX.utils.json_to_sheet(rows);
+        applyCurrencyFormat(ws);
+        XLSX.utils.book_append_sheet(wb, ws, name);
+      };
 
-      // Sheet 3: Saatlik
-      XLSX.utils.book_append_sheet(
-        wb,
-        XLSX.utils.json_to_sheet(
-          hourlySales.map((h) => ({ Saat: h.saat, Ciro: h.ciro, 'Sipariş Sayısı': h.siparis })),
-        ),
-        'Saatlik',
-      );
-
-      // Sheet 4: Garsonlar
-      XLSX.utils.book_append_sheet(
-        wb,
-        XLSX.utils.json_to_sheet(
-          waiterPerf.map((w) => ({ Garson: w.ad, Ciro: w.ciro, 'Sipariş Sayısı': w.siparis })),
-        ),
-        'Garsonlar',
-      );
-
-      // Sheet 5: Ürünler
-      XLSX.utils.book_append_sheet(
-        wb,
-        XLSX.utils.json_to_sheet(
-          productPerf.map((p) => ({ Ürün: p.ad, 'Satış Adedi': p.adet, Ciro: p.ciro })),
-        ),
-        'Ürünler',
-      );
-
-      // Sheet 6: Ödeme
-      XLSX.utils.book_append_sheet(
-        wb,
-        XLSX.utils.json_to_sheet(
-          paymentMethodDist.map((p) => ({ Yöntem: p.name, Tutar: p.value })),
-        ),
-        'Ödeme Yöntemleri',
-      );
+      addSheet('Günlük', cardRows.dailyTrend());
+      addSheet('Saatlik', cardRows.hourly());
+      addSheet('Garsonlar', cardRows.waiters());
+      addSheet('Ürün-Kategori', cardRows.categories());
+      addSheet('Ürünler', cardRows.products());
+      addSheet('Ödeme Yöntemleri', cardRows.payments());
 
       XLSX.writeFile(wb, `rapor_${from}_${to}.xlsx`);
       toast.success('Excel raporu indirildi');
@@ -329,7 +345,7 @@ export default function AdminReports() {
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Günlük trend */}
-          <ChartCard title="Günlük Ciro Trendi">
+          <ChartCard title="Günlük Ciro Trendi" onExport={exportCard('Günlük', 'dailyTrend')}>
             <ResponsiveContainer width="100%" height={280}>
               <LineChart data={dailyTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -345,7 +361,7 @@ export default function AdminReports() {
           </ChartCard>
 
           {/* Saatlik */}
-          <ChartCard title="Saatlik Satış Dağılımı">
+          <ChartCard title="Saatlik Satış Dağılımı" onExport={exportCard('Saatlik', 'hourly')}>
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={hourlySales}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -358,7 +374,7 @@ export default function AdminReports() {
           </ChartCard>
 
           {/* Garson performansı */}
-          <ChartCard title="Garson Performansı (Top 8)">
+          <ChartCard title="Garson Performansı (Top 8)" onExport={exportCard('Garsonlar', 'waiters')}>
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={waiterPerf} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -371,7 +387,7 @@ export default function AdminReports() {
           </ChartCard>
 
           {/* Kategori dağılımı */}
-          <ChartCard title="Ürün/Kategori Dağılımı (Top 10)">
+          <ChartCard title="Ürün/Kategori Dağılımı (Top 10)" onExport={exportCard('Ürün-Kategori', 'categories')}>
             <ResponsiveContainer width="100%" height={280}>
               <PieChart>
                 <Pie
@@ -394,7 +410,7 @@ export default function AdminReports() {
           </ChartCard>
 
           {/* Ödeme yöntemi */}
-          <ChartCard title="Ödeme Yöntemi Dağılımı">
+          <ChartCard title="Ödeme Yöntemi Dağılımı" onExport={exportCard('Ödeme Yöntemleri', 'payments')}>
             <ResponsiveContainer width="100%" height={280}>
               <PieChart>
                 <Pie
@@ -419,9 +435,12 @@ export default function AdminReports() {
 
           {/* Ürün tablosu (top 10) */}
           <div className="card">
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-500">
-              En Çok Satan Ürünler (Top 10)
-            </h3>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+                En Çok Satan Ürünler (Top 10)
+              </h3>
+              <ExportButton onClick={exportCard('Ürünler', 'products')} />
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
@@ -449,11 +468,26 @@ export default function AdminReports() {
   );
 }
 
-function ChartCard({ title, children }) {
+function ChartCard({ title, children, onExport }) {
   return (
     <div className="card">
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-500">{title}</h3>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">{title}</h3>
+        {onExport && <ExportButton onClick={onExport} />}
+      </div>
       {children}
     </div>
+  );
+}
+
+function ExportButton({ onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      title="Excel'e aktar"
+      className="flex shrink-0 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+    >
+      <Download size={14} /> Excel
+    </button>
   );
 }
