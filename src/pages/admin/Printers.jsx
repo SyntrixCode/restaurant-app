@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2, Printer as PrinterIcon, Star, Zap, Wallet, Bell, Receipt, ClipboardList } from 'lucide-react';
+import { Plus, Pencil, Trash2, Printer as PrinterIcon, Star, Zap, Wallet, Bell, Receipt, ClipboardList, Copy } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import PageHeader from '../../components/layout/PageHeader';
 import Modal from '../../components/ui/Modal';
@@ -73,8 +73,10 @@ export default function Printers() {
     }
   };
 
-  // Her yazıcıdan, O YAZICIDAN basılan ürünlerin listesini çıkar (sipariş/ciro oluşmadan).
-  // Hem bağlantıyı hem ürün→yazıcı yönlendirmesini tek seferde doğrular.
+  // DEMO MUTFAK FİŞİ — her aktif yazıcıya, O YAZICIDAN çıkacak ürünlerle gerçek fiş
+  // biçiminde bir DENEME fişi basar (sipariş/ciro oluşmaz). Hem bağlantıyı, hem
+  // ürün→yazıcı yönlendirmesini, hem de "fiş çıkmama" düzeltmesini tek seferde doğrular.
+  // Üstte büyük "<YAZICI> DEMO" ibaresi → mutfak gerçek siparişle karıştırmaz.
   const handlePrintRoutingMap = async () => {
     if (!Capacitor.isNativePlatform()) {
       toast.error(
@@ -89,25 +91,45 @@ export default function Printers() {
       toast.error('Aktif ve IP’li yazıcı bulunamadı.');
       return;
     }
+    // Gerçek mutfak fişi akışıyla aynı retry (geçici ağ kopması fişi düşürmesin).
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const printWithRetry = async (opts, retries = 2, delayMs = 1000) => {
+      let lastErr;
+      for (let a = 0; a <= retries; a++) {
+        try {
+          return await printNetworkReceipt(opts);
+        } catch (err) {
+          lastErr = err;
+          if (a < retries) await sleep(delayMs);
+        }
+      }
+      throw lastErr;
+    };
+
     setListPrinting(true);
-    const t = toast.loading('Tüm yazıcılardan ürün listesi basılıyor…');
+    const t = toast.loading('Tüm yazıcılara DEMO fişi basılıyor…');
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
     let ok = 0;
     let fail = 0;
     for (const g of groups) {
       const urunler = [...g.items].sort((a, b) => (a.ad || '').localeCompare(b.ad || '', 'tr'));
       const lines = [
-        { type: 'text', text: 'URUN LISTESI (TEST)', align: 'center', size: 30, bold: true },
-        { type: 'text', text: `» ${String(g.printer.ad).toLocaleUpperCase('tr-TR')} «`, align: 'center', size: 40, bold: true },
+        { type: 'text', text: '*** DEMO / TEST ***', align: 'center', size: 30, bold: true },
+        { type: 'text', text: `${String(g.printer.ad).toLocaleUpperCase('tr-TR')} DEMO`, align: 'center', size: 46, bold: true },
         { type: 'text', text: `${g.printer.ip || ''}`, align: 'center', size: 20 },
         { type: 'divider' },
-        { type: 'text', text: `Bu yazicidan ${urunler.length} urun basilir:`, size: 24, bold: true },
-        ...urunler.map((u, i) => ({ type: 'text', text: `${i + 1}. ${u.ad}`, size: 26 })),
+        { type: 'text', text: `Saat: ${hh}:${mm}`, size: 28 },
+        { type: 'text', text: `Bu yazicidan ${urunler.length} urun cikar:`, size: 26, bold: true },
         { type: 'divider' },
-        { type: 'text', text: 'Yazici/urun yonlendirme testi', align: 'center', size: 20 },
-        { type: 'feed', lines: 1 },
+        ...urunler.map((u) => ({ type: 'text', text: `1x ${u.ad}`, size: 32, bold: true })),
+        { type: 'divider' },
+        { type: 'text', text: '*** DEMO - GECERSIZ FIS ***', align: 'center', size: 24, bold: true },
+        { type: 'text', text: 'powered by {S} syntrixCode', align: 'center', size: 18 },
       ];
       try {
-        await printNetworkReceipt({
+        await printWithRetry({
           ip: g.printer.ip,
           model: g.printer.model || 'SRP-E300',
           connection: g.printer.baglanti || 'ethernet',
@@ -118,12 +140,12 @@ export default function Printers() {
         ok++;
       } catch (err) {
         fail++;
-        console.warn(`Liste basılamadı (${g.printer.ad} @ ${g.printer.ip}):`, err?.message || err);
+        console.warn(`DEMO fişi basılamadı (${g.printer.ad} @ ${g.printer.ip}):`, err?.message || err);
       }
     }
     setListPrinting(false);
     toast[fail ? 'error' : 'success'](
-      `${ok} yazıcıdan liste basıldı${fail ? ` · ${fail} yazıcı başarısız` : ''}`,
+      `${ok} yazıcıya DEMO fişi basıldı${fail ? ` · ${fail} yazıcı başarısız` : ''}`,
       { id: t, duration: 6000 },
     );
   };
@@ -139,9 +161,9 @@ export default function Printers() {
               onClick={handlePrintRoutingMap}
               disabled={listPrinting}
               className="btn-secondary disabled:opacity-50"
-              title="Her yazıcıdan, o yazıcının bastığı ürünlerin listesini çıkarır (sipariş/ciro oluşmaz)"
+              title="Her aktif yazıcıya, o yazıcıdan çıkacak ürünlerle DEMO fişi basar. Üstünde 'DEMO' ibaresi olur, sipariş/ciro oluşmaz."
             >
-              <ClipboardList size={16} /> {listPrinting ? 'Basılıyor…' : 'Yazıcı–Ürün Listesi Bas'}
+              <ClipboardList size={16} /> {listPrinting ? 'Basılıyor…' : 'DEMO Fiş Bas (Tüm Yazıcılar)'}
             </button>
             <button
               onClick={() => {
@@ -203,6 +225,11 @@ export default function Printers() {
                 <Receipt size={12} /> Adisyon basıcı
               </p>
             )}
+            {p.aynaGrubu && (
+              <p className="flex items-center gap-1 text-xs font-medium text-teal-700">
+                <Copy size={12} /> Ayna grubu (ortak fiş)
+              </p>
+            )}
             <div className="mt-2 flex flex-wrap gap-2">
               <button onClick={() => handleTest(p)} className="btn-ghost flex-1 text-xs text-emerald-700 hover:bg-emerald-50">
                 <Zap size={14} /> Test Yazdır
@@ -258,7 +285,7 @@ function PrinterModal({ open, onClose, editing }) {
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(printerSchema),
-    defaultValues: { ad: '', model: 'SRP-E300', baglanti: 'ethernet', ip: '', port: 9100, varsayilan: false, aktif: true, kasaBagli: false, siparisZili: false, adisyonBas: false },
+    defaultValues: { ad: '', model: 'SRP-E300', baglanti: 'ethernet', ip: '', port: 9100, varsayilan: false, aktif: true, kasaBagli: false, siparisZili: false, adisyonBas: false, aynaGrubu: false },
   });
 
   useEffect(() => {
@@ -276,6 +303,7 @@ function PrinterModal({ open, onClose, editing }) {
               kasaBagli: editing.kasaBagli ?? false,
               siparisZili: editing.siparisZili ?? false,
               adisyonBas: editing.adisyonBas ?? false,
+              aynaGrubu: editing.aynaGrubu ?? false,
             }
           : { ad: '', model: 'SRP-E300', ip: '', port: 9100, varsayilan: false, aktif: true, kasaBagli: false },
       );
@@ -400,6 +428,18 @@ function PrinterModal({ open, onClose, editing }) {
             </p>
           </div>
           <Toggle checked={watch('adisyonBas')} onChange={(v) => setValue('adisyonBas', v)} />
+        </div>
+        <div className="flex items-center justify-between rounded-lg bg-teal-50 p-3">
+          <div>
+            <span className="text-sm font-medium text-slate-700">Ayna grubu (ortak fiş)</span>
+            <p className="text-xs text-slate-500">
+              Bu işaretli yazıcılar tek bir grup gibi davranır: gruptaki herhangi bir yazıcıya
+              düşen kalem, grubun HEPSİNDEN aynı fiş olarak çıkar. Böylece bu yazıcılardan ne
+              sipariş gelirse gelsin aynı mutfak fişi basılır. Grup dışı yazıcılar (ör. Meşrubat)
+              kendi ürünleriyle kalır.
+            </p>
+          </div>
+          <Toggle checked={watch('aynaGrubu')} onChange={(v) => setValue('aynaGrubu', v)} />
         </div>
         <p className="text-xs text-slate-500">
           Bu yazıcıya yönlendirilen kategorilerin siparişleri buradan ESC/POS protokolü ile basılır.

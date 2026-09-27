@@ -26,6 +26,43 @@ describe('pickDefaultPrinter', () => {
   });
 });
 
+describe('ayna grubu (aynaGrubu)', () => {
+  // Fırın + Kahvaltı = ayna grubu; Meşrubat grup dışı.
+  const firin = { id: 'f', ad: 'Fırın', ip: '1.1.1.1', aktif: true, aynaGrubu: true };
+  const kahvalti = { id: 'k', ad: 'Kahvaltı', ip: '1.1.1.2', aktif: true, aynaGrubu: true };
+  const mesrubat = { id: 'm', ad: 'Meşrubat', ip: '1.1.1.3', aktif: true, varsayilan: false };
+  const pl = [{ ...firin, varsayilan: true }, kahvalti, mesrubat];
+
+  it('gruptaki bir yazıcıya düşen kalem grubun HEPSİNDEN çıkar', () => {
+    const groups = groupItemsByPrinter([{ ad: 'Pide', yaziciIds: ['f'] }], [], pl);
+    const ids = groups.map((g) => g.printer.id).sort();
+    expect(ids).toEqual(['f', 'k']); // fırın + kahvaltı
+  });
+
+  it('içecek (grup dışı) yalnızca kendi yazıcısından çıkar', () => {
+    const groups = groupItemsByPrinter([{ ad: 'Ayran', yaziciIds: ['m'] }], [], pl);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].printer.id).toBe('m');
+  });
+
+  it('yönlendirmesiz kalem varsayılana (grupta) düşer → tüm gruba yayılır', () => {
+    const groups = groupItemsByPrinter([{ ad: 'Yeni Ürün' }], [], pl);
+    expect(groups.map((g) => g.printer.id).sort()).toEqual(['f', 'k']);
+  });
+
+  it('grup + içecek karışık siparişte fiş doğru bölünür', () => {
+    const groups = groupItemsByPrinter(
+      [{ ad: 'Pide', yaziciIds: ['f'] }, { ad: 'Ayran', yaziciIds: ['m'] }],
+      [],
+      pl,
+    );
+    const byP = Object.fromEntries(groups.map((g) => [g.printer.id, g.items.map((i) => i.ad)]));
+    expect(byP.f).toEqual(['Pide']);
+    expect(byP.k).toEqual(['Pide']);
+    expect(byP.m).toEqual(['Ayran']);
+  });
+});
+
 describe('groupItemsByPrinter', () => {
   it('kalemleri kategoriye göre mutfak/bar yazıcısına böler', () => {
     const items = [

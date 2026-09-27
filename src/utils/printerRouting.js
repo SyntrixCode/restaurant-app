@@ -90,9 +90,34 @@ function matchProductByName(ad, products) {
 }
 
 /**
+ * AYNA GRUBU — `aynaGrubu:true` işaretli yazıcılar tek bir "ortak fiş" grubu gibi
+ * davranır: bu gruptaki HERHANGİ bir yazıcıya düşen kalem, grubun HEPSİNE gönderilir.
+ * Böylece o yazıcılardan ne sipariş gelirse gelsin AYNI fiş çıkar (yedeklilik /
+ * karışıklığı önleme). Grup dışı yazıcılar (ör. Meşrubat) kendi kalemleriyle kalır.
+ *
+ * Grupta hiç yazıcı yoksa özellik kapalıdır — hedefler aynen döner.
+ */
+function expandMirror(targets, printerById) {
+  const mirror = [...printerById.values()].filter((p) => p.aynaGrubu);
+  if (mirror.length === 0) return targets; // özellik kapalı
+  if (!targets.some((t) => t.aynaGrubu)) return targets; // gruba düşmeyen kalem (ör. içecek) — dokunma
+  // Gruba düşen kalem → grubun HEPSİ + (varsa) grup-dışı hedefler korunur. Benzersizleştir.
+  const seen = new Set();
+  const out = [];
+  for (const t of [...targets.filter((x) => !x.aynaGrubu), ...mirror]) {
+    if (!seen.has(t.id)) {
+      seen.add(t.id);
+      out.push(t);
+    }
+  }
+  return out;
+}
+
+/**
  * Bir kalemin (eklenen/silinen/değişen) gideceği aktif yazıcıları çözer.
  * Öncelik: ürün yaziciIds (çoklu) → kategori yaziciId → varsayılan.
  * Yönlendirme bilgisi hiç yoksa (platform siparişi) ürün ADINDAN eşleştirilir.
+ * Son adım: ayna grubu genişletmesi (bkz. expandMirror).
  */
 function resolveTargets(it, catById, printerById, def, products) {
   let ids = Array.isArray(it.yaziciIds) ? it.yaziciIds : [];
@@ -107,12 +132,17 @@ function resolveTargets(it, catById, printerById, def, products) {
     }
   }
 
-  const targets = ids.map((id) => printerById.get(id)).filter(Boolean);
-  if (targets.length > 0) return targets;
-  const cat = categoryId ? catById.get(categoryId) : null;
-  const yId = cat?.yaziciId;
-  const t = (yId && printerById.get(yId)) || def;
-  return t ? [t] : [];
+  const byIds = ids.map((id) => printerById.get(id)).filter(Boolean);
+  let resolved;
+  if (byIds.length > 0) {
+    resolved = byIds;
+  } else {
+    const cat = categoryId ? catById.get(categoryId) : null;
+    const yId = cat?.yaziciId;
+    const t = (yId && printerById.get(yId)) || def;
+    resolved = t ? [t] : [];
+  }
+  return expandMirror(resolved, printerById);
 }
 
 /**

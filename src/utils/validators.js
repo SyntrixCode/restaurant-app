@@ -278,6 +278,9 @@ export const printerSchema = z
     // Bu yazıcı adisyon/hesap fişi basabilir mi? Birden fazla işaretliyse cihaz
     // ayarı (localStorage posDeviceAdisyonPrinterId) ile tercih belirlenir.
     adisyonBas: z.boolean().optional().default(false),
+    // Ayna grubu: bu işaretli yazıcılar aynı ortak fişi basar — gruba düşen her kalem
+    // grubun HEPSİNDEN çıkar (ör. Fırın+Kahvaltı+Çorba aynı mutfak fişini bassın).
+    aynaGrubu: z.boolean().optional().default(false),
   })
   // Ethernet'te IP zorunlu ve formatlı, USB'de boş geçilebilir.
   .superRefine((data, ctx) => {
