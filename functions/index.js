@@ -1,5 +1,6 @@
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentWritten, onDocumentUpdated, onDocumentCreated, onDocumentDeleted } from 'firebase-functions/v2/firestore';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import { defineSecret } from 'firebase-functions/params';
 import { initializeApp } from 'firebase-admin/app';
@@ -557,16 +558,9 @@ export const posentegraConfirm = onCall(
  * (zaten platformda ödendi); ciro/raporda platform kırılımına girsin diye
  * yontem='uygulama' payment kaydı yazılır. Gün = siparişin AÇILIŞ tarihi.
  */
-export const tamamlaPlatformSiparis = onCall({ region: 'europe-west1' }, async (req) => {
-  if (!req.auth) throw new HttpsError('unauthenticated', 'Giriş gerekli');
-  const userSnap = await db.collection('users').doc(req.auth.uid).get();
-  const userData = userSnap.exists ? userSnap.data() : {};
-  if (!userData.aktif || !['admin', 'kasiyer', 'garson', 'godmode'].includes(userData.rol)) {
-    throw new HttpsError('permission-denied', 'Yetki yok');
-  }
-  const orderId = String(req.data?.orderId || '');
-  if (!orderId) throw new HttpsError('invalid-argument', 'orderId gerekli');
-
+// Platform siparişini arşivler (ortak helper — hem callable hem otomatik poller kullanır).
+// kapatanId/kapatanAd: işlemi yapan (personel veya 'Otomatik').
+async function arsivlePlatformSiparis(orderId, kapatanId, kapatanAd) {
   const orderRef = db.collection('orders').doc(orderId);
   return await db.runTransaction(async (txn) => {
     const snap = await txn.get(orderRef);
@@ -584,7 +578,7 @@ export const tamamlaPlatformSiparis = onCall({ region: 'europe-west1' }, async (
     const gun = `${olDate.getFullYear()}-${String(olDate.getMonth() + 1).padStart(2, '0')}-${String(olDate.getDate()).padStart(2, '0')}`;
 
     const isTA = (a) => String(a || '').toLowerCase().startsWith('syntrix');
-    const isTest = order.test === true || isTA(order.garsonAd) || isTA(userData.ad);
+    const isTest = order.test === true || isTA(order.garsonAd) || isTA(kapatanAd);
     const kaynakAd = order.paketKaynakAd || order.paketKaynak || 'Uygulama';
 
     const payRef = db.collection('payments').doc();
@@ -594,8 +588,8 @@ export const tamamlaPlatformSiparis = onCall({ region: 'europe-west1' }, async (
       tutar: Number(order.toplam) || 0,
       yontem: 'uygulama',
       kartTipi: kaynakAd,
-      kasiyerId: req.auth.uid,
-      kasiyerAd: userData.ad || 'Personel',
+      kasiyerId: kapatanId || null,
+      kasiyerAd: kapatanAd || 'Personel',
       fisBasildi: false,
       test: isTest,
       zaman: FieldValue.serverTimestamp(),
@@ -621,7 +615,66 @@ export const tamamlaPlatformSiparis = onCall({ region: 'europe-west1' }, async (
 
     return { ok: true, gun };
   });
+}
+
+export const tamamlaPlatformSiparis = onCall({ region: 'europe-west1' }, async (req) => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Giriş gerekli');
+  const userSnap = await db.collection('users').doc(req.auth.uid).get();
+  const userData = userSnap.exists ? userSnap.data() : {};
+  if (!userData.aktif || !['admin', 'kasiyer', 'garson', 'godmode'].includes(userData.rol)) {
+    throw new HttpsError('permission-denied', 'Yetki yok');
+  }
+  const orderId = String(req.data?.orderId || '');
+  if (!orderId) throw new HttpsError('invalid-argument', 'orderId gerekli');
+  return await arsivlePlatformSiparis(orderId, req.auth.uid, userData.ad || 'Personel');
 });
+
+// ============================================================================
+// PLATFORM SİPARİŞ DURUM TAKİBİ (polling) → kurye alınca OTOMATİK KAPAT
+// ----------------------------------------------------------------------------
+// Personel platform ekranından "teslim edildi" yapmadığı için, Posentegra'dan
+// siparişin durumunu periyodik sorarız (getOrder). Kurye "yola çıktı/teslim
+// edildi" olunca siparişi otomatik kapatırız.
+//
+// GÜVENLİK: Yanlış kodda erken kapatmamak için, "kapat" sayılan Posentegra durum
+// kodları settings/posentegra.autoCloseStatuses (dizi) ile YAPILANDIRILIR.
+// Boş/tanımsızsa YALNIZCA LOG atar (kapatmaz) — doğru kodu loglardan öğrenip
+// ayara girince otomatik kapatma redeploy'suz aktifleşir.
+// ============================================================================
+export const platformSiparisDurumTakip = onSchedule(
+  { schedule: 'every 3 minutes', region: 'europe-west1', secrets: [POSENTEGRA_API_KEY] },
+  async () => {
+    const cfgSnap = await db.doc('settings/posentegra').get();
+    const cfg = cfgSnap.exists ? cfgSnap.data() : {};
+    const closeCodes = new Set((Array.isArray(cfg.autoCloseStatuses) ? cfg.autoCloseStatuses : []).map(Number));
+
+    const snap = await db
+      .collection('orders')
+      .where('durum', 'in', ['aktif', 'hazirlandi'])
+      .get();
+
+    for (const d of snap.docs) {
+      const o = d.data();
+      if (o.teslimatTipi !== 'platform' || !o.posentegraPid || !o.posentegraOnayli) continue;
+      try {
+        const res = await posentegraApi.getOrder(POSENTEGRA_API_KEY.value(), o.posentegraPid);
+        // Status alanı Posentegra'da farklı isimlerde olabilir — hepsini dene + logla.
+        const status = res?.status ?? res?.orderStatus ?? res?.state ?? res?.data?.status ?? res?.order?.status;
+        console.log('[durumTakip]', {
+          id: d.id, pid: o.posentegraPid, durum: o.durum, status,
+          statusText: res?.statusText ?? res?.statusName ?? res?.orderStatusText,
+          keys: Object.keys(res || {}),
+        });
+        if (status != null && closeCodes.has(Number(status))) {
+          await arsivlePlatformSiparis(d.id, null, 'Otomatik (kurye teslim)');
+          console.log('[durumTakip] OTOMATİK KAPATILDI', { id: d.id, status });
+        }
+      } catch (err) {
+        console.warn('[durumTakip] getOrder hata', o.posentegraPid, err.message);
+      }
+    }
+  },
+);
 
 /**
  * Garson/Kasiyer "Reddet" basınca → Posentegra'ya cancel gönderir, order'ı iptal'e alır.
