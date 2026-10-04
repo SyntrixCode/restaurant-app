@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Minus, Trash2, Search, X, ImageIcon, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { watchCollection, orderBy, fetchOne, watchDoc } from '../../firebase/firestore';
+import { watchCollection, orderBy, fetchOne } from '../../firebase/firestore';
 import { useCartStore } from '../../store/cartStore';
 import { useAuthStore } from '../../store/authStore';
 import { formatTL, formatAdet } from '../../utils/format';
@@ -45,14 +45,23 @@ export default function NewOrder() {
   // Submit'te diff hesaplanır.
   const [editedExisting, setEditedExisting] = useState({});
 
-  // Mevcut siparişe ekleme yapılıyorsa, siparişi dinle
+  // Mevcut siparişe ekleme/düzenleme yapılıyorsa, siparişi TEK SEFER anlık görüntü (snapshot)
+  // olarak al — canlı dinleme (watchDoc) DEĞİL. Canlı dinlemede düzenleme sırasında sipariş
+  // güncellenince items dizisinin indeksleri kayıyordu; editedExisting index-tabanlı olduğu için
+  // İPTAL/düzeltme fişi YANLIŞ kaleme çıkıyordu (hâlâ siparişte olan ürüne "iptal"). Snapshot ile
+  // düzenleme bazı sabit kalır, diff doğru hesaplanır.
   useEffect(() => {
     if (!orderId) {
       setExistingOrder(null);
       setEditedExisting({});
       return;
     }
-    return watchDoc('orders', orderId, setExistingOrder);
+    let active = true;
+    (async () => {
+      const o = await fetchOne('orders', orderId);
+      if (active) setExistingOrder(o);
+    })();
+    return () => { active = false; };
   }, [orderId]);
 
   // Order ilk geldiğinde editedExisting'i original ile hizala
