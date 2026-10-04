@@ -14,12 +14,15 @@ service cloud.firestore {
     }
     function isAdmin() { return isActive() && role() == 'admin'; }
     function isKasiyer() { return isActive() && role() == 'kasiyer'; }
+    // Godmode (Sezgin) — sipariş iptal/düzenleme süper yetkilisi. İptal akışı
+    // archivedOrders/payments/orders yazar; bu işlemlerde admin-denk yetki gerekir.
+    function isGod() { return isActive() && role() == 'godmode'; }
     function isStaff() {
-      return isActive() && role() in ['admin', 'kasiyer', 'garson', 'kurye'];
+      return isActive() && role() in ['admin', 'kasiyer', 'garson', 'kurye', 'godmode'];
     }
     function isCashier() {
       // Ödeme/arşiv yazabilecek roller — kurye teslim ettiğinde kendi siparişini kapatır
-      return isActive() && role() in ['admin', 'kasiyer', 'kurye'];
+      return isActive() && role() in ['admin', 'kasiyer', 'kurye', 'godmode'];
     }
 
     match /users/{userId} {
@@ -71,19 +74,21 @@ service cloud.firestore {
       allow read: if isStaff();
       allow create: if isStaff();
       allow update: if isStaff();
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || isGod();
     }
 
     match /archivedOrders/{id} {
       allow read: if isStaff();
       allow create: if isCashier();
-      allow update, delete: if isAdmin();
+      // Arşiv iptali/ürün düzeltme — admin veya godmode (Sezgin)
+      allow update, delete: if isAdmin() || isGod();
     }
 
     match /payments/{id} {
       allow read: if isStaff();
       allow create: if isCashier();
-      allow update, delete: if isAdmin();
+      // Ödeme düzeltme/arşiv ürün düzenleme — admin veya godmode
+      allow update, delete: if isAdmin() || isGod();
     }
 
     match /campaigns/{id} {
