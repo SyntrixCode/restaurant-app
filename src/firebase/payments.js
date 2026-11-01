@@ -5,7 +5,6 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './config';
-import { isTestAccount } from '../utils/testAccount';
 
 function gunString(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -203,7 +202,10 @@ export async function recordPayment({
     const paymentIds = [];
     // Test/demo: sipariş test hesabından açıldıysa VEYA ödemeyi test hesabı aldıysa,
     // ödeme de test sayılır → ciroya/raporlara girmez.
-    const isTest = order.test === true || isTestAccount(kasiyerAd);
+    // Test/gerçek ayrımı SİPARİŞİN garsonundan gelir (order.test, createOrder'da garsondan set edilir).
+    // Ödemeyi alan hesap belirleyici DEĞİL: gerçek garsonun siparişini "Syntrix Kasiyer" tahsil edince
+    // eskiden ciro dışı kalıyordu (gün sonu yazar kasayla tutmuyordu).
+    const isTest = order.test === true;
 
     // Sadece TAHSİL EDİLEN ödemeler (nakit/kart/yemekKarti) ciroya yazılır
     for (const p of collectedPays) {

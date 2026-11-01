@@ -516,7 +516,7 @@ export const posentegraConfirm = onCall(
     const userSnap = await db.collection('users').doc(req.auth.uid).get();
     if (!userSnap.exists) throw new HttpsError('permission-denied', 'Kullanıcı bulunamadı');
     const userData = userSnap.data();
-    if (!userData.aktif || !['admin', 'kasiyer', 'garson'].includes(userData.rol)) {
+    if (!userData.aktif || !['admin', 'kasiyer', 'garson', 'godmode'].includes(userData.rol)) {
       throw new HttpsError('permission-denied', 'Yetki yok');
     }
 
@@ -577,7 +577,9 @@ async function arsivlePlatformSiparis(orderId, kapatanId, kapatanAd) {
     const gun = `${olDate.getFullYear()}-${String(olDate.getMonth() + 1).padStart(2, '0')}-${String(olDate.getDate()).padStart(2, '0')}`;
 
     const isTA = (a) => String(a || '').toLowerCase().startsWith('syntrix');
-    const isTest = order.test === true || isTA(order.garsonAd) || isTA(kapatanAd);
+    // Test = siparişin kendisi test ise. Kapatan hesap (Syntrix Kasiyer vb.) belirleyici DEĞİL —
+    // gerçek platform siparişini test hesabı kapatınca ciro dışı kalmasın.
+    const isTest = order.test === true || isTA(order.garsonAd);
     const kaynakAd = order.paketKaynakAd || order.paketKaynak || 'Uygulama';
 
     const payRef = db.collection('payments').doc();
@@ -672,7 +674,7 @@ export const posentegraReject = onCall(
     const userSnap = await db.collection('users').doc(req.auth.uid).get();
     if (!userSnap.exists) throw new HttpsError('permission-denied', 'Kullanıcı bulunamadı');
     const userData = userSnap.data();
-    if (!userData.aktif || !['admin', 'kasiyer'].includes(userData.rol)) {
+    if (!userData.aktif || !['admin', 'kasiyer', 'godmode'].includes(userData.rol)) {
       throw new HttpsError('permission-denied', 'Yetki yok');
     }
 

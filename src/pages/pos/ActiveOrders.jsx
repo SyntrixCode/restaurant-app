@@ -57,7 +57,7 @@ export default function ActiveOrders() {
   const { user, profile, rol } = useAuthStore();
   const { settings } = useSettingsStore();
   const gecikmeEsigi = settings.gecikmeEsigiDk || 15;
-  const canPay = ['kasiyer', 'admin'].includes(rol);
+  const canPay = ['kasiyer', 'admin', 'godmode'].includes(rol);
 
   // Her 30 sn'de bir yeniden render → süreler canlı güncellenir, gecikme alarmı otomatik tetiklenir
   useEffect(() => {
@@ -1001,15 +1001,25 @@ function PaketOrderCard({
               <Check size={15} /> Teslim Edildi · Siparişi Kapat
             </button>
           ) : (
-            // Kapıda ödeme — kurye teslim edince sipariş otomatik düşer, sadece durum gösterimi
-            <div className="flex w-full items-center justify-center gap-2 rounded-lg bg-purple-50 px-4 py-2.5 text-sm font-semibold text-purple-700">
-              <Truck size={15} /> Kurye Yolda
-              {order.masayaGittiZamani && (
-                <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-white/80 px-2 py-0.5 text-xs tabular-nums">
-                  <Clock size={11} />
-                  <LiveTimer from={order.masayaGittiZamani} />
-                </span>
-              )}
+            // Kapıda ödeme + yolda: durum göstergesi VE "Ödeme Al". Eskiden yalnızca gösterge vardı
+            // ("kurye teslim edince otomatik düşer" diyordu ama böyle bir otomasyon yok) → sipariş
+            // sonsuza dek "Yolda" kalıyor, kimse ödemeyi alıp kapatamıyordu.
+            <div className="space-y-2">
+              <div className="flex w-full items-center justify-center gap-2 rounded-lg bg-purple-50 px-4 py-2.5 text-sm font-semibold text-purple-700">
+                <Truck size={15} /> Kurye Yolda
+                {order.masayaGittiZamani && (
+                  <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-white/80 px-2 py-0.5 text-xs tabular-nums">
+                    <Clock size={11} />
+                    <LiveTimer from={order.masayaGittiZamani} />
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={onManuelPay}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow hover:bg-emerald-700 active:scale-95"
+              >
+                <CreditCard size={15} /> Ödeme Al · Siparişi Kapat
+              </button>
             </div>
           )
         ) : (

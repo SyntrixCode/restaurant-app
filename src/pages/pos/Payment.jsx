@@ -337,10 +337,10 @@ export default function Payment() {
     return () => clearTimeout(t);
   }, [finalized, submitting, splitSlip, payments.length, itemStates, order?.id, handleCompleteRef]);
 
-  if (!['kasiyer', 'admin'].includes(rol)) {
+  if (!['kasiyer', 'admin', 'godmode'].includes(rol)) {
     return (
       <div className="flex h-full items-center justify-center text-slate-500">
-        Ödeme alma yetkiniz yok. Kasiyer veya admin gerekli.
+        Ödeme alma yetkiniz yok. Kasiyer, admin veya yetkili gerekli.
       </div>
     );
   }

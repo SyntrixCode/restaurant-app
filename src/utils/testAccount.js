@@ -12,9 +12,18 @@ export function isTestAccount(ad) {
   return (ad || '').toLowerCase().startsWith('syntrix');
 }
 
-/** Bir kaydın (sipariş/ödeme/arşiv) test verisi olup olmadığı. */
+/**
+ * Bir kaydın (sipariş/ödeme/arşiv) test verisi olup olmadığı.
+ * Test = kaydın `test` işareti (sipariş garsondan set edilir) VEYA garson adı Syntrix.
+ * `kasiyerAd` bilerek hariç: gerçek garsonun siparişini "Syntrix Kasiyer" tahsil edince
+ * gerçek satış ciro dışı kalıyordu (gün sonu yazar kasayla tutmuyordu).
+ */
 export function isTestRecord(rec) {
-  return rec?.test === true || isTestAccount(rec?.garsonAd) || isTestAccount(rec?.kasiyerAd);
+  if (rec?.test === true) return true;
+  // Açıkça test:false damgalı kayıt (ör. testGeriAlindi) GERÇEK satıştır — ada bakılmaz.
+  if (rec?.test === false) return false;
+  // `test` alanı hiç yoksa (eski kayıtlar) garson adına göre belirle.
+  return isTestAccount(rec?.garsonAd);
 }
 
 /** Rapor/ciro toplamları için: test kayıtlarını dışla. */
