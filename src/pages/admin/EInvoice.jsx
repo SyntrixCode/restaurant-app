@@ -33,13 +33,13 @@ const PLAN = [
 
 export default function EInvoice() {
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="E-Dönüşüm / Entegrasyon"
         subtitle="e-Fatura · e-Arşiv · Posentegra · GMP-3 ÖKC — planlama ve ön gereksinimler"
       />
 
-      <div className="mb-6 flex items-start gap-3 rounded-xl border-2 border-amber-300 bg-amber-50 p-4">
+      <div className="mb-4 flex items-start gap-3 rounded-xl border-2 border-amber-300 bg-amber-50 p-3 sm:mb-6 sm:p-4">
         <AlertTriangle className="mt-0.5 shrink-0 text-amber-600" size={22} />
         <div className="text-sm text-amber-900">
           <p className="font-semibold">Bu modül planlama aşamasındadır.</p>
@@ -51,7 +51,7 @@ export default function EInvoice() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
         <div className="card">
           <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-900">
             <FileCheck2 size={18} /> Ön Gereksinimler
@@ -98,7 +98,7 @@ export default function EInvoice() {
             href="https://ebelge.gib.gov.tr"
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-4 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
+            className="mt-4 inline-flex min-h-[40px] items-center gap-1.5 sm:min-h-0 text-sm text-blue-600 hover:underline"
           >
             <ExternalLink size={14} /> GİB e-Belge bilgi sayfası
           </a>

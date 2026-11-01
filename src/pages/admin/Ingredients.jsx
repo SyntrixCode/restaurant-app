@@ -72,7 +72,7 @@ export default function AdminIngredients() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Malzemeler"
         subtitle="Reçete bazlı stok için hammadde tanımları (un, kıyma, yağ vb.)"
@@ -89,7 +89,7 @@ export default function AdminIngredients() {
         }
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
         <StatCard label="Toplam Malzeme" value={ingredients.length} icon={Wheat} />
         <StatCard label="Aktif" value={aktifSayisi} color="green" />
         <StatCard
@@ -115,7 +115,7 @@ export default function AdminIngredients() {
       )}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative max-w-xs flex-1">
+        <div className="relative w-full flex-1 sm:max-w-xs">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             value={search}
@@ -127,7 +127,7 @@ export default function AdminIngredients() {
         <select
           value={filterKategori}
           onChange={(e) => setFilterKategori(e.target.value)}
-          className="input max-w-xs"
+          className="input w-full sm:max-w-xs"
         >
           <option value="all">Tüm Kategoriler</option>
           {kategoriler.map((k) => (
@@ -152,7 +152,7 @@ export default function AdminIngredients() {
               return (
                 <li
                   key={i.id}
-                  className={`grid grid-cols-12 items-center gap-3 px-4 py-3 text-sm ${
+                  className={`relative flex flex-col gap-1.5 px-4 py-3 pr-24 text-sm sm:grid sm:grid-cols-12 sm:items-center sm:gap-3 sm:pr-4 ${
                     i.aktif === false ? 'opacity-60' : ''
                   }`}
                 >
@@ -177,14 +177,14 @@ export default function AdminIngredients() {
                       {formatAdet(i.stok)} {BIRIM_LABELS[i.birim]}
                     </span>
                   </div>
-                  <div className="col-span-2 text-xs text-slate-500">
+                  <div className="col-span-2 text-xs text-slate-500 empty:hidden sm:empty:block">
                     {i.dusukStokEsigi != null && (
                       <p>
                         Eşik: {formatAdet(i.dusukStokEsigi)} {BIRIM_LABELS[i.birim]}
                       </p>
                     )}
                   </div>
-                  <div className="col-span-2 text-xs text-slate-700">
+                  <div className="col-span-2 text-xs text-slate-700 empty:hidden sm:empty:block">
                     {i.birimMaliyet != null && i.birimMaliyet > 0 && (
                       <p>
                         {formatTL(i.birimMaliyet)} / {BIRIM_LABELS[i.birim]}
@@ -194,19 +194,19 @@ export default function AdminIngredients() {
                   <div className="col-span-2 text-xs text-slate-500">
                     {tedarikci?.ad || '—'}
                   </div>
-                  <div className="col-span-1 flex justify-end gap-1">
+                  <div className="absolute right-2 top-2 col-span-1 flex justify-end gap-1 sm:static">
                     <button
                       onClick={() => {
                         setEditing(i);
                         setOpen(true);
                       }}
-                      className="btn-ghost px-2 py-1"
+                      className="btn-ghost min-h-[40px] min-w-[40px] justify-center p-2.5 sm:min-h-0 sm:min-w-0 sm:px-2 sm:py-1"
                     >
                       <Pencil size={14} />
                     </button>
                     <button
                       onClick={() => handleDelete(i)}
-                      className="btn-ghost px-2 py-1 text-red-600 hover:bg-red-50"
+                      className="btn-ghost min-h-[40px] min-w-[40px] justify-center p-2.5 text-red-600 hover:bg-red-50 sm:min-h-0 sm:min-w-0 sm:px-2 sm:py-1"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -325,7 +325,7 @@ function IngredientModal({ open, editing, suppliers, onClose }) {
           {errors.ad && <p className="mt-1 text-xs text-red-600">{errors.ad.message}</p>}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Birim</label>
             <select {...register('birim')} className="input">
@@ -347,7 +347,7 @@ function IngredientModal({ open, editing, suppliers, onClose }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Mevcut Stok</label>
             <input
@@ -370,7 +370,7 @@ function IngredientModal({ open, editing, suppliers, onClose }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Birim Maliyet (TL)</label>
             <input

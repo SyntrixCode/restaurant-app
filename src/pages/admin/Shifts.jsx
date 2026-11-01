@@ -120,30 +120,52 @@ export default function Shifts() {
     ]);
   };
 
+  const aksiyon = (s) => (
+    <>
+      {s.acik && (
+        <button
+          onClick={() => handleClose(s)}
+          className="min-h-[40px] flex-1 rounded-md bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 sm:min-h-0 sm:flex-none sm:px-2 sm:py-1 sm:text-xs"
+        >
+          Kapat
+        </button>
+      )}
+      {isAdmin && (
+        <button
+          onClick={() => handleDelete(s.id)}
+          className="flex min-h-[40px] min-w-[40px] items-center justify-center rounded-md p-2.5 text-red-500 hover:bg-red-50 sm:min-h-0 sm:min-w-0 sm:p-1"
+          title="Sil"
+        >
+          <Trash2 size={15} />
+        </button>
+      )}
+    </>
+  );
+
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Personel Mesai Takibi"
         subtitle="Günlük giriş / çıkış kayıtları ve toplam çalışma süresi"
         actions={
-          <div className="flex items-center gap-2 print:hidden">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto print:hidden">
             <input
               type="date"
               value={gun}
               onChange={(e) => setGun(e.target.value)}
-              className="input max-w-[160px]"
+              className="input w-full min-h-[44px] sm:w-auto sm:min-h-0 sm:max-w-[160px]"
             />
-            <button onClick={handleExport} className="btn-secondary">
+            <button onClick={handleExport} className="btn-secondary min-h-[44px] flex-1 justify-center sm:min-h-0 sm:flex-none">
               <ClipboardList size={16} /> Excel
             </button>
-            <button onClick={() => window.print()} className="btn-secondary">
+            <button onClick={() => window.print()} className="btn-secondary min-h-[44px] flex-1 justify-center sm:min-h-0 sm:flex-none">
               <Printer size={16} /> Yazdır
             </button>
           </div>
         }
       />
 
-      <div id="mesai-rapor" className="space-y-6">
+      <div id="mesai-rapor" className="space-y-4 sm:space-y-6">
         {/* Toplam süre özeti */}
         {totals.length > 0 && (
           <div className="card">
@@ -168,6 +190,37 @@ export default function Shifts() {
           {sorted.length === 0 ? (
             <p className="py-6 text-center text-sm text-slate-500">Bu güne ait mesai kaydı yok.</p>
           ) : (
+            <>
+              {/* Telefon: kart listesi */}
+              <ul className="space-y-2 sm:hidden">
+                {sorted.map((s) => (
+                  <li key={s.id} className="rounded-lg border border-slate-200 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="break-words font-semibold text-slate-900">{s.personelAd}</p>
+                        <p className="text-xs text-slate-500">{s.rol || '-'}</p>
+                      </div>
+                      <p className={`shrink-0 text-lg font-bold tabular-nums ${s.acik ? 'text-amber-700' : 'text-slate-900'}`}>
+                        {sureLabel(effectiveDk(s))}
+                      </p>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2 text-sm tabular-nums text-slate-600">
+                      <span>{s.giris ? formatDate(s.giris, 'HH:mm') : '-'}</span>
+                      <span>→</span>
+                      {s.acik ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Açık</span>
+                      ) : (
+                        <span>{s.cikis ? formatDate(s.cikis, 'HH:mm') : '-'}</span>
+                      )}
+                    </div>
+                    {(s.acik || isAdmin) && (
+                      <div className="mt-2 flex gap-2 print:hidden">{aksiyon(s)}</div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {/* Masaüstü: tablo */}
+              <div className="hidden sm:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500">
@@ -198,30 +251,14 @@ export default function Shifts() {
                     </td>
                     <td className={`py-2 text-right font-semibold tabular-nums ${s.acik ? 'text-amber-700' : ''}`}>{sureLabel(effectiveDk(s))}</td>
                     <td className="py-2 text-right print:hidden">
-                      <div className="flex justify-end gap-1">
-                        {s.acik && (
-                          <button
-                            onClick={() => handleClose(s)}
-                            className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
-                          >
-                            Kapat
-                          </button>
-                        )}
-                        {isAdmin && (
-                          <button
-                            onClick={() => handleDelete(s.id)}
-                            className="rounded-md p-1 text-red-500 hover:bg-red-50"
-                            title="Sil"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        )}
-                      </div>
+                      <div className="flex justify-end gap-1">{aksiyon(s)}</div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+              </div>
+            </>
           )}
         </div>
       </div>

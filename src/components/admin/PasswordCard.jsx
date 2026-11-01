@@ -66,14 +66,14 @@ export default function PasswordCard() {
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               autoComplete="current-password"
-              className="input pr-10"
+              className="input pr-12 sm:pr-10"
               placeholder="mevcut şifreniz"
               required
             />
             <button
               type="button"
               onClick={() => setShowCurrent((v) => !v)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100"
+              className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-2.5 text-slate-400 sm:right-2 sm:p-1 hover:bg-slate-100"
               tabIndex={-1}
             >
               {showCurrent ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -90,14 +90,14 @@ export default function PasswordCard() {
               onChange={(e) => setNewPassword(e.target.value)}
               autoComplete="new-password"
               minLength={6}
-              className="input pr-10"
+              className="input pr-12 sm:pr-10"
               placeholder="en az 6 karakter"
               required
             />
             <button
               type="button"
               onClick={() => setShowNew((v) => !v)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100"
+              className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-2.5 text-slate-400 sm:right-2 sm:p-1 hover:bg-slate-100"
               tabIndex={-1}
             >
               {showNew ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -122,7 +122,7 @@ export default function PasswordCard() {
         <button
           type="submit"
           disabled={busy || !currentPassword || !newPassword || !confirmPassword}
-          className="btn-primary w-full disabled:opacity-50"
+          className="btn-primary min-h-[44px] w-full sm:min-h-0 disabled:opacity-50"
         >
           {busy ? 'Güncelleniyor…' : 'Şifreyi Güncelle'}
         </button>

@@ -223,22 +223,22 @@ export default function EndOfDay() {
   const handlePrint = () => window.print();
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Gün Sonu (Z Raporu)"
         subtitle="Vardiya kapanışı — ödeme dökümü ve kasa sayımı"
         actions={
-          <div className="flex items-center gap-2 print:hidden">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto print:hidden">
             <input
               type="date"
               value={gun}
               onChange={(e) => setGun(e.target.value)}
-              className="input max-w-[160px]"
+              className="input w-full min-h-[44px] sm:w-auto sm:min-h-0 sm:max-w-[160px]"
             />
-            <button onClick={handlePrint} className="btn-secondary">
+            <button onClick={handlePrint} className="btn-secondary min-h-[44px] flex-1 justify-center sm:min-h-0 sm:flex-none">
               <Printer size={16} /> Yazdır
             </button>
-            <button onClick={handleSave} disabled={saving} className="btn-primary disabled:opacity-50">
+            <button onClick={handleSave} disabled={saving} className="btn-primary min-h-[44px] flex-1 justify-center disabled:opacity-50 sm:min-h-0 sm:flex-none">
               <Save size={16} /> {saving ? 'Kaydediliyor...' : 'Z Raporu Kaydet'}
             </button>
           </div>
@@ -246,8 +246,8 @@ export default function EndOfDay() {
       />
 
       {acikSiparisler.length > 0 && (
-        <div className="mb-4 rounded-xl border-2 border-red-300 bg-red-50 p-4 print:hidden">
-          <p className="text-base font-bold text-red-700">
+        <div className="mb-4 rounded-xl border-2 border-red-300 bg-red-50 p-3 sm:p-4 print:hidden">
+          <p className="text-base font-bold leading-snug text-red-700">
             ⚠️ {acikSiparisler.length} AÇIK sipariş var — kapatılmadan ciroya GİRMEZ!
           </p>
           <p className="mt-1 text-sm text-red-600">
@@ -255,7 +255,7 @@ export default function EndOfDay() {
           </p>
           <ul className="mt-2 grid grid-cols-1 gap-1 text-sm text-red-800 sm:grid-cols-2">
             {acikSiparisler.slice(0, 12).map((o) => (
-              <li key={o.id} className="flex justify-between rounded bg-white/70 px-2 py-1">
+              <li key={o.id} className="flex justify-between rounded bg-white/70 px-2 py-1.5 sm:py-1">
                 <span className="truncate">
                   {o.masaAd || o.musteriAd || o.paketKaynakAd || 'Sipariş'}
                   {o.garsonAd ? ` · ${o.garsonAd}` : ''}
@@ -270,9 +270,9 @@ export default function EndOfDay() {
         </div>
       )}
 
-      <div id="zrapor" className="space-y-6">
+      <div id="zrapor" className="space-y-4 sm:space-y-6">
         {/* Ödeme yöntemi dökümü */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
           <StatCard label="Toplam Ciro" value={formatTL(totals.toplam)} color="green" icon={Calculator} />
           <StatCard label="Nakit" value={formatTL(totals.nakit)} color="emerald" icon={Wallet} />
           <StatCard label="Kart" value={formatTL(totals.kart)} color="blue" icon={CreditCard} />
@@ -281,7 +281,7 @@ export default function EndOfDay() {
 
         {/* Platform (uygulama) dökümü — sadece tutarı olanlar */}
         {totals.platformToplam > 0 && (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
             {PLATFORM_KAYNAKLAR.filter((k) => totals.platform[k] > 0).map((k) => (
               <StatCard
                 key={k}
@@ -294,7 +294,7 @@ export default function EndOfDay() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
           {/* Özet */}
           <div className="card">
             <h3 className="mb-4 text-lg font-semibold text-slate-900">Gün Özeti — {gun}</h3>
@@ -334,10 +334,11 @@ export default function EndOfDay() {
                 <label className="mb-1 block text-sm font-medium text-slate-700">Açılış Kasası (TL)</label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   step="0.01"
                   value={acilisKasa}
                   onChange={(e) => setAcilisKasa(e.target.value)}
-                  className="input text-lg tabular-nums"
+                  className="input min-h-[48px] text-lg tabular-nums sm:min-h-0"
                   placeholder="Sabah kasada olan nakit"
                 />
               </div>
@@ -345,10 +346,11 @@ export default function EndOfDay() {
                 <label className="mb-1 block text-sm font-medium text-slate-700">Sayılan Nakit (TL)</label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   step="0.01"
                   value={sayilanNakit}
                   onChange={(e) => setSayilanNakit(e.target.value)}
-                  className="input text-lg tabular-nums"
+                  className="input min-h-[48px] text-lg tabular-nums sm:min-h-0"
                   placeholder="Kapanışta sayılan nakit"
                 />
               </div>
@@ -382,7 +384,7 @@ export default function EndOfDay() {
       </div>
 
       {isAdmin && (
-        <div className="card mt-6 print:hidden">
+        <div className="card mt-4 sm:mt-6 print:hidden">
           <div className="mb-3 flex items-center gap-2">
             <MessageCircle size={18} className="text-green-600" />
             <h3 className="text-lg font-semibold text-slate-900">WhatsApp Gün Sonu Raporu</h3>
@@ -420,35 +422,35 @@ export default function EndOfDay() {
               />
             </div>
           </div>
-          <label className="mt-4 flex items-center gap-2 text-sm font-medium text-slate-700">
+          <label className="mt-4 flex min-h-[40px] items-center gap-3 sm:min-h-0 sm:gap-2 text-sm font-medium text-slate-700">
             <input
               type="checkbox"
               checked={waCfg.aktif}
               onChange={(e) => setWaCfg((c) => ({ ...c, aktif: e.target.checked }))}
-              className="h-4 w-4"
+              className="h-5 w-5 shrink-0 sm:h-4 sm:w-4"
             />
             Gün sonu ciro raporunu gönder
           </label>
-          <label className="mt-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+          <label className="mt-2 flex min-h-[40px] items-center gap-3 sm:min-h-0 sm:gap-2 text-sm font-medium text-slate-700">
             <input
               type="checkbox"
               checked={waCfg.siparisBildirimAktif}
               onChange={(e) => setWaCfg((c) => ({ ...c, siparisBildirimAktif: e.target.checked }))}
-              className="h-4 w-4"
+              className="h-5 w-5 shrink-0 sm:h-4 sm:w-4"
             />
             Yeni platform siparişi (Yemeksepeti/Getir/Trendyol) geldiğinde bildir
           </label>
-          <label className="mt-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+          <label className="mt-2 flex min-h-[40px] items-center gap-3 sm:min-h-0 sm:gap-2 text-sm font-medium text-slate-700">
             <input
               type="checkbox"
               checked={waCfg.iptalBildirimAktif}
               onChange={(e) => setWaCfg((c) => ({ ...c, iptalBildirimAktif: e.target.checked }))}
-              className="h-4 w-4"
+              className="h-5 w-5 shrink-0 sm:h-4 sm:w-4"
             />
             Bir sipariş iptal edildiğinde bildir
           </label>
           <div className="mt-4">
-            <button onClick={handleSaveWa} disabled={waSaving} className="btn-primary disabled:opacity-50">
+            <button onClick={handleSaveWa} disabled={waSaving} className="btn-primary min-h-[44px] w-full justify-center disabled:opacity-50 sm:min-h-0 sm:w-auto">
               <Save size={16} /> {waSaving ? 'Kaydediliyor...' : 'Ayarı Kaydet'}
             </button>
           </div>
@@ -469,9 +471,9 @@ export default function EndOfDay() {
 function Row({ label, value, bold, danger, success }) {
   return (
     <div className="flex items-center justify-between">
-      <dt className="text-slate-600">{label}</dt>
+      <dt className="min-w-0 pr-2 text-slate-600">{label}</dt>
       <dd
-        className={`tabular-nums ${bold ? 'text-lg font-bold' : ''} ${
+        className={`shrink-0 tabular-nums ${bold ? 'text-lg font-bold' : ''} ${
           danger ? 'text-red-600' : success ? 'text-emerald-600' : 'text-slate-900'
         }`}
       >

@@ -97,16 +97,16 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="flex h-full items-center justify-center bg-slate-100 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
+    <div className="flex min-h-full items-center justify-center bg-slate-100 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-5 sm:p-8 shadow-xl">
         <div className="mb-6 flex flex-col items-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-100">
             <ShieldCheck className="text-red-600" size={28} />
           </div>
-          <h1 className="mt-4 text-3xl font-extrabold tracking-wide text-slate-900">
+          <h1 className="mt-4 text-2xl sm:text-3xl font-extrabold tracking-wide text-slate-900">
             SyntrixPos
           </h1>
-          <h2 className="mt-4 text-2xl font-bold text-slate-900">Admin Girişi</h2>
+          <h2 className="mt-3 sm:mt-4 text-xl sm:text-2xl font-bold text-slate-900">Admin Girişi</h2>
           <p className="mt-1 text-sm text-slate-500">Yönetim panelinize hoş geldiniz</p>
         </div>
 
@@ -135,12 +135,12 @@ export default function AdminLogin() {
                 type={showPwd ? 'text' : 'password'}
                 autoComplete="current-password"
                 {...register('password')}
-                className="input pr-10"
+                className="input pr-12 sm:pr-10"
               />
               <button
                 type="button"
                 onClick={() => setShowPwd((v) => !v)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100"
+                className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-2.5 sm:right-2 sm:p-1 text-slate-400 hover:bg-slate-100"
               >
                 {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
@@ -150,8 +150,8 @@ export default function AdminLogin() {
             )}
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" {...register('rememberMe')} className="h-4 w-4 rounded" />
+          <label className="flex min-h-[40px] items-center gap-2 text-sm text-slate-700 sm:min-h-0">
+            <input type="checkbox" {...register('rememberMe')} className="h-5 w-5 rounded sm:h-4 sm:w-4" />
             Beni Hatırla (30 gün)
           </label>
 
@@ -177,7 +177,7 @@ export default function AdminLogin() {
             <span className="text-xs font-medium uppercase tracking-wider text-slate-400">veya</span>
             <div className="h-px flex-1 bg-slate-200" />
           </div>
-          <form onSubmit={handlePinLogin} className="flex items-end gap-2">
+          <form onSubmit={handlePinLogin} className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <div className="flex-1">
               <label className="mb-1 block text-sm font-medium text-slate-700">Yetkili PIN</label>
               <input
@@ -194,7 +194,7 @@ export default function AdminLogin() {
             <button
               type="submit"
               disabled={pinSubmitting || isLocked || pin.length !== 4}
-              className="btn-secondary h-[42px] disabled:opacity-50"
+              className="btn-secondary min-h-[44px] sm:h-[42px] sm:min-h-0 disabled:opacity-50"
             >
               <KeyRound size={16} /> {pinSubmitting ? '...' : 'PIN ile Gir'}
             </button>
@@ -202,7 +202,7 @@ export default function AdminLogin() {
         </div>
 
         <div className="mt-6 text-center">
-          <a href="/pos/login" className="text-sm text-red-600 hover:underline">
+          <a href="/pos/login" className="inline-flex min-h-[40px] items-center text-sm text-red-600 hover:underline">
             POS Cihazı Girişi →
           </a>
         </div>

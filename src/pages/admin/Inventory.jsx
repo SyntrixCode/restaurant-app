@@ -85,7 +85,7 @@ export default function AdminInventory() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Sayım"
         subtitle="Fiziksel stoğu sistem ile karşılaştır, farkları otomatik düzelt"
@@ -104,12 +104,12 @@ export default function AdminInventory() {
 
       {aktifSayim && (
         <div className="mb-6 rounded-lg border-2 border-blue-300 bg-blue-50 p-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-blue-900">📋 Devam Eden Sayım</p>
               <p className="text-xs text-blue-700">{aktifSayim.ad} — {aktifSayim.urunSayisi} ürün</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex w-full gap-2 sm:w-auto">
               <button onClick={() => setActive(aktifSayim)} className="btn-primary text-sm">
                 Devam Et
               </button>
@@ -121,7 +121,7 @@ export default function AdminInventory() {
         </div>
       )}
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
         <StatCard label="Toplam Sayım" value={counts.length} icon={ClipboardList} />
         <StatCard label="Tamamlanan" value={tamamlanan.length} color="green" icon={CheckCircle2} />
         <StatCard label="Aktif" value={aktifSayim ? 1 : 0} color="amber" />
@@ -139,20 +139,20 @@ export default function AdminInventory() {
         ) : (
           <ul className="divide-y divide-slate-100">
             {tamamlanan.map((c) => (
-              <li key={c.id} className="grid grid-cols-12 items-center gap-3 px-4 py-3 text-sm">
-                <div className="col-span-4">
+              <li key={c.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-3 text-sm sm:grid sm:grid-cols-12">
+                <div className="w-full sm:col-span-4 sm:w-auto">
                   <p className="font-medium text-slate-900">{c.ad}</p>
                   <p className="text-xs text-slate-500">
                     {c.yapanAd} {c.kapatanAd && c.kapatanAd !== c.yapanAd && `→ ${c.kapatanAd}`}
                   </p>
                 </div>
-                <div className="col-span-3 text-xs text-slate-600">
+                <div className="text-xs text-slate-600 sm:col-span-3">
                   Başlangıç: {formatDate(c.baslangic, 'dd.MM HH:mm')}
                 </div>
-                <div className="col-span-3 text-xs text-slate-600">
+                <div className="text-xs text-slate-600 sm:col-span-3">
                   Bitiş: {formatDate(c.bitisZamani, 'dd.MM HH:mm')}
                 </div>
-                <div className="col-span-2 text-right text-sm">
+                <div className="text-right text-sm sm:col-span-2">
                   <span className="font-semibold">{c.duzeltilenSayisi || 0}</span>
                   <span className="ml-1 text-xs text-slate-500">düzeltme</span>
                 </div>
@@ -275,7 +275,7 @@ function CountSession({ open, countDoc, userId, userAd, onClose }) {
       }
     >
       <div className="space-y-3">
-        <div className="grid grid-cols-3 gap-3 text-xs">
+        <div className="grid grid-cols-3 gap-2 text-[11px] sm:gap-3 sm:text-xs">
           <div className="rounded-lg bg-slate-50 p-2 text-center">
             <p className="text-slate-500">Doldurulan</p>
             <p className="text-lg font-bold text-slate-900">{dolduruldu} / {rows.length}</p>
@@ -331,7 +331,7 @@ function CountSession({ open, countDoc, userId, userAd, onClose }) {
                         value={r.fizikselStok ?? ''}
                         onChange={(e) => updateRow(r._idx, e.target.value)}
                         placeholder="—"
-                        className="w-24 rounded border border-slate-300 px-2 py-1 text-right tabular-nums"
+                        className="w-24 rounded border border-slate-300 px-2 py-2 text-right tabular-nums sm:py-1"
                       />
                     </td>
                     <td

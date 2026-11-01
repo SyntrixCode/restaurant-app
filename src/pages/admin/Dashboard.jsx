@@ -69,10 +69,10 @@ export default function Dashboard() {
   }, [todayPayments]);
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <UpdateBanner />
       <PageHeader title="Dashboard" subtitle="Günlük operasyon özeti" />
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard label="Günlük Satış" value={formatTL(dailySales)} color="green" icon={CheckCircle2} />
         <StatCard label="Aktif Masa" value={fullTables} color="red" icon={Grid3x3} />
         <StatCard label="Bekleyen Sipariş" value={pendingOrders} color="amber" icon={Clock} />
@@ -80,12 +80,12 @@ export default function Dashboard() {
       </div>
 
       {/* Saatlik ciro grafiği */}
-      <div className="mt-8 card">
-        <h3 className="mb-4 text-lg font-semibold text-slate-900">Saatlik Ciro (Bugün)</h3>
+      <div className="mt-4 sm:mt-8 card">
+        <h3 className="mb-4 text-base sm:text-lg font-semibold text-slate-900">Saatlik Ciro (Bugün)</h3>
         {hourlyData.length === 0 ? (
           <p className="py-12 text-center text-sm text-slate-500">Bugün henüz satış yok.</p>
         ) : (
-          <div className="h-64 w-full">
+          <div className="h-56 sm:h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={hourlyData} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -102,20 +102,20 @@ export default function Dashboard() {
         )}
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="mt-4 sm:mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="card">
-          <h3 className="mb-4 text-lg font-semibold text-slate-900">Son Aktif Siparişler</h3>
+          <h3 className="mb-4 text-base sm:text-lg font-semibold text-slate-900">Son Aktif Siparişler</h3>
           {activeOrders.length === 0 ? (
             <p className="py-8 text-center text-sm text-slate-500">Aktif sipariş yok.</p>
           ) : (
             <ul className="divide-y divide-slate-100">
               {activeOrders.slice(0, 5).map((o) => (
-                <li key={o.id} className="flex items-center justify-between py-2 text-sm">
-                  <div>
+                <li key={o.id} className="flex items-center justify-between gap-3 py-2.5 sm:py-2 text-sm">
+                  <div className="min-w-0">
                     <p className="font-medium text-slate-900">{o.masaAd || 'Paket'}</p>
                     <p className="text-xs text-slate-500">{o.garsonAd}</p>
                   </div>
-                  <span className="font-semibold text-slate-900">{formatTL(o.toplam)}</span>
+                  <span className="shrink-0 font-semibold text-slate-900">{formatTL(o.toplam)}</span>
                 </li>
               ))}
             </ul>
@@ -124,8 +124,8 @@ export default function Dashboard() {
 
         <div className="card">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-slate-900">Stok Durumu</h3>
-            <Link to="/admin/stock" className="text-xs font-medium text-blue-600 hover:underline">
+            <h3 className="text-base sm:text-lg font-semibold text-slate-900">Stok Durumu</h3>
+            <Link to="/admin/stock" className="inline-flex min-h-[40px] items-center text-sm sm:min-h-0 sm:text-xs font-medium text-blue-600 hover:underline">
               Stok yönetimi →
             </Link>
           </div>

@@ -173,7 +173,7 @@ export default function AdminFinance() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Finans"
         subtitle="Gelir / gider defteri (POS satışları otomatik raporlardan görülür; burası ek hareketler)"
@@ -193,7 +193,7 @@ export default function AdminFinance() {
         }
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:mb-6 sm:gap-4 md:grid-cols-4">
         <StatCard label="Toplam Hareket" value={filtered.length} color="blue" icon={Wallet} />
         <StatCard label="Gelir" value={formatTL(stats.gelir)} color="green" icon={TrendingUp} />
         <StatCard label="Gider" value={formatTL(stats.gider)} color="red" icon={TrendingDown} />
@@ -207,7 +207,7 @@ export default function AdminFinance() {
       {/* Açık tedarikçi borçları (ödenmemiş) — gider değil, ödendiğinde gider olur */}
       {acikBorcToplam > 0 && (
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-3">
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-1">
             <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-amber-800">
               <Truck size={14} /> Açık Tedarikçi Borcu (ödenmemiş)
             </p>
@@ -229,26 +229,26 @@ export default function AdminFinance() {
 
       {/* Filtreler */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-2">
-          <Calendar size={16} className="text-slate-400" />
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="input max-w-[150px]" />
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <Calendar size={16} className="hidden shrink-0 text-slate-400 sm:block" />
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="input min-w-0 flex-1 sm:max-w-[150px] sm:flex-none" />
           <span className="text-slate-400">→</span>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="input max-w-[150px]" />
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="input min-w-0 flex-1 sm:max-w-[150px] sm:flex-none" />
         </div>
-        <div className="flex gap-1 text-xs">
-          <button onClick={() => { setFrom(todayISO()); setTo(todayISO()); }} className="rounded bg-slate-100 px-2 py-1 hover:bg-slate-200">
+        <div className="flex gap-2 text-xs sm:gap-1">
+          <button onClick={() => { setFrom(todayISO()); setTo(todayISO()); }} className="min-h-[40px] rounded bg-slate-100 px-3 py-2 hover:bg-slate-200 sm:min-h-0 sm:px-2 sm:py-1">
             Bugün
           </button>
-          <button onClick={() => { setFrom(daysAgo(30)); setTo(todayISO()); }} className="rounded bg-slate-100 px-2 py-1 hover:bg-slate-200">
+          <button onClick={() => { setFrom(daysAgo(30)); setTo(todayISO()); }} className="min-h-[40px] rounded bg-slate-100 px-3 py-2 hover:bg-slate-200 sm:min-h-0 sm:px-2 sm:py-1">
             30 gün
           </button>
         </div>
-        <select value={filterTip} onChange={(e) => setFilterTip(e.target.value)} className="input max-w-[140px]">
+        <select value={filterTip} onChange={(e) => setFilterTip(e.target.value)} className="input w-full sm:max-w-[140px]">
           <option value="all">Tüm Tipler</option>
           <option value="gelir">Gelir</option>
           <option value="gider">Gider</option>
         </select>
-        <select value={filterKategori} onChange={(e) => setFilterKategori(e.target.value)} className="input max-w-[200px]">
+        <select value={filterKategori} onChange={(e) => setFilterKategori(e.target.value)} className="input w-full sm:max-w-[200px]">
           <option value="all">Tüm Kategoriler</option>
           {tumKategoriler.map((k) => (
             <option key={k} value={k}>
@@ -256,13 +256,13 @@ export default function AdminFinance() {
             </option>
           ))}
         </select>
-        <div className="relative ml-auto">
+        <div className="relative w-full sm:ml-auto sm:w-auto">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Ara..."
-            className="input max-w-xs pl-8"
+            className="input w-full pl-8 sm:max-w-xs"
           />
         </div>
       </div>
@@ -274,41 +274,76 @@ export default function AdminFinance() {
             <p>Bu aralıkta hareket yok.</p>
           </div>
         ) : (
-          <ul className="divide-y divide-slate-100">
-            {filtered.map((t) => {
-              const isGelir = t.tip === 'gelir';
-              const Arrow = isGelir ? ArrowUpRight : ArrowDownRight;
-              const color = isGelir ? 'text-emerald-600' : 'text-red-600';
-              return (
-                <li key={t.id} className="grid grid-cols-12 items-center gap-3 px-4 py-3 text-sm">
-                  <div className="col-span-2 text-xs text-slate-500">{t.tarih}</div>
-                  <div className="col-span-3">
-                    <p className="font-medium text-slate-900">{t.kategori}</p>
-                    {t.aciklama && (
-                      <p className="text-xs text-slate-500 truncate">{t.aciklama}</p>
-                    )}
-                  </div>
-                  <div className="col-span-2 text-xs text-slate-600">
-                    {YONTEM_LABELS[t.odemeYontemi] || t.odemeYontemi || '—'}
-                    {t.belgeNo && <p className="text-[10px] text-slate-400">#{t.belgeNo}</p>}
-                  </div>
-                  <div className={`col-span-3 flex items-center gap-1 font-bold ${color}`}>
-                    <Arrow size={16} />
-                    {isGelir ? '+' : '-'}
-                    {formatTL(t.miktar)}
-                  </div>
-                  <div className="col-span-2 text-right">
+          <>
+            {/* Telefon: kart satırı */}
+            <ul className="divide-y divide-slate-100 sm:hidden">
+              {filtered.map((t) => {
+                const isGelir = t.tip === 'gelir';
+                const Arrow = isGelir ? ArrowUpRight : ArrowDownRight;
+                const color = isGelir ? 'text-emerald-600' : 'text-red-600';
+                return (
+                  <li key={t.id} className="flex items-start gap-3 px-3 py-3 text-sm">
+                    <div className="min-w-0 flex-1">
+                      <p className="break-words font-medium text-slate-900">{t.kategori}</p>
+                      {t.aciklama && <p className="break-words text-xs text-slate-500">{t.aciklama}</p>}
+                      <p className="mt-1 text-xs text-slate-500">
+                        {t.tarih} · {YONTEM_LABELS[t.odemeYontemi] || t.odemeYontemi || '—'}
+                        {t.belgeNo && <span className="text-slate-400"> · #{t.belgeNo}</span>}
+                      </p>
+                    </div>
+                    <div className={`flex shrink-0 items-center gap-0.5 text-base font-bold ${color}`}>
+                      <Arrow size={16} />
+                      {isGelir ? '+' : '-'}
+                      {formatTL(t.miktar)}
+                    </div>
                     <button
                       onClick={() => handleDelete(t)}
-                      className="btn-ghost px-2 py-1 text-red-600 hover:bg-red-50"
+                      aria-label="Sil"
+                      className="btn-ghost -my-1 shrink-0 p-2.5 text-red-600 hover:bg-red-50"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={16} />
                     </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                  </li>
+                );
+              })}
+            </ul>
+            {/* Masaüstü: ızgara satırı */}
+            <ul className="hidden divide-y divide-slate-100 sm:block">
+              {filtered.map((t) => {
+                const isGelir = t.tip === 'gelir';
+                const Arrow = isGelir ? ArrowUpRight : ArrowDownRight;
+                const color = isGelir ? 'text-emerald-600' : 'text-red-600';
+                return (
+                  <li key={t.id} className="grid grid-cols-12 items-center gap-3 px-4 py-3 text-sm">
+                    <div className="col-span-2 text-xs text-slate-500">{t.tarih}</div>
+                    <div className="col-span-3">
+                      <p className="font-medium text-slate-900">{t.kategori}</p>
+                      {t.aciklama && (
+                        <p className="text-xs text-slate-500 truncate">{t.aciklama}</p>
+                      )}
+                    </div>
+                    <div className="col-span-2 text-xs text-slate-600">
+                      {YONTEM_LABELS[t.odemeYontemi] || t.odemeYontemi || '—'}
+                      {t.belgeNo && <p className="text-[10px] text-slate-400">#{t.belgeNo}</p>}
+                    </div>
+                    <div className={`col-span-3 flex items-center gap-1 font-bold ${color}`}>
+                      <Arrow size={16} />
+                      {isGelir ? '+' : '-'}
+                      {formatTL(t.miktar)}
+                    </div>
+                    <div className="col-span-2 text-right">
+                      <button
+                        onClick={() => handleDelete(t)}
+                        className="btn-ghost px-2 py-1 text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
         )}
       </div>
 
@@ -392,7 +427,7 @@ function TxModal({ open, onClose }) {
       }
     >
       <form id="tx-form" onSubmit={handleSubmit(onSubmit)} className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">Tip</label>
             <div className="grid grid-cols-2 gap-2">
@@ -430,7 +465,7 @@ function TxModal({ open, onClose }) {
           {errors.kategori && <p className="mt-1 text-xs text-red-600">{errors.kategori.message}</p>}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Tutar (TL)</label>
             <input

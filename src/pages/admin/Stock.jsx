@@ -161,7 +161,7 @@ export default function AdminStock() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Stok Yönetimi"
         subtitle={`Son ${STOCK_HISTORY_DAYS} gün stok hareketleri ve manuel düzeltmeler`}
@@ -181,7 +181,7 @@ export default function AdminStock() {
         }
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
         <StatCard label="Toplam Hareket" value={stats.hareketler} color="blue" icon={Boxes} />
         <StatCard label="Giriş (adet)" value={stats.giris} color="green" icon={TrendingUp} />
         <StatCard label="Çıkış (adet)" value={stats.cikis} color="amber" icon={TrendingDown} />
@@ -201,7 +201,7 @@ export default function AdminStock() {
             {lowStockProducts.map((p) => (
               <span
                 key={p.id}
-                className={`rounded-full px-2 py-0.5 text-xs ${
+                className={`rounded-full px-3 py-1 text-sm font-semibold sm:px-2 sm:py-0.5 sm:text-xs sm:font-normal ${
                   p.stok === 0 ? 'bg-red-200 text-red-800' : 'bg-amber-200 text-amber-800'
                 }`}
               >
@@ -214,18 +214,18 @@ export default function AdminStock() {
 
       {/* Filtreler */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           <Calendar size={16} className="text-slate-400" />
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="input max-w-[150px]" />
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="input min-w-0 flex-1 sm:max-w-[150px] sm:flex-none" />
           <span className="text-slate-400">→</span>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="input max-w-[150px]" />
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="input min-w-0 flex-1 sm:max-w-[150px] sm:flex-none" />
         </div>
-        <select value={filterTip} onChange={(e) => setFilterTip(e.target.value)} className="input max-w-[140px]">
+        <select value={filterTip} onChange={(e) => setFilterTip(e.target.value)} className="input w-full sm:w-auto sm:max-w-[140px]">
           <option value="all">Tüm Tipler</option>
           <option value="giris">Giriş</option>
           <option value="cikis">Çıkış</option>
         </select>
-        <select value={filterKaynak} onChange={(e) => setFilterKaynak(e.target.value)} className="input max-w-[180px]">
+        <select value={filterKaynak} onChange={(e) => setFilterKaynak(e.target.value)} className="input w-full sm:w-auto sm:max-w-[180px]">
           <option value="all">Tüm Kaynaklar</option>
           {Object.entries(KAYNAK_LABELS).map(([k, v]) => (
             <option key={k} value={k}>
@@ -236,7 +236,7 @@ export default function AdminStock() {
         <select
           value={filterProduct}
           onChange={(e) => setFilterProduct(e.target.value)}
-          className="input max-w-[200px]"
+          className="input w-full sm:w-auto sm:max-w-[200px]"
         >
           <option value="all">Tüm Ürünler</option>
           {products
@@ -248,13 +248,13 @@ export default function AdminStock() {
               </option>
             ))}
         </select>
-        <div className="relative ml-auto">
+        <div className="relative w-full sm:ml-auto sm:w-auto">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Ara..."
-            className="input max-w-xs pl-8"
+            className="input pl-8 sm:max-w-xs"
           />
         </div>
       </div>
@@ -271,22 +271,22 @@ export default function AdminStock() {
               const Arrow = m.tip === 'giris' ? ArrowUpRight : ArrowDownRight;
               const arrowColor = m.tip === 'giris' ? 'text-emerald-600' : 'text-red-600';
               return (
-                <li key={m.id} className="grid grid-cols-12 items-center gap-3 px-4 py-2.5 text-sm">
-                  <div className="col-span-2 text-xs text-slate-500">
+                <li key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-sm sm:grid sm:grid-cols-12 sm:py-2.5">
+                  <div className="order-2 text-xs text-slate-500 sm:order-none sm:col-span-2">
                     {formatDate(m.zaman, 'dd.MM HH:mm')}
                   </div>
-                  <div className="col-span-3 font-medium text-slate-900 truncate">{m.productAd}</div>
-                  <div className="col-span-1 flex items-center gap-1">
+                  <div className="order-1 w-full truncate text-base font-medium text-slate-900 sm:order-none sm:col-span-3 sm:w-auto sm:text-sm">{m.productAd}</div>
+                  <div className="order-3 flex items-center gap-1 sm:order-none sm:col-span-1">
                     <Arrow size={14} className={arrowColor} />
                     <span className={`font-bold ${arrowColor}`}>
                       {m.tip === 'giris' ? '+' : '-'}
                       {formatAdet(m.miktar)}
                     </span>
                   </div>
-                  <div className="col-span-1 text-xs text-slate-500">
+                  <div className="order-4 text-xs text-slate-500 sm:order-none sm:col-span-1">
                     {m.oncekiStok} → <strong className="text-slate-900">{m.yeniStok}</strong>
                   </div>
-                  <div className="col-span-2">
+                  <div className="order-5 sm:order-none sm:col-span-2">
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
                         KAYNAK_COLORS[m.kaynak] || 'bg-slate-100 text-slate-700'
@@ -295,7 +295,7 @@ export default function AdminStock() {
                       {KAYNAK_LABELS[m.kaynak] || m.kaynak}
                     </span>
                   </div>
-                  <div className="col-span-3 truncate text-xs text-slate-600">
+                  <div className="order-6 w-full truncate text-xs text-slate-600 sm:order-none sm:col-span-3 sm:w-auto">
                     {m.tedarikciAd && <span className="font-medium">{m.tedarikciAd}</span>}
                     {m.tedarikciAd && m.aciklama && <span> · </span>}
                     {m.aciklama}
@@ -420,17 +420,17 @@ function ManualMovementModal({ open, onClose, products, suppliers }) {
           {errors.productId && <p className="mt-1 text-xs text-red-600">{errors.productId.message}</p>}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">Tip</label>
             <div className="grid grid-cols-2 gap-2">
-              <label className={`cursor-pointer rounded-lg border-2 p-3 text-center text-sm font-medium ${
+              <label className={`cursor-pointer rounded-lg border-2 p-3 text-center min-h-[44px] text-sm font-medium ${
                 tip === 'giris' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200'
               }`}>
                 <input type="radio" {...register('tip')} value="giris" className="sr-only" />
                 + Giriş
               </label>
-              <label className={`cursor-pointer rounded-lg border-2 p-3 text-center text-sm font-medium ${
+              <label className={`cursor-pointer rounded-lg border-2 p-3 text-center min-h-[44px] text-sm font-medium ${
                 tip === 'cikis' ? 'border-red-500 bg-red-50 text-red-700' : 'border-slate-200'
               }`}>
                 <input type="radio" {...register('tip')} value="cikis" className="sr-only" />
@@ -581,7 +581,7 @@ function ProductPicker({ value, onChange, products, hasError }) {
                     setOpen(false);
                     setQuery('');
                   }}
-                  className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition hover:bg-blue-50 ${
+                  className={`flex w-full items-center justify-between gap-2 px-3 py-3 text-left text-sm transition hover:bg-blue-50 sm:py-2 ${
                     p.id === value
                       ? 'bg-blue-50 font-medium text-blue-700'
                       : 'text-slate-700'

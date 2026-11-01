@@ -185,16 +185,16 @@ export default function Products() {
   const toggleActive = (p) => patchDoc('products', p.id, { aktif: !p.aktif });
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Ürünler"
         subtitle="Menü ürünleri, stok ve fiyat yönetimi"
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={handleImportMenu}
               disabled={importing}
-              className="btn-secondary"
+              className="btn-secondary min-h-[40px] sm:min-h-0"
               title="PDF menüsünden kategoriler + ürünler + görsel + çeviriler yüklenir (mevcut menü silinir)"
             >
               <FileDown size={16} /> {importing ? 'Yükleniyor…' : 'PDF Menüsünü Yükle'}
@@ -202,7 +202,7 @@ export default function Products() {
             <button
               onClick={handleAutoTranslate}
               disabled={translating}
-              className="btn-secondary"
+              className="btn-secondary min-h-[40px] sm:min-h-0"
               title="Tüm kategori ve ürünleri TR'den EN ve AR'a otomatik çevirir (mevcut çeviriler korunur)"
             >
               <Languages size={16} /> {translating ? 'Çevriliyor…' : 'Otomatik Çevir (TR→EN/AR)'}
@@ -212,7 +212,7 @@ export default function Products() {
                 setEditing(null);
                 setOpen(true);
               }}
-              className="btn-primary"
+              className="btn-primary min-h-[40px] sm:min-h-0"
             >
               <Plus size={16} /> Yeni Ürün
             </button>
@@ -220,24 +220,24 @@ export default function Products() {
         }
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:mb-6 sm:gap-4 md:grid-cols-4">
         <StatCard label="Toplam Ürün" value={stats.toplam} icon={Package} />
         <StatCard label="Aktif" value={stats.aktif} color="green" />
         <StatCard label="Düşük Stok" value={stats.dusuk} color="amber" />
         <StatCard label="Stokta Yok" value={stats.bitti} color="red" />
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         <input
           value={filter.search}
           onChange={(e) => setFilter((f) => ({ ...f, search: e.target.value }))}
           placeholder="Ürün ara..."
-          className="input max-w-xs"
+          className="input max-w-none sm:max-w-xs"
         />
         <select
           value={filter.categoryId}
           onChange={(e) => setFilter((f) => ({ ...f, categoryId: e.target.value }))}
-          className="input max-w-xs"
+          className="input max-w-none sm:max-w-xs"
         >
           <option value="all">Tüm Kategoriler</option>
           {categories.map((c) => (
@@ -249,7 +249,7 @@ export default function Products() {
         <select
           value={filter.stock}
           onChange={(e) => setFilter((f) => ({ ...f, stock: e.target.value }))}
-          className="input max-w-xs"
+          className="input max-w-none sm:max-w-xs"
         >
           <option value="all">Tüm Stok</option>
           <option value="in">Stokta Var</option>
@@ -258,7 +258,7 @@ export default function Products() {
         </select>
       </div>
 
-      <p className="mb-2 flex items-center gap-1.5 text-xs text-slate-500">
+      <p className="mb-2 block text-xs text-slate-500 sm:flex sm:items-center sm:gap-1.5">
         {canReorder ? (
           <>
             <GripVertical size={13} className="text-slate-400" />
@@ -275,7 +275,7 @@ export default function Products() {
       </p>
 
       <div className="card overflow-hidden p-0">
-        <div className="grid grid-cols-12 items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs font-medium uppercase text-slate-500">
+        <div className="hidden grid-cols-12 items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs sm:grid font-medium uppercase text-slate-500">
           <div className="col-span-1"></div>
           <div className="col-span-1">Görsel</div>
           <div className="col-span-4">Ad</div>
@@ -330,11 +330,11 @@ function SortableProductRow({ product: p, categoryAd, state, canReorder, onToggl
     <div
       ref={setNodeRef}
       style={style}
-      className="grid grid-cols-12 items-center gap-2 border-b border-slate-100 px-4 py-2 hover:bg-slate-50"
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-100 px-3 py-3 hover:bg-slate-50 sm:grid sm:grid-cols-12 sm:gap-2 sm:px-4 sm:py-2"
     >
       <div className="col-span-1">
         {canReorder ? (
-          <button {...attributes} {...listeners} className="cursor-grab text-slate-400 hover:text-slate-700" title="Sürükle">
+          <button {...attributes} {...listeners} className="-m-1 cursor-grab touch-none p-2.5 text-slate-400 hover:text-slate-700 sm:m-0 sm:p-0" title="Sürükle">
             <GripVertical size={18} />
           </button>
         ) : (
@@ -343,25 +343,26 @@ function SortableProductRow({ product: p, categoryAd, state, canReorder, onToggl
       </div>
       <div className="col-span-1">
         {p.gorsel ? (
-          <img src={p.gorsel} alt={p.ad} className="h-10 w-10 rounded object-cover" />
+          <img src={p.gorsel} alt={p.ad} className="h-10 w-10 shrink-0 rounded object-cover" />
         ) : (
-          <div className="flex h-10 w-10 items-center justify-center rounded bg-slate-100 text-slate-400">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-slate-100 text-slate-400">
             <ImageIcon size={16} />
           </div>
         )}
       </div>
-      <div className="col-span-4 font-medium text-slate-900">{p.ad}</div>
-      <div className="col-span-2 text-sm text-slate-600">{categoryAd}</div>
+      <div className="col-span-4 min-w-0 flex-1 break-words font-medium text-slate-900">{p.ad}</div>
+      <div className="h-0 basis-full sm:hidden" />
+      <div className="col-span-2 min-w-[4rem] flex-1 truncate text-sm text-slate-600 sm:min-w-0 sm:flex-none sm:overflow-visible sm:text-clip sm:whitespace-normal">{categoryAd}</div>
       <div className="col-span-1 font-semibold text-slate-900">{formatTL(p.fiyat)}</div>
       <div className="col-span-1">
         <Toggle checked={p.aktif} onChange={onToggle} />
       </div>
-      <div className="col-span-2 text-right">
-        <div className="inline-flex gap-1">
-          <button onClick={onEdit} className="btn-ghost px-2 py-1">
+      <div className="col-span-2 ml-auto text-right sm:ml-0">
+        <div className="inline-flex gap-2 sm:gap-1">
+          <button onClick={onEdit} className="btn-ghost min-h-[40px] min-w-[40px] justify-center p-2.5 sm:min-h-0 sm:min-w-0 sm:px-2 sm:py-1">
             <Pencil size={14} />
           </button>
-          <button onClick={onDelete} className="btn-ghost px-2 py-1 text-red-600 hover:bg-red-50">
+          <button onClick={onDelete} className="btn-ghost min-h-[40px] min-w-[40px] justify-center p-2.5 sm:min-h-0 sm:min-w-0 sm:px-2 sm:py-1 text-red-600 hover:bg-red-50">
             <Trash2 size={14} />
           </button>
         </div>
@@ -504,7 +505,7 @@ function ProductModal({ open, onClose, editing, categories, printers = [] }) {
         </>
       }
     >
-      <form id="prod-form" onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-2 gap-4">
+      <form id="prod-form" onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-2 gap-3 sm:gap-4">
         <div className="col-span-2">
           <label className="mb-1 block text-sm font-medium text-slate-700">Ürün Adı</label>
           <input {...register('ad')} className="input" autoFocus />
@@ -546,7 +547,7 @@ function ProductModal({ open, onClose, editing, categories, printers = [] }) {
                         : [...cur, p.id];
                       setValue('yaziciIds', next, { shouldDirty: true });
                     }}
-                    className={`rounded-lg border-2 px-3 py-2 text-sm font-medium transition ${
+                    className={`min-h-[40px] rounded-lg border-2 px-3 py-2 text-sm font-medium transition sm:min-h-0 ${
                       sel
                         ? 'border-blue-500 bg-blue-50 text-blue-700'
                         : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
@@ -631,7 +632,7 @@ function ProductModal({ open, onClose, editing, categories, printers = [] }) {
                     const cur = watch('etiketler') || [];
                     setValue('etiketler', sel ? cur.filter((x) => x !== k) : [...cur, k], { shouldDirty: true });
                   }}
-                  className={`rounded-full border px-3 py-1.5 text-sm transition ${
+                  className={`min-h-[40px] rounded-full border px-3 py-2 text-sm transition sm:min-h-0 sm:py-1.5 ${
                     sel ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                   }`}
                 >
@@ -643,8 +644,8 @@ function ProductModal({ open, onClose, editing, categories, printers = [] }) {
           <p className="mt-1 text-xs text-slate-500">Müşteri menüsünde ürünün yanında rozet olarak görünür.</p>
         </div>
 
-        <div className="col-span-2 flex items-center justify-between rounded-lg bg-amber-50 p-3">
-          <div>
+        <div className="col-span-2 flex items-center justify-between gap-3 rounded-lg bg-amber-50 p-3">
+          <div className="min-w-0">
             <span className="text-sm font-medium text-amber-800">⭐ Şefin Önerisi (Öne Çıkanlar vitrini)</span>
             <p className="text-xs text-amber-700">Menünün en üstündeki vitrinde gösterilir + ⭐ rozeti alır.</p>
           </div>
@@ -658,7 +659,7 @@ function ProductModal({ open, onClose, editing, categories, printers = [] }) {
           <p className="mt-1 text-xs text-slate-500">
             Boş bırakılan diller müşteri menüsünde Türkçe gösterilir.
           </p>
-          <div className="mt-3 grid grid-cols-2 gap-3">
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">İngilizce ad</label>
               <input {...register('ceviri.en.ad')} className="input" placeholder="English name" />
@@ -680,7 +681,7 @@ function ProductModal({ open, onClose, editing, categories, printers = [] }) {
 
         <div className="col-span-2">
           <label className="mb-1 block text-sm font-medium text-slate-700">Görsel</label>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {imageUrl ? (
               <img src={imageUrl} className="h-16 w-16 rounded object-cover" alt="" />
             ) : (
@@ -704,7 +705,7 @@ function ProductModal({ open, onClose, editing, categories, printers = [] }) {
               />
             </label>
             {imageUrl && (
-              <button type="button" onClick={() => setImageUrl('')} className="btn-ghost text-xs">
+              <button type="button" onClick={() => setImageUrl('')} className="btn-ghost min-h-[40px] text-xs sm:min-h-0">
                 Kaldır
               </button>
             )}
@@ -863,7 +864,7 @@ function SortableOptionTag({
         <button
           type="button"
           onClick={onRemove}
-          className="rounded-full p-0.5 text-blue-800 hover:bg-blue-200"
+          className="rounded-full p-2 text-blue-800 hover:bg-blue-200 sm:p-0.5"
           title="Kaldır"
         >
           <X size={11} />
@@ -882,14 +883,14 @@ function SortableOptionTag({
         type="button"
         {...attributes}
         {...listeners}
-        className="cursor-grab touch-none text-blue-500 hover:text-blue-700 active:cursor-grabbing"
+        className="cursor-grab touch-none p-2 text-blue-500 sm:p-0 hover:text-blue-700 active:cursor-grabbing"
         title="Sıralamak için sürükle"
       >
         <GripVertical size={11} />
       </button>
       <span
         onClick={onStartEdit}
-        className="cursor-text rounded px-1 hover:bg-blue-200"
+        className="cursor-text rounded px-1 py-2 hover:bg-blue-200 sm:py-0"
         title="Düzenlemek için tıkla"
       >
         {value}
@@ -897,7 +898,7 @@ function SortableOptionTag({
       <button
         type="button"
         onClick={onRemove}
-        className="rounded-full p-0.5 hover:bg-blue-200"
+        className="rounded-full p-2 hover:bg-blue-200 sm:p-0.5"
         title="Kaldır"
       >
         <X size={11} />

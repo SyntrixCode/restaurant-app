@@ -111,13 +111,13 @@ export default function UpdateCard() {
       </div>
 
       <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3 text-sm">
+        <div className="grid grid-cols-2 gap-2 text-sm sm:gap-3">
           <div className="rounded-lg bg-slate-50 p-3">
             <p className="text-xs uppercase tracking-wider text-slate-500">Mevcut</p>
             <p className="mt-1 font-mono text-sm font-semibold text-slate-900">
               {APP_VERSION}
             </p>
-            <p className="text-xs text-slate-500">{APP_BUILD_DATE}</p>
+            <p className="break-words text-xs text-slate-500">{APP_BUILD_DATE}</p>
           </div>
           <div className="rounded-lg bg-slate-50 p-3">
             <p className="text-xs uppercase tracking-wider text-slate-500">Son Sürüm</p>
@@ -143,7 +143,7 @@ export default function UpdateCard() {
               Android, uygulamanın APK yükleyebilmesi için bir kerelik izin ister.
               Açılan ayar ekranında "Bu kaynağa izin ver" tuşunu açın, sonra geri dönüp tekrar deneyin.
             </p>
-            <button onClick={handleGrantPermission} className="btn-primary w-full text-sm">
+            <button onClick={handleGrantPermission} className="btn-primary min-h-[44px] w-full sm:min-h-0 text-sm">
               <ShieldAlert size={14} /> İzin Ekranını Aç
             </button>
           </div>
@@ -182,7 +182,7 @@ export default function UpdateCard() {
                 {info.latest.body.slice(0, 400)}
               </pre>
             )}
-            <button onClick={handleDownload} className="btn-primary w-full">
+            <button onClick={handleDownload} className="btn-primary min-h-[44px] w-full sm:min-h-0">
               <Download size={16} />
               {isNative ? 'İndir & Güncelle' : 'Tarayıcıdan İndir'}
             </button>
@@ -208,13 +208,13 @@ export default function UpdateCard() {
           </div>
         )}
 
-        <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
           <p className="text-xs text-slate-500">
             {lastChecked
               ? `Son kontrol: ${lastChecked.toLocaleTimeString('tr-TR')}`
               : 'Kontrol ediliyor…'}
           </p>
-          <button onClick={runCheck} disabled={checking || downloading} className="btn-ghost text-xs">
+          <button onClick={runCheck} disabled={checking || downloading} className="btn-ghost min-h-[40px] text-xs sm:min-h-0">
             <RefreshCw size={12} className={checking ? 'animate-spin' : ''} />
             Tekrar Kontrol
           </button>

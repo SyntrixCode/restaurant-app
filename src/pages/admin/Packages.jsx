@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   Truck,
@@ -137,6 +137,34 @@ export default function AdminPackages() {
     }
   };
 
+  const renderActions = (o) => (
+    <>
+      {['aktif', 'hazirlandi'].includes(o.durum) && (
+        <button
+          onClick={() => handleStatusChange(o, 'masayaGitti')}
+          className="flex min-h-[40px] min-w-[40px] items-center justify-center rounded bg-purple-100 px-3 py-2 text-xs font-medium text-purple-700 hover:bg-purple-200 sm:min-h-0 sm:min-w-0 sm:px-2 sm:py-1"
+          title="Yola çıkar"
+        >
+          <Truck size={14} />
+        </button>
+      )}
+      {o.durum === 'masayaGitti' && APP_KAYNAKLAR.includes(o.paketKaynak) && (
+        <button
+          onClick={() => handleAppPaid(o)}
+          className="flex min-h-[40px] min-w-[40px] items-center justify-center rounded bg-emerald-100 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-200 sm:min-h-0 sm:min-w-0 sm:px-2 sm:py-1"
+          title={`${KAYNAK_LABELS[o.paketKaynak]} ile ödendi`}
+        >
+          <Smartphone size={14} />
+        </button>
+      )}
+      {o.durum === 'masayaGitti' && !APP_KAYNAKLAR.includes(o.paketKaynak) && (
+        <span className="rounded bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-700">
+          Yolda
+        </span>
+      )}
+    </>
+  );
+
   const handleCancel = async (order) => {
     if (!confirm(`${order.musteriAd} paketi iptal edilsin mi?\n\nGeri alınamaz.`)) return;
     try {
@@ -150,13 +178,13 @@ export default function AdminPackages() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Paket Servis"
         subtitle="Telefon ve online paket siparişleri (Yemeksepeti/Getir webhook entegrasyonu Blaze planına geçişte eklenecek)"
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
         <StatCard label="Aktif Paketler" value={packets.length} color="blue" icon={PackageIcon} />
         <StatCard label="Aktif Tutar" value={formatTL(totalActive)} color="green" />
         <StatCard label="Yolda" value={counts.masayaGitti} color="amber" icon={Truck} />
@@ -170,14 +198,14 @@ export default function AdminPackages() {
 
       {/* Filtreler */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="flex gap-1">
+        <div className="flex w-full gap-1 sm:w-auto">
           {TABS.map((t) => {
             const Icon = t.icon;
             return (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
+                className={`flex min-h-[40px] flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm transition sm:flex-none sm:justify-start ${
                   tab === t.id ? 'bg-blue-100 font-medium text-blue-700' : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
@@ -188,11 +216,11 @@ export default function AdminPackages() {
             );
           })}
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:flex-nowrap">
           <select
             value={filterKaynak}
             onChange={(e) => setFilterKaynak(e.target.value)}
-            className="input max-w-xs"
+            className="input w-full sm:max-w-xs"
           >
             <option value="all">Tüm Kaynaklar</option>
             {Object.entries(KAYNAK_LABELS).map(([k, v]) => (
@@ -201,13 +229,13 @@ export default function AdminPackages() {
               </option>
             ))}
           </select>
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Ad / tel / adres ara..."
-              className="input max-w-xs pl-8"
+              className="input w-full pl-8 sm:max-w-xs"
             />
           </div>
         </div>
@@ -226,9 +254,9 @@ export default function AdminPackages() {
               const mins = minutesSince(o.olusturmaZamani);
               const late = mins > gecikmeEsigi && o.durum !== 'masayaGitti';
               return (
+                <Fragment key={o.id}>
                 <li
-                  key={o.id}
-                  className={`grid cursor-pointer grid-cols-12 items-center gap-3 px-4 py-3 transition hover:bg-slate-50 ${
+                  className={`hidden cursor-pointer grid-cols-12 sm:grid items-center gap-3 px-4 py-3 transition hover:bg-slate-50 ${
                     late ? 'border-l-4 border-red-500' : ''
                   }`}
                   onClick={() => setDetail(o)}
@@ -268,31 +296,47 @@ export default function AdminPackages() {
                     {formatTL(o.toplam)}
                   </div>
                   <div className="col-span-1 flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                    {['aktif', 'hazirlandi'].includes(o.durum) && (
-                      <button
-                        onClick={() => handleStatusChange(o, 'masayaGitti')}
-                        className="rounded bg-purple-100 px-2 py-1 text-xs font-medium text-purple-700 hover:bg-purple-200"
-                        title="Yola çıkar"
-                      >
-                        <Truck size={12} />
-                      </button>
-                    )}
-                    {o.durum === 'masayaGitti' && APP_KAYNAKLAR.includes(o.paketKaynak) && (
-                      <button
-                        onClick={() => handleAppPaid(o)}
-                        className="rounded bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-200"
-                        title={`${KAYNAK_LABELS[o.paketKaynak]} ile ödendi`}
-                      >
-                        <Smartphone size={12} />
-                      </button>
-                    )}
-                    {o.durum === 'masayaGitti' && !APP_KAYNAKLAR.includes(o.paketKaynak) && (
-                      <span className="rounded bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-700">
-                        Yolda
-                      </span>
-                    )}
+                    {renderActions(o)}
                   </div>
                 </li>
+                <li
+                  className={`cursor-pointer px-3 py-3 transition active:bg-slate-50 sm:hidden ${
+                    late ? 'border-l-4 border-red-500' : ''
+                  }`}
+                  onClick={() => setDetail(o)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="break-words text-base font-semibold text-slate-900">{o.musteriAd || '—'}</p>
+                      <p className="flex items-center gap-1 text-sm text-slate-500">
+                        <Phone size={12} />
+                        {o.musteriTel || '—'}
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-base font-bold text-slate-900">{formatTL(o.toplam)}</p>
+                  </div>
+                  <p className="mt-1 line-clamp-2 flex gap-1 text-sm text-slate-600">
+                    <MapPin size={13} className="mt-0.5 shrink-0 text-slate-400" />
+                    <span className="break-words">{o.musteriAdres || '—'}</span>
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        KAYNAK_COLORS[o.paketKaynak] || 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {KAYNAK_LABELS[o.paketKaynak] || o.paketKaynak || '—'}
+                    </span>
+                    <span className="text-sm text-slate-700">{o.items?.length || 0} ürün</span>
+                    <span className={`text-sm font-semibold ${late ? 'text-red-600' : 'text-slate-700'}`}>
+                      {mins} dk
+                    </span>
+                    <div className="ml-auto flex gap-1" onClick={(e) => e.stopPropagation()}>
+                      {renderActions(o)}
+                    </div>
+                  </div>
+                </li>
+                </Fragment>
               );
             })}
           </ul>
@@ -355,28 +399,28 @@ function PackageDetail({ open, order, onClose, onCancel, onStatusChange, onAppPa
     >
       <div className="space-y-4">
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div className="flex items-center gap-2">
               <User size={14} className="text-amber-700" />
               <span className="font-semibold">{order.musteriAd}</span>
             </div>
             <div className="flex items-center gap-2">
               <Phone size={14} className="text-amber-700" />
-              <a href={`tel:${order.musteriTel}`} className="font-semibold text-amber-900 hover:underline">
+              <a href={`tel:${order.musteriTel}`} className="inline-flex min-h-[40px] items-center font-semibold text-amber-900 hover:underline sm:min-h-0">
                 {order.musteriTel}
               </a>
             </div>
           </div>
           <div className="mt-2 flex items-start gap-2">
             <MapPin size={14} className="mt-0.5 text-amber-700" />
-            <span>{order.musteriAdres}</span>
+            <span className="break-words">{order.musteriAdres}</span>
           </div>
           {order.notlar && (
             <p className="mt-2 italic text-amber-800">Not: {order.notlar}</p>
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-3 text-sm">
+        <div className="grid grid-cols-3 gap-2 text-sm sm:gap-3">
           <Info label="Kaynak" value={KAYNAK_LABELS[order.paketKaynak] || order.paketKaynak || '—'} />
           <Info label="Süre" value={`${mins} dk`} />
           <Info label="Personel" value={order.garsonAd || '—'} />
@@ -388,12 +432,12 @@ function PackageDetail({ open, order, onClose, onCancel, onStatusChange, onAppPa
           </div>
           <ul className="divide-y divide-slate-100">
             {(order.items || []).map((it, idx) => (
-              <li key={idx} className="flex justify-between px-3 py-2 text-sm">
+              <li key={idx} className="flex justify-between gap-2 px-3 py-2 text-sm">
                 <span>
                   <strong>{formatAdet(it.adet)}×</strong> {it.ad}
                   {it.notlar && <em className="ml-2 text-xs text-slate-500">({it.notlar})</em>}
                 </span>
-                <span className="font-semibold">{formatTL(it.fiyat * it.adet)}</span>
+                <span className="shrink-0 font-semibold">{formatTL(it.fiyat * it.adet)}</span>
               </li>
             ))}
           </ul>
@@ -413,7 +457,7 @@ function PackageDetail({ open, order, onClose, onCancel, onStatusChange, onAppPa
 
 function Info({ label, value }) {
   return (
-    <div className="rounded-lg bg-slate-50 p-3">
+    <div className="min-w-0 rounded-lg bg-slate-50 p-2 sm:p-3">
       <p className="text-xs text-slate-500">{label}</p>
       <p className="font-semibold text-slate-900 truncate">{value}</p>
     </div>

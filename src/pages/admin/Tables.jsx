@@ -291,6 +291,11 @@ export default function AdminTables() {
       const availableW = rect.width - 16;
       const availableH = rect.height - 16;
       if (availableW <= 0 || availableH <= 0) return;
+      if (window.innerWidth < 768) {
+        // Telefon: canvas alt alta dizilir, yükseklik içerikten gelir; genişliğe sığdır ama okunur kal (kabında yatay kayar)
+        setScale(Math.max(0.55, Math.min(1, availableW / CANVAS_W)));
+        return;
+      }
       const sW = availableW / CANVAS_W;
       const sH = availableH / CANVAS_H;
       setScale(Math.min(1, sW, sH));
@@ -602,8 +607,8 @@ export default function AdminTables() {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="border-b border-slate-200 bg-white px-8 pt-5">
+    <div className="flex h-auto min-h-full flex-col md:h-full">
+      <div className="border-b border-slate-200 bg-white px-4 pt-4 sm:px-8 sm:pt-5">
         <PageHeader
           title="Masa Yönetimi"
           subtitle="Salon yerleşimini sürükle-bırak ile düzenle"
@@ -640,7 +645,7 @@ export default function AdminTables() {
         />
       </div>
 
-      <div className="flex items-center gap-1 border-b border-slate-200 bg-white px-8 py-2">
+      <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-white px-4 py-2 sm:px-8">
         {zones.map((z) => {
           const count = tables.filter((t) => (t.zone || 'ic') === z).length;
           return (
@@ -650,7 +655,7 @@ export default function AdminTables() {
                 setZone(z);
                 setSelected(null);
               }}
-              className={`rounded-lg px-4 py-1.5 text-sm transition ${
+              className={`min-h-[40px] rounded-lg px-4 py-2 text-sm transition sm:min-h-0 sm:py-1.5 ${
                 zone === z
                   ? 'bg-blue-100 font-medium text-blue-700'
                   : 'text-slate-600 hover:bg-slate-100'
@@ -669,12 +674,13 @@ export default function AdminTables() {
         })}
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-col md:flex-1 md:flex-row md:overflow-hidden">
         <div
           ref={canvasWrapperRef}
-          className="flex flex-1 items-start justify-center overflow-hidden bg-slate-100 p-2"
+          className="flex items-start overflow-x-auto overflow-y-hidden bg-slate-100 p-2 md:flex-1 md:justify-center md:overflow-hidden"
         >
           <div
+            className="shrink-0"
             style={{
               width: CANVAS_W * scale,
               height: CANVAS_H * scale,
@@ -766,7 +772,7 @@ export default function AdminTables() {
           </div>
         </div>
 
-        <aside className="w-80 shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-5">
+        <aside className="w-full shrink-0 overflow-y-auto border-t border-slate-200 bg-white p-4 md:w-80 md:border-l md:border-t-0 md:p-5">
           <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
             Öğe Ekle
           </h3>
@@ -775,7 +781,7 @@ export default function AdminTables() {
               setEditing(null);
               setModal('add');
             }}
-            className="btn-primary mb-3 flex w-full items-center justify-center gap-1.5"
+            className="btn-primary mb-3 flex min-h-[44px] w-full items-center justify-center gap-1.5"
           >
             <Plus size={16} /> Yeni Masa
           </button>
@@ -923,7 +929,7 @@ function DecorButton({ tip, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="flex flex-col items-center gap-1 rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-700 transition hover:border-blue-400 hover:bg-blue-50"
+      className="flex min-h-[44px] flex-col items-center gap-1 rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-700 transition hover:border-blue-400 hover:bg-blue-50"
     >
       {Icon ? (
         <Icon size={18} className="text-slate-600" />

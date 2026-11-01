@@ -71,14 +71,14 @@ export default function PosLayout() {
     <div className="flex h-full flex-col bg-slate-100">
       <OfflineBanner />
       <WaiterCallAlert />
-      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <div className="flex items-center gap-4">
+      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
           <img
             src="/branding/ala-konya-logo.png"
             alt={settings.restoranAd || 'Alâ Konya Mutfağı'}
-            className="h-[3.75rem] w-auto"
+            className="h-10 w-auto sm:h-[3.75rem]"
           />
-          <span className="text-sm text-slate-500">
+          <span className="min-w-0 truncate text-sm text-slate-500">
             {profile?.ad} <span className="font-medium text-blue-600">({rol})</span>
           </span>
           {idleEnabled && (
@@ -93,7 +93,7 @@ export default function PosLayout() {
             </span>
           )}
         </div>
-        <nav className="flex items-center gap-1">
+        <nav className="flex w-full items-center gap-1 overflow-x-auto sm:w-auto sm:overflow-visible [&>*]:shrink-0">
           {!isKurye && <PosNavLink to="/pos/tables" icon={Grid3x3} label="Masalar" />}
           <PosNavLink
             to="/pos/orders/active"
@@ -137,7 +137,7 @@ function PosNavLink({ to, icon: Icon, label }) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
+        `flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm transition ${
           isActive ? 'bg-blue-100 text-blue-700' : 'text-slate-600 hover:bg-slate-100'
         }`
       }

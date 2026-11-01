@@ -79,8 +79,26 @@ export default function Users() {
     await patchDoc('users', u.id, { aktif: !u.aktif });
   };
 
+  const rowActions = (u) => (
+    <div className="inline-flex gap-1">
+      <button onClick={() => handleResetCode(u)} className="btn-ghost p-2.5 sm:px-2 sm:py-1" title="Kodu Sıfırla">
+        <RefreshCw size={14} />
+      </button>
+      <button onClick={() => openEdit(u)} className="btn-ghost p-2.5 sm:px-2 sm:py-1" title="Düzenle">
+        <Pencil size={14} />
+      </button>
+      <button
+        onClick={() => handleDelete(u)}
+        className="btn-ghost p-2.5 text-red-600 hover:bg-red-50 sm:px-2 sm:py-1"
+        title="Sil"
+      >
+        <Trash2 size={14} />
+      </button>
+    </div>
+  );
+
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Kullanıcılar"
         subtitle="Garson ve kasiyer hesaplarını yönetin"
@@ -91,18 +109,18 @@ export default function Users() {
         }
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
         <StatCard label="Toplam" value={stats.toplam} icon={UsersIcon} />
         <StatCard label="Aktif" value={stats.aktif} color="green" />
         <StatCard label="Garson" value={stats.garson} color="blue" />
         <StatCard label="Kasiyer" value={stats.kasiyer} color="amber" />
       </div>
 
-      <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex flex-wrap gap-2">
         <select
           value={filter.rol}
           onChange={(e) => setFilter((f) => ({ ...f, rol: e.target.value }))}
-          className="input max-w-xs"
+          className="input w-full sm:w-auto sm:max-w-xs"
         >
           <option value="all">Tüm Roller</option>
           <option value="garson">Garson</option>
@@ -113,7 +131,7 @@ export default function Users() {
         <select
           value={filter.aktif}
           onChange={(e) => setFilter((f) => ({ ...f, aktif: e.target.value }))}
-          className="input max-w-xs"
+          className="input w-full sm:w-auto sm:max-w-xs"
         >
           <option value="all">Tümü</option>
           <option value="active">Sadece Aktif</option>
@@ -121,7 +139,30 @@ export default function Users() {
         </select>
       </div>
 
-      <div className="card overflow-hidden p-0">
+      {filtered.length === 0 && (
+        <div className="card py-12 text-center text-sm text-slate-500 sm:hidden">
+          Henüz kullanıcı yok. "Yeni Kullanıcı" ile başlayın.
+        </div>
+      )}
+      <div className="space-y-2 sm:hidden">
+        {filtered.map((u) => (
+          <div key={u.id} className="card flex flex-col gap-3 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="break-words font-medium text-slate-900">{u.ad}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">{ROLE_LABEL[u.rol]}</span>
+                  <span className="font-mono text-sm text-slate-600">{u.kodIpucu || '****'}</span>
+                </div>
+              </div>
+              <Toggle checked={u.aktif} onChange={() => toggleActive(u)} />
+            </div>
+            <div className="flex justify-end">{rowActions(u)}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card hidden overflow-hidden p-0 sm:block">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
             <tr>
@@ -151,21 +192,7 @@ export default function Users() {
                   <Toggle checked={u.aktif} onChange={() => toggleActive(u)} />
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <div className="inline-flex gap-1">
-                    <button onClick={() => handleResetCode(u)} className="btn-ghost px-2 py-1" title="Kodu Sıfırla">
-                      <RefreshCw size={14} />
-                    </button>
-                    <button onClick={() => openEdit(u)} className="btn-ghost px-2 py-1" title="Düzenle">
-                      <Pencil size={14} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(u)}
-                      className="btn-ghost px-2 py-1 text-red-600 hover:bg-red-50"
-                      title="Sil"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+                  {rowActions(u)}
                 </td>
               </tr>
             ))}
@@ -321,7 +348,7 @@ function UserModal({ open, onClose, editing }) {
             <button
               type="button"
               onClick={() => setValue('kod', randomCode4(), { shouldValidate: true })}
-              className="btn-secondary whitespace-nowrap"
+              className="btn-secondary shrink-0 whitespace-nowrap"
             >
               Otomatik Üret
             </button>

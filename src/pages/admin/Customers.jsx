@@ -70,7 +70,7 @@ export default function Customers() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Telefon Defteri"
         subtitle="Paket servis müşterileri — paket alındıkça otomatik kaydedilir"
@@ -81,7 +81,7 @@ export default function Customers() {
         }
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="mb-4 sm:mb-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
         <StatCard label="Kayıtlı Müşteri" value={customers.length} icon={Users} />
         <StatCard label="Toplam Paket Sipariş" value={toplamSiparis} color="blue" icon={Phone} />
       </div>
@@ -96,7 +96,46 @@ export default function Customers() {
         />
       </div>
 
-      <div className="card overflow-hidden p-0">
+      <div className="space-y-2 sm:hidden">
+        {filtered.length === 0 && (
+          <div className="card py-10 text-center text-slate-500">
+            {customers.length === 0 ? 'Henüz kayıt yok.' : 'Eşleşen müşteri yok.'}
+          </div>
+        )}
+        {filtered.map((c) => (
+          <div key={c.id} className="card p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="break-words font-medium text-slate-900">{c.ad || '—'}</p>
+                <a href={`tel:${c.tel}`} className="-my-1 inline-flex min-h-[40px] items-center font-mono text-sm text-slate-700">{c.tel}</a>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <button onClick={() => setEditing(c)} className="btn-ghost min-h-[40px] min-w-[40px] p-2.5">
+                  <Pencil size={16} />
+                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => handleDelete(c)}
+                    className="btn-ghost min-h-[40px] min-w-[40px] p-2.5 text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+              </div>
+            </div>
+            {c.adres && <p className="mt-1 break-words text-sm text-slate-600">{c.adres}</p>}
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+              <span>Sipariş: <strong className="tabular-nums text-slate-800">{c.siparisSayisi || 0}</strong></span>
+              {sadakatAktif && (
+                <span>Puan: <strong className="tabular-nums text-purple-700">{c.puan || 0}</strong></span>
+              )}
+              <span>Son: {c.sonSiparis ? formatDate(c.sonSiparis, 'dd.MM.yyyy') : '—'}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card hidden overflow-hidden p-0 sm:block">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
             <tr>

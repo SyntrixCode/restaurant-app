@@ -45,7 +45,7 @@ export default function AdminCampaigns() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Kampanyalar"
         subtitle="Otomatik uygulanan indirimleri yönet (en büyük indirim kuralı)"
@@ -62,7 +62,7 @@ export default function AdminCampaigns() {
         }
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:mb-6 sm:gap-4 md:grid-cols-3">
         <StatCard label="Toplam Kampanya" value={campaigns.length} icon={Megaphone} />
         <StatCard label="Aktif" value={totalActive} color="green" />
         <StatCard label="Şu An Geçerli" value={activeNow.length} color="blue" />
@@ -79,9 +79,9 @@ export default function AdminCampaigns() {
             {campaigns.map((c) => {
               const aktifSimdi = isCampaignActive(c, 999999);
               return (
-                <li key={c.id} className="grid grid-cols-12 items-center gap-3 px-4 py-3">
-                  <div className="col-span-4">
-                    <div className="flex items-center gap-2">
+                <li key={c.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:grid sm:grid-cols-12 sm:gap-3">
+                  <div className="w-full min-w-0 break-words sm:col-span-4 sm:w-auto">
+                    <div className="flex flex-wrap items-center gap-2">
                       <p className="font-semibold text-slate-900">{c.ad}</p>
                       {aktifSimdi && c.aktif && (
                         <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
@@ -91,10 +91,10 @@ export default function AdminCampaigns() {
                     </div>
                     {c.aciklama && <p className="text-xs text-slate-500">{c.aciklama}</p>}
                   </div>
-                  <div className="col-span-2 text-sm font-semibold text-blue-700">
+                  <div className="text-sm font-semibold text-blue-700 sm:col-span-2">
                     {c.indirimTipi === 'yuzde' ? `%${c.indirimDeger}` : formatTL(c.indirimDeger)}
                   </div>
-                  <div className="col-span-3 text-xs text-slate-600">
+                  <div className="text-xs text-slate-600 sm:col-span-3">
                     {c.gunler && c.gunler.length > 0 && (
                       <p className="flex items-center gap-1">
                         <Calendar size={11} />
@@ -109,22 +109,22 @@ export default function AdminCampaigns() {
                     )}
                     {c.minTutar > 0 && <p>Min: {formatTL(c.minTutar)}</p>}
                   </div>
-                  <div className="col-span-2">
+                  <div className="sm:col-span-2">
                     <Toggle checked={!!c.aktif} onChange={() => handleToggle(c)} />
                   </div>
-                  <div className="col-span-1 flex justify-end gap-1">
+                  <div className="ml-auto flex justify-end gap-1 sm:col-span-1 sm:ml-0">
                     <button
                       onClick={() => {
                         setEditing(c);
                         setOpen(true);
                       }}
-                      className="btn-ghost px-2 py-1"
+                      className="btn-ghost p-2.5 sm:px-2 sm:py-1"
                     >
                       <Pencil size={14} />
                     </button>
                     <button
                       onClick={() => handleDelete(c)}
-                      className="btn-ghost px-2 py-1 text-red-600 hover:bg-red-50"
+                      className="btn-ghost p-2.5 text-red-600 hover:bg-red-50 sm:px-2 sm:py-1"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -309,7 +309,7 @@ function CampaignModal({ open, editing, onClose }) {
                           : [...(field.value || []), idx];
                         field.onChange(next);
                       }}
-                      className={`rounded-lg border-2 py-2 text-xs font-semibold transition ${
+                      className={`rounded-lg border-2 py-3 text-xs font-semibold transition sm:py-2 ${
                         selected
                           ? 'border-blue-500 bg-blue-50 text-blue-700'
                           : 'border-slate-200 text-slate-600 hover:border-slate-300'

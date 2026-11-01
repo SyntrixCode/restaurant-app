@@ -81,13 +81,13 @@ export default function AdminNotifications() {
     lateOrders.length + lowStockItems.length + upcomingReservations.length;
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Bildirimler"
         subtitle="Dikkat gerektiren olaylar — ayarlar sayfasından açıp kapatabilirsin"
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
         <StatCard
           label="Toplam Uyarı"
           value={totalAlerts}
@@ -114,7 +114,7 @@ export default function AdminNotifications() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
         {/* Geciken siparişler */}
         <div className="card">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-500">
@@ -136,8 +136,8 @@ export default function AdminNotifications() {
                   key={o.id}
                   className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm"
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 break-words">
                       <p className="font-semibold text-slate-900">{o.masaAd}</p>
                       <p className="text-xs text-slate-600">{o.garsonAd}</p>
                     </div>
@@ -177,8 +177,8 @@ export default function AdminNotifications() {
                       : 'border-amber-200 bg-amber-50'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 break-words">
                       <p className="font-medium text-slate-900">{p.ad}</p>
                       <p className="text-xs text-slate-500">{p.categoryAd}</p>
                     </div>
@@ -224,8 +224,8 @@ export default function AdminNotifications() {
                   key={r.id}
                   className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm"
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 break-words">
                       <p className="font-semibold text-slate-900">{r.musteriAd}</p>
                       <p className="text-xs text-slate-600">
                         {r.masaAd} · {r.kisiSayisi} kişi
@@ -246,7 +246,7 @@ export default function AdminNotifications() {
       <div className="mt-6 rounded-lg bg-slate-50 p-4 text-xs text-slate-500">
         <p>
           💡 Bildirim kategorilerini açıp kapatmak için{' '}
-          <a href="/admin/settings" className="text-blue-700 hover:underline">
+          <a href="/admin/settings" className="inline-block py-1.5 text-blue-700 hover:underline sm:py-0">
             Ayarlar → Bildirimler
           </a>{' '}
           sayfasını kullan.

@@ -123,23 +123,23 @@ export default function AdminArchive() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Arşivlenen Siparişler"
         subtitle="Tamamlanan siparişlerin geçmişi"
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => exportArchivedOrders(filtered, `arsiv_${from}_${to}`)}
               disabled={filtered.length === 0}
-              className="btn-primary disabled:opacity-50"
+              className="btn-primary min-h-[40px] disabled:opacity-50"
             >
               <Download size={16} /> Excel İndir
             </button>
             <button
               onClick={exportCSV}
               disabled={filtered.length === 0}
-              className="btn-secondary disabled:opacity-50"
+              className="btn-secondary min-h-[40px] disabled:opacity-50"
             >
               <Download size={16} /> CSV
             </button>
@@ -147,7 +147,7 @@ export default function AdminArchive() {
         }
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="mb-4 sm:mb-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
         <StatCard label="Geçerli Sipariş" value={validCount} color="blue" icon={ArchiveIcon} />
         <StatCard label="Toplam Ciro" value={formatTL(totals.toplam)} color="green" />
         <StatCard label="Ortalama Tutar" value={formatTL(ortalamaTutar)} color="blue" />
@@ -160,29 +160,29 @@ export default function AdminArchive() {
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <Calendar size={16} className="text-slate-400" />
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <Calendar size={16} className="hidden shrink-0 text-slate-400 sm:block" />
           <input
             type="date"
             value={from}
             onChange={(e) => setFrom(e.target.value)}
-            className="input max-w-[160px]"
+            className="input min-w-0 flex-1 sm:max-w-[160px] sm:flex-none"
           />
           <span className="text-slate-400">→</span>
           <input
             type="date"
             value={to}
             onChange={(e) => setTo(e.target.value)}
-            className="input max-w-[160px]"
+            className="input min-w-0 flex-1 sm:max-w-[160px] sm:flex-none"
           />
         </div>
-        <div className="flex gap-1 text-xs">
+        <div className="flex w-full gap-2 text-sm sm:w-auto sm:gap-1 sm:text-xs">
           <button
             onClick={() => {
               setFrom(todayISO());
               setTo(todayISO());
             }}
-            className="rounded bg-slate-100 px-2 py-1 hover:bg-slate-200"
+            className="min-h-[40px] flex-1 rounded bg-slate-100 px-3 py-2 hover:bg-slate-200 sm:min-h-0 sm:flex-none sm:px-2 sm:py-1"
           >
             Bugün
           </button>
@@ -191,7 +191,7 @@ export default function AdminArchive() {
               setFrom(daysAgo(7));
               setTo(todayISO());
             }}
-            className="rounded bg-slate-100 px-2 py-1 hover:bg-slate-200"
+            className="min-h-[40px] flex-1 rounded bg-slate-100 px-3 py-2 hover:bg-slate-200 sm:min-h-0 sm:flex-none sm:px-2 sm:py-1"
           >
             Son 7 gün
           </button>
@@ -200,18 +200,18 @@ export default function AdminArchive() {
               setFrom(daysAgo(30));
               setTo(todayISO());
             }}
-            className="rounded bg-slate-100 px-2 py-1 hover:bg-slate-200"
+            className="min-h-[40px] flex-1 rounded bg-slate-100 px-3 py-2 hover:bg-slate-200 sm:min-h-0 sm:flex-none sm:px-2 sm:py-1"
           >
             Son 30 gün
           </button>
         </div>
-        <div className="relative ml-auto">
+        <div className="relative w-full sm:ml-auto sm:w-auto">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Masa, garson, no..."
-            className="input max-w-xs pl-8"
+            className="input pl-8 sm:max-w-xs"
           />
         </div>
       </div>
@@ -230,10 +230,47 @@ export default function AdminArchive() {
                 <li
                   key={o.id}
                   onClick={() => setDetail(o)}
-                  className={`grid cursor-pointer grid-cols-12 items-center gap-3 px-4 py-3 transition hover:bg-slate-50 ${
+                  className={`cursor-pointer transition hover:bg-slate-50 ${
                     cancelled ? 'bg-red-50/40' : ''
                   }`}
                 >
+                  {/* Telefon: kart satırı */}
+                  <div className="flex items-start justify-between gap-3 px-4 py-3 sm:hidden">
+                    <div className="min-w-0">
+                      <p
+                        className={`truncate text-base font-semibold ${cancelled ? 'text-slate-500 line-through' : 'text-slate-900'}`}
+                      >
+                        {o.masaAd || 'Paket'}
+                        {o.not && <span title="Not var"> · 📝</span>}
+                      </p>
+                      <p className="mt-0.5 truncate text-sm text-slate-500">
+                        {formatDate(o.tamamlandiZamani)}
+                      </p>
+                      <p className="mt-0.5 truncate text-sm text-slate-600">
+                        {o.garsonAd || '—'}
+                        {o.kisiSayisi != null ? ` · ${o.kisiSayisi} kişi` : ''} · {o.items?.length || 0} ürün
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className={`text-base font-bold ${cancelled ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+                        {formatTL(o.toplam)}
+                      </p>
+                      <p className="text-xs uppercase text-slate-500">
+                        {(o.odemeYontemleri || []).join(' + ')}
+                      </p>
+                      {cancelled ? (
+                        <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                          <Ban size={10} /> İptal
+                        </span>
+                      ) : (
+                        <span className="mt-1 inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                          Tamamlandı
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {/* Masaüstü: grid satırı */}
+                  <div className="hidden grid-cols-12 items-center gap-3 px-4 py-3 sm:grid">
                   <div className="col-span-2 text-sm">
                     <p className={`font-semibold ${cancelled ? 'text-slate-500 line-through' : 'text-slate-900'}`}>
                       {o.masaAd || 'Paket'}
@@ -271,6 +308,7 @@ export default function AdminArchive() {
                         Tamamlandı
                       </span>
                     )}
+                  </div>
                   </div>
                 </li>
               );
@@ -520,25 +558,25 @@ function ArchiveDetailModal({ open, order, onClose }) {
             </div>
           )}
 
-          <div className="grid grid-cols-4 gap-3 text-sm">
+          <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
             <Info label="Garson" value={order.garsonAd || '—'} />
             <Info label="Kişi" value={order.kisiSayisi != null ? order.kisiSayisi : '—'} />
             <Info label="Tamamlanma" value={formatDate(order.tamamlandiZamani, 'dd.MM HH:mm')} />
             <Info label="Ödeme" value={(order.odemeYontemleri || []).join(' + ') || '—'} />
           </div>
           <div className="rounded-lg border border-slate-200">
-            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2">
               <span className="text-xs font-medium uppercase text-slate-500">İçerik</span>
               {isAdmin && !cancelled && (
                 editMode ? (
-                  <div className="flex gap-1">
-                    <button onClick={cancelEdit} className="btn-ghost px-2 py-1 text-xs">
+                  <div className="flex flex-wrap justify-end gap-1">
+                    <button onClick={cancelEdit} className="btn-ghost min-h-[40px] px-3 py-2 text-sm sm:min-h-0 sm:px-2 sm:py-1 sm:text-xs">
                       Vazgeç
                     </button>
                     <button
                       onClick={() => setConfirmEdit(true)}
                       disabled={!itemsDirty}
-                      className="btn-primary px-2 py-1 text-xs disabled:opacity-40"
+                      className="btn-primary min-h-[40px] px-3 py-2 text-sm disabled:opacity-40 sm:min-h-0 sm:px-2 sm:py-1 sm:text-xs"
                     >
                       <Save size={13} /> Düzeltmeyi Kaydet
                     </button>
@@ -546,7 +584,7 @@ function ArchiveDetailModal({ open, order, onClose }) {
                 ) : (
                   <button
                     onClick={startEdit}
-                    className="btn-ghost px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
+                    className="btn-ghost min-h-[40px] px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 sm:min-h-0 sm:px-2 sm:py-1 sm:text-xs"
                     title="Yanlış girilen ürünü sil / adedi düzelt / unutulanı ekle"
                   >
                     <Pencil size={13} /> Ürünleri Düzenle
@@ -559,12 +597,12 @@ function ArchiveDetailModal({ open, order, onClose }) {
               <>
                 <ul className="divide-y divide-slate-100">
                   {order.items?.map((it, idx) => (
-                    <li key={idx} className="flex justify-between px-3 py-2 text-sm">
-                      <span>
+                    <li key={idx} className="flex justify-between gap-3 px-3 py-2 text-sm">
+                      <span className="min-w-0 break-words">
                         <strong>{formatAdet(it.adet)}×</strong> {it.ad}
                         {it.notlar && <em className="ml-2 text-xs text-slate-500">({it.notlar})</em>}
                       </span>
-                      <span className="font-semibold">{formatTL(it.fiyat * it.adet)}</span>
+                      <span className="shrink-0 font-semibold">{formatTL(it.fiyat * it.adet)}</span>
                     </li>
                   ))}
                 </ul>
@@ -579,8 +617,8 @@ function ArchiveDetailModal({ open, order, onClose }) {
               <>
                 <ul className="divide-y divide-slate-100">
                   {editItems.map((it, idx) => (
-                    <li key={idx} className="flex items-center gap-2 px-3 py-2 text-sm">
-                      <span className="flex-1 truncate">
+                    <li key={idx} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm sm:flex-nowrap">
+                      <span className="min-w-0 basis-full break-words sm:flex-1 sm:basis-auto sm:truncate">
                         {it.ad}
                         {it.notlar && <em className="ml-1 text-xs text-slate-500">({it.notlar})</em>}
                         <span className="ml-1 text-xs text-slate-400">{formatTL(it.fiyat)}/adet</span>
@@ -591,15 +629,15 @@ function ArchiveDetailModal({ open, order, onClose }) {
                         step="1"
                         value={it.adet}
                         onChange={(e) => setItemAdet(idx, e.target.value)}
-                        className="input max-w-[70px] py-1 text-center text-sm"
+                        className="input max-w-[80px] py-2 text-center text-sm sm:max-w-[70px] sm:py-1"
                       />
-                      <span className="w-20 shrink-0 text-right font-semibold">
+                      <span className="ml-auto w-20 shrink-0 text-right font-semibold sm:ml-0">
                         {formatTL((Number(it.fiyat) || 0) * (Number(it.adet) || 0))}
                       </span>
                       <button
                         onClick={() => removeItem(idx)}
                         title="Bu ürünü siparişten sil"
-                        className="rounded p-1 text-red-500 hover:bg-red-50"
+                        className="rounded p-2.5 text-red-500 hover:bg-red-50 sm:p-1"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -616,7 +654,7 @@ function ArchiveDetailModal({ open, order, onClose }) {
                       if (p) addItem(p);
                       e.target.value = '';
                     }}
-                    className="input py-1 text-sm"
+                    className="input py-2 text-sm sm:py-1"
                   >
                     <option value="">+ Ürün ekle (unutulan / sonradan servis edilen)…</option>
                     {[...products]
@@ -630,7 +668,7 @@ function ArchiveDetailModal({ open, order, onClose }) {
                   </select>
                 </div>
 
-                <div className="border-t border-slate-200 bg-slate-50 px-3 py-2 text-right text-sm">
+                <div className="border-t border-slate-200 bg-slate-50 px-3 py-2 text-right text-sm leading-relaxed">
                   <span className="text-slate-500">Eski: </span>
                   <span className="text-slate-400 line-through">{formatTL(order.toplam)}</span>
                   <span className="mx-2 text-slate-400">→</span>
@@ -660,7 +698,7 @@ function ArchiveDetailModal({ open, order, onClose }) {
           {/* Önceki düzeltmeler (denetim izi) */}
           {(order.duzeltmeler || []).length > 0 && (
             <details className="rounded-lg border border-amber-200 bg-amber-50">
-              <summary className="cursor-pointer px-3 py-1.5 text-xs font-medium text-amber-800">
+              <summary className="cursor-pointer px-3 py-2.5 text-xs sm:py-1.5 font-medium text-amber-800">
                 ✎ Bu fişte {order.duzeltmeler.length} düzeltme yapılmış
               </summary>
               <ul className="space-y-1 px-3 pb-2 text-[11px] text-amber-700">
@@ -679,7 +717,7 @@ function ArchiveDetailModal({ open, order, onClose }) {
               payments dokümanı güncellenir → Gün Sonu / Raporlar dağılımı düzelir. Tutar değişmez. */}
           {pays.length > 0 && (
             <div className="rounded-lg border border-slate-200">
-              <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2">
                 <span className="flex items-center gap-1.5 text-xs font-medium uppercase text-slate-500">
                   <Wallet size={14} /> Ödeme Yöntemi
                 </span>
@@ -687,7 +725,7 @@ function ArchiveDetailModal({ open, order, onClose }) {
                   <button
                     onClick={handleSavePayments}
                     disabled={!payDirty || savingPay}
-                    className="btn-primary px-2 py-1 text-xs disabled:opacity-40"
+                    className="btn-primary min-h-[40px] px-3 py-2 text-sm disabled:opacity-40 sm:min-h-0 sm:px-2 sm:py-1 sm:text-xs"
                   >
                     <Save size={13} /> {savingPay ? 'Kaydediliyor…' : 'Düzeltmeyi Kaydet'}
                   </button>
@@ -695,7 +733,7 @@ function ArchiveDetailModal({ open, order, onClose }) {
               </div>
               <ul className="divide-y divide-slate-100">
                 {pays.map((p) => (
-                  <li key={p.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                  <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 text-sm">
                     <span className="font-semibold text-slate-900">{formatTL(p.tutar)}</span>
                     <div className="flex items-center gap-2">
                       {p.duzeltme && (
@@ -712,7 +750,7 @@ function ArchiveDetailModal({ open, order, onClose }) {
                           onChange={(e) =>
                             setPayEdits((s) => ({ ...s, [p.id]: e.target.value }))
                           }
-                          className={`input max-w-[150px] py-1 text-sm ${
+                          className={`input max-w-[150px] py-2 text-sm sm:py-1 ${
                             payEdits[p.id] && payEdits[p.id] !== p.yontem
                               ? 'border-amber-400 bg-amber-50 font-medium'
                               : ''
@@ -760,7 +798,7 @@ function ArchiveDetailModal({ open, order, onClose }) {
                   <button
                     onClick={handleSaveNote}
                     disabled={savingNote || not.trim() === (order.not || '').trim()}
-                    className="btn-primary text-sm disabled:opacity-50"
+                    className="btn-primary min-h-[40px] text-sm disabled:opacity-50"
                   >
                     <Save size={14} /> {savingNote ? 'Kaydediliyor...' : 'Notu Kaydet'}
                   </button>

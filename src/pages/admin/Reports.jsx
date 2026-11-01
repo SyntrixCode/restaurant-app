@@ -66,7 +66,18 @@ function daysAgo(n) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function useIsNarrow() {
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 640);
+  useEffect(() => {
+    const on = () => setNarrow(window.innerWidth < 640);
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
+  return narrow;
+}
+
 export default function AdminReports() {
+  const isNarrow = useIsNarrow();
   const [archived, setArchived] = useState([]);
   const [payments, setPayments] = useState([]);
   const [from, setFrom] = useState(daysAgo(7));
@@ -281,12 +292,12 @@ export default function AdminReports() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Raporlar"
         subtitle="Satış analizleri ve performans grafikleri"
         actions={
-          <button onClick={exportExcel} disabled={orders.length === 0} className="btn-primary disabled:opacity-50">
+          <button onClick={exportExcel} disabled={orders.length === 0} className="btn-primary min-h-[44px] disabled:opacity-50 sm:min-h-0">
             <Download size={16} /> Excel İndir
           </button>
         }
@@ -294,40 +305,40 @@ export default function AdminReports() {
 
       {/* Tarih aralığı */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <Calendar size={16} className="text-slate-400" />
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <Calendar size={16} className="shrink-0 text-slate-400" />
           <input
             type="date"
             value={from}
             onChange={(e) => setFrom(e.target.value)}
-            className="input max-w-[160px]"
+            className="input min-w-0 max-w-none flex-1 sm:max-w-[160px] sm:flex-none"
           />
           <span className="text-slate-400">→</span>
           <input
             type="date"
             value={to}
             onChange={(e) => setTo(e.target.value)}
-            className="input max-w-[160px]"
+            className="input min-w-0 max-w-none flex-1 sm:max-w-[160px] sm:flex-none"
           />
         </div>
-        <div className="flex gap-1 text-xs">
-          <button onClick={() => { setFrom(todayISO()); setTo(todayISO()); }} className="rounded bg-slate-100 px-2 py-1 hover:bg-slate-200">
+        <div className="grid w-full grid-cols-4 gap-2 text-xs sm:flex sm:w-auto sm:gap-1">
+          <button onClick={() => { setFrom(todayISO()); setTo(todayISO()); }} className="rounded bg-slate-100 px-1 py-2 hover:bg-slate-200 sm:px-2 sm:py-1">
             Bugün
           </button>
-          <button onClick={() => { setFrom(daysAgo(7)); setTo(todayISO()); }} className="rounded bg-slate-100 px-2 py-1 hover:bg-slate-200">
+          <button onClick={() => { setFrom(daysAgo(7)); setTo(todayISO()); }} className="rounded bg-slate-100 px-1 py-2 hover:bg-slate-200 sm:px-2 sm:py-1">
             Son 7 gün
           </button>
-          <button onClick={() => { setFrom(daysAgo(30)); setTo(todayISO()); }} className="rounded bg-slate-100 px-2 py-1 hover:bg-slate-200">
+          <button onClick={() => { setFrom(daysAgo(30)); setTo(todayISO()); }} className="rounded bg-slate-100 px-1 py-2 hover:bg-slate-200 sm:px-2 sm:py-1">
             Son 30 gün
           </button>
-          <button onClick={() => { setFrom(daysAgo(90)); setTo(todayISO()); }} className="rounded bg-slate-100 px-2 py-1 hover:bg-slate-200">
+          <button onClick={() => { setFrom(daysAgo(90)); setTo(todayISO()); }} className="rounded bg-slate-100 px-1 py-2 hover:bg-slate-200 sm:px-2 sm:py-1">
             Son 90 gün
           </button>
         </div>
       </div>
 
       {/* KPI'lar */}
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-6">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-6">
         <StatCard label="Ciro" value={formatTL(totals.ciro)} color="green" icon={TrendingUp} />
         <StatCard label="Sipariş" value={totals.siparis} color="blue" icon={Receipt} />
         <StatCard label="Ortalama Sepet" value={formatTL(totals.ortalama)} color="amber" icon={ShoppingBag} />
@@ -343,7 +354,7 @@ export default function AdminReports() {
           <p>Bu aralıkta veri yok.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
           {/* Günlük trend */}
           <ChartCard title="Günlük Ciro Trendi" onExport={exportCard('Günlük', 'dailyTrend')}>
             <ResponsiveContainer width="100%" height={280}>
@@ -365,7 +376,7 @@ export default function AdminReports() {
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={hourlySales}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="saat" tick={{ fontSize: 10 }} interval={1} />
+                <XAxis dataKey="saat" tick={{ fontSize: 10 }} interval={isNarrow ? 3 : 1} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${v / 1000}k`} />
                 <Tooltip formatter={(value) => formatTL(value)} />
                 <Bar dataKey="ciro" fill="#10b981" />
@@ -379,7 +390,7 @@ export default function AdminReports() {
               <BarChart data={waiterPerf} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `${v / 1000}k`} />
-                <YAxis type="category" dataKey="ad" tick={{ fontSize: 11 }} width={100} />
+                <YAxis type="category" dataKey="ad" tick={{ fontSize: 11 }} width={isNarrow ? 72 : 100} />
                 <Tooltip formatter={(value) => formatTL(value)} />
                 <Bar dataKey="ciro" fill="#f59e0b" />
               </BarChart>
@@ -396,8 +407,8 @@ export default function AdminReports() {
                   nameKey="name"
                   cx="50%"
                   cy="50%"
-                  outerRadius={90}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={isNarrow ? 70 : 90}
+                  label={isNarrow ? ({ percent }) => `${(percent * 100).toFixed(0)}%` : ({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                   labelLine={false}
                 >
                   {categoryDist.map((_, i) => (
@@ -405,6 +416,7 @@ export default function AdminReports() {
                   ))}
                 </Pie>
                 <Tooltip formatter={(value) => formatTL(value)} />
+                {isNarrow && <Legend wrapperStyle={{ fontSize: 11 }} />}
               </PieChart>
             </ResponsiveContainer>
           </ChartCard>
@@ -419,9 +431,9 @@ export default function AdminReports() {
                   nameKey="name"
                   cx="50%"
                   cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  innerRadius={isNarrow ? 45 : 60}
+                  outerRadius={isNarrow ? 70 : 90}
+                  label={isNarrow ? ({ percent }) => `${(percent * 100).toFixed(0)}%` : ({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                   labelLine={false}
                 >
                   {paymentMethodDist.map((_, i) => (
@@ -429,6 +441,7 @@ export default function AdminReports() {
                   ))}
                 </Pie>
                 <Tooltip formatter={(value) => formatTL(value)} />
+                {isNarrow && <Legend wrapperStyle={{ fontSize: 11 }} />}
               </PieChart>
             </ResponsiveContainer>
           </ChartCard>
@@ -441,7 +454,18 @@ export default function AdminReports() {
               </h3>
               <ExportButton onClick={exportCard('Ürünler', 'products')} />
             </div>
-            <div className="overflow-x-auto">
+            <ul className="divide-y divide-slate-100 sm:hidden">
+              {productPerf.map((p) => (
+                <li key={p.ad} className="flex items-center justify-between gap-3 py-2.5">
+                  <div className="min-w-0">
+                    <div className="break-words text-sm font-medium text-slate-900">{p.ad}</div>
+                    <div className="text-xs text-slate-500">{p.adet} adet</div>
+                  </div>
+                  <div className="shrink-0 text-sm font-semibold">{formatTL(p.ciro)}</div>
+                </li>
+              ))}
+            </ul>
+            <div className="hidden overflow-x-auto sm:block">
               <table className="w-full text-sm">
                 <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
                   <tr>
@@ -485,7 +509,7 @@ function ExportButton({ onClick }) {
     <button
       onClick={onClick}
       title="Excel'e aktar"
-      className="flex shrink-0 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+      className="flex min-h-[40px] shrink-0 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs sm:min-h-0 sm:px-2 sm:py-1 font-medium text-emerald-700 hover:bg-emerald-100"
     >
       <Download size={14} /> Excel
     </button>

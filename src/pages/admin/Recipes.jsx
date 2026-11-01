@@ -67,13 +67,13 @@ export default function AdminRecipes() {
   }, [products, recipeMap]);
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Reçeteler"
         subtitle="Bir ürünü malzemelere bağlayarak satış sırasında stok otomatik düşer"
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
         <StatCard label="Aktif Ürün" value={products.filter((p) => p.aktif && !p.stokTakipli).length} icon={ChefHat} />
         <StatCard label="Reçetesi Olan" value={recetesiOlanSayisi} color="green" />
         <StatCard label="Malzeme Sayısı" value={ingredients.length} color="blue" />
@@ -86,7 +86,7 @@ export default function AdminRecipes() {
       )}
 
       <div className="mb-4 flex flex-wrap gap-2">
-        <div className="relative max-w-xs flex-1">
+        <div className="relative w-full flex-1 sm:max-w-xs">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             value={search}
@@ -98,7 +98,7 @@ export default function AdminRecipes() {
         <select
           value={filterCategory}
           onChange={(e) => setFilterCategory(e.target.value)}
-          className="input max-w-[220px]"
+          className="input w-full sm:max-w-[220px]"
         >
           <option value="all">Tüm Kategoriler</option>
           {categories
@@ -123,7 +123,7 @@ export default function AdminRecipes() {
                 }, 0)
               : 0;
             return (
-              <li key={p.id} className="grid grid-cols-12 items-center gap-3 px-4 py-3 text-sm">
+              <li key={p.id} className="flex flex-col gap-2 px-4 py-3 text-sm sm:grid sm:grid-cols-12 sm:items-center sm:gap-3">
                 <div className="col-span-3">
                   <p className="font-medium text-slate-900">{p.ad}</p>
                   <p className="text-xs text-slate-500">{p.categoryAd}</p>
@@ -152,7 +152,7 @@ export default function AdminRecipes() {
                     <span className="text-xs italic text-slate-400">Reçete tanımlı değil</span>
                   )}
                 </div>
-                <div className="col-span-2 text-xs">
+                <div className="col-span-2 text-xs empty:hidden sm:empty:block">
                   {maliyet > 0 && (
                     <>
                       <p className="text-slate-500">Maliyet</p>
@@ -165,10 +165,10 @@ export default function AdminRecipes() {
                     </>
                   )}
                 </div>
-                <div className="col-span-1 text-right">
+                <div className="col-span-1 sm:text-right">
                   <button
                     onClick={() => setEditing({ product: p, recipe })}
-                    className="btn-ghost px-2 py-1 text-sm"
+                    className="btn-ghost min-h-[40px] w-full justify-center border border-slate-200 px-3 py-2 text-sm sm:min-h-0 sm:w-auto sm:border-0 sm:px-2 sm:py-1"
                   >
                     {hasRecipe ? 'Düzenle' : '+ Tanımla'}
                   </button>
@@ -311,9 +311,9 @@ function RecipeModal({ open, product, existingRecipe, ingredients, onClose }) {
               return (
                 <div
                   key={it.ingredientId}
-                  className="flex items-center gap-2 rounded-lg border border-slate-200 p-2 text-sm"
+                  className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 p-2 text-sm"
                 >
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
                     <p className="font-medium text-slate-900">{ing?.ad || '?'}</p>
                     {ing?.birimMaliyet > 0 && (
                       <p className="text-xs text-slate-500">
@@ -326,12 +326,12 @@ function RecipeModal({ open, product, existingRecipe, ingredients, onClose }) {
                     step="0.01"
                     value={it.miktar}
                     onChange={(e) => updateItem(idx, e.target.value)}
-                    className="w-20 rounded border border-slate-300 px-2 py-1 text-right tabular-nums"
+                    className="min-h-[40px] w-24 rounded border border-slate-300 px-2 py-1 text-right tabular-nums sm:min-h-0 sm:w-20"
                   />
                   <select
                     value={it.birim || ing?.birim || ''}
                     onChange={(e) => updateItemBirim(idx, e.target.value)}
-                    className="w-16 rounded border border-slate-300 px-1 py-1 text-xs"
+                    className="min-h-[40px] w-20 rounded border border-slate-300 px-1 py-1 text-xs sm:min-h-0 sm:w-16"
                   >
                     {recipeUnitOptions(ing?.birim).map((u) => (
                       <option key={u} value={u}>
@@ -341,7 +341,7 @@ function RecipeModal({ open, product, existingRecipe, ingredients, onClose }) {
                   </select>
                   <button
                     onClick={() => removeItem(idx)}
-                    className="rounded p-1.5 text-red-500 hover:bg-red-50"
+                    className="ml-auto rounded p-2.5 text-red-500 hover:bg-red-50 sm:ml-0 sm:p-1.5"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -376,7 +376,7 @@ function RecipeModal({ open, product, existingRecipe, ingredients, onClose }) {
                 <button
                   key={i.id}
                   onClick={() => addIngredient(i)}
-                  className="rounded px-2 py-1.5 text-left text-xs hover:bg-blue-50"
+                  className="min-h-[40px] rounded px-2 py-2 text-left text-xs hover:bg-blue-50 sm:min-h-0 sm:py-1.5"
                 >
                   <span className="font-medium text-slate-900">+ {i.ad}</span>
                   <span className="ml-1 text-slate-500">({BIRIM_LABELS[i.birim]})</span>

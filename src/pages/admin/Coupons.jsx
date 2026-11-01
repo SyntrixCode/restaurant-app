@@ -55,7 +55,7 @@ export default function AdminCoupons() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Kupon Kodları"
         subtitle="Müşterinin elinde kod ile uygulanan indirimler"
@@ -72,7 +72,7 @@ export default function AdminCoupons() {
         }
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:mb-6 sm:gap-4 md:grid-cols-3">
         <StatCard label="Toplam Kupon" value={coupons.length} icon={Tag} />
         <StatCard label="Aktif" value={totalAktif} color="green" />
         <StatCard label="Şu An Kullanılabilir" value={totalGecerli} color="blue" />
@@ -85,7 +85,7 @@ export default function AdminCoupons() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Kupon kodu ara..."
-            className="input max-w-xs pl-8"
+            className="input w-full pl-8 sm:max-w-xs"
           />
         </div>
       </div>
@@ -103,16 +103,16 @@ export default function AdminCoupons() {
               const dolu = c.maxKullanim > 0 && (c.kullanilan || 0) >= c.maxKullanim;
               const suresizMi = c.maxKullanim === 0;
               return (
-                <li key={c.id} className="grid grid-cols-12 items-center gap-3 px-4 py-3">
-                  <div className="col-span-3">
-                    <div className="flex items-center gap-2">
+                <li key={c.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:grid sm:grid-cols-12 sm:gap-3">
+                  <div className="w-full min-w-0 break-words sm:col-span-3 sm:w-auto">
+                    <div className="flex flex-wrap items-center gap-2">
                       <code className="rounded bg-slate-100 px-2 py-1 font-mono text-sm font-bold tracking-wider">
                         {c.kod}
                       </code>
                       <button
                         onClick={() => copyCode(c.kod)}
                         title="Kopyala"
-                        className="text-slate-400 hover:text-slate-700"
+                        className="-m-2 p-2.5 text-slate-400 hover:text-slate-700 sm:m-0 sm:p-0"
                       >
                         <Copy size={12} />
                       </button>
@@ -129,35 +129,35 @@ export default function AdminCoupons() {
                     </div>
                     {c.aciklama && <p className="mt-1 text-xs text-slate-500">{c.aciklama}</p>}
                   </div>
-                  <div className="col-span-2 text-sm font-semibold text-blue-700">
+                  <div className="text-sm font-semibold text-blue-700 sm:col-span-2">
                     {c.indirimTipi === 'yuzde' ? `%${c.indirimDeger}` : formatTL(c.indirimDeger)}
                   </div>
-                  <div className="col-span-2 text-xs text-slate-600">
+                  <div className="text-xs text-slate-600 sm:col-span-2">
                     {c.minTutar > 0 && <p>Min: {formatTL(c.minTutar)}</p>}
                     {c.sonGecerlilik && <p>Son: {c.sonGecerlilik}</p>}
                   </div>
-                  <div className="col-span-2 text-xs text-slate-700">
+                  <div className="text-xs text-slate-700 sm:col-span-2">
                     <p>
                       Kullanım: <strong>{c.kullanilan || 0}</strong>
                       {!suresizMi && ` / ${c.maxKullanim}`}
                     </p>
                   </div>
-                  <div className="col-span-2">
+                  <div className="sm:col-span-2">
                     <Toggle checked={!!c.aktif} onChange={() => handleToggle(c)} />
                   </div>
-                  <div className="col-span-1 flex justify-end gap-1">
+                  <div className="ml-auto flex justify-end gap-1 sm:col-span-1 sm:ml-0">
                     <button
                       onClick={() => {
                         setEditing(c);
                         setOpen(true);
                       }}
-                      className="btn-ghost px-2 py-1"
+                      className="btn-ghost p-2.5 sm:px-2 sm:py-1"
                     >
                       <Pencil size={14} />
                     </button>
                     <button
                       onClick={() => handleDelete(c)}
-                      className="btn-ghost px-2 py-1 text-red-600 hover:bg-red-50"
+                      className="btn-ghost p-2.5 text-red-600 hover:bg-red-50 sm:px-2 sm:py-1"
                     >
                       <Trash2 size={14} />
                     </button>

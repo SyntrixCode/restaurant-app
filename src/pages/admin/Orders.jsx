@@ -86,10 +86,10 @@ export default function AdminOrders() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader title="Açık Siparişler" subtitle="Henüz ödenmemiş masa siparişleri" />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="mb-4 sm:mb-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
         <StatCard label="Açık Sipariş" value={masaOrders.length} color="blue" icon={ShoppingCart} />
         <StatCard label="Açık Tutar" value={formatTL(totalActive)} color="green" />
         <StatCard
@@ -101,11 +101,11 @@ export default function AdminOrders() {
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:flex-nowrap">
           <select
             value={filterGarson}
             onChange={(e) => setFilterGarson(e.target.value)}
-            className="input max-w-xs"
+            className="input w-full sm:w-auto sm:max-w-xs"
           >
             <option value="all">Tüm Garsonlar</option>
             {garsonlar.map((g) => (
@@ -114,13 +114,13 @@ export default function AdminOrders() {
               </option>
             ))}
           </select>
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Masa, garson, no ara..."
-              className="input max-w-xs pl-8"
+              className="input pl-8 sm:max-w-xs"
             />
           </div>
         </div>
@@ -141,10 +141,32 @@ export default function AdminOrders() {
                 <li
                   key={o.id}
                   onClick={() => setDetail(o)}
-                  className={`grid cursor-pointer grid-cols-12 items-center gap-3 px-4 py-3 transition hover:bg-slate-50 ${
+                  className={`cursor-pointer transition hover:bg-slate-50 ${
                     late ? 'border-l-4 border-red-500' : ''
                   }`}
                 >
+                  {/* Telefon: kart satırı */}
+                  <div className="flex items-start justify-between gap-3 px-4 py-3 sm:hidden">
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-semibold text-slate-900">{o.masaAd || 'Paket'}</p>
+                      <p className="mt-0.5 truncate text-sm text-slate-600">
+                        {o.garsonAd}
+                        {o.kisiSayisi != null ? ` · ${o.kisiSayisi} kişi` : ''} · {o.items?.length || 0} ürün
+                      </p>
+                      <p className={`mt-0.5 text-sm font-semibold ${late ? 'text-red-600' : 'text-slate-600'}`}>
+                        {late && <AlertTriangle size={12} className="mr-1 inline" />}
+                        {mins} dk
+                        <span className="ml-2 text-xs font-normal text-slate-500">
+                          {formatDate(o.olusturmaZamani, 'HH:mm')} · #{o.id.slice(0, 6)}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right text-base font-bold text-slate-900">
+                      {formatTL(o.toplam)}
+                    </div>
+                  </div>
+                  {/* Masaüstü: grid satırı */}
+                  <div className="hidden grid-cols-12 items-center gap-3 px-4 py-3 sm:grid">
                   <div className="col-span-3">
                     <p className="font-semibold text-slate-900">{o.masaAd || 'Paket'}</p>
                     <p className="text-xs text-slate-500">#{o.id.slice(0, 6)}</p>
@@ -169,6 +191,7 @@ export default function AdminOrders() {
                   </div>
                   <div className="col-span-3 text-right text-sm font-bold text-slate-900">
                     {formatTL(o.toplam)}
+                  </div>
                   </div>
                 </li>
               );
@@ -213,7 +236,7 @@ function OrderDetailModal({ open, order, onClose, onCancel }) {
       }
     >
       <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-3 text-sm">
+        <div className="grid grid-cols-3 gap-2 text-sm sm:gap-3">
           <Info label="Garson" value={order.garsonAd} />
           <Info label="Kişi" value={order.kisiSayisi != null ? order.kisiSayisi : '—'} />
           <Info label="Süre" value={`${mins} dk`} />
@@ -225,18 +248,18 @@ function OrderDetailModal({ open, order, onClose, onCancel }) {
           </div>
           <ul className="divide-y divide-slate-100">
             {order.items?.map((it, idx) => (
-              <li key={idx} className="flex justify-between px-3 py-2 text-sm">
-                <span>
+              <li key={idx} className="flex justify-between gap-3 px-3 py-2 text-sm">
+                <span className="min-w-0 break-words">
                   <strong>{formatAdet(it.adet)}×</strong> {it.ad}
                   {it.notlar && (
                     <em className="ml-2 text-xs text-slate-500">({it.notlar})</em>
                   )}
                 </span>
-                <span className="font-semibold">{formatTL(it.fiyat * it.adet)}</span>
+                <span className="shrink-0 font-semibold">{formatTL(it.fiyat * it.adet)}</span>
               </li>
             ))}
           </ul>
-          <div className="border-t border-slate-200 bg-slate-50 px-3 py-2 text-right">
+          <div className="border-t border-slate-200 bg-slate-50 px-3 py-2 text-right leading-relaxed">
             <span className="text-slate-500">Ara Toplam: </span>
             <span className="mr-3">{formatTL(order.araToplam)}</span>
             {order.indirim > 0 && (

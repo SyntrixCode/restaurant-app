@@ -112,7 +112,7 @@ export default function Categories() {
   const toggleActive = (c) => patchDoc('categories', c.id, { aktif: !c.aktif });
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Kategoriler"
         subtitle="Menü kategorilerini sıralayın ve yazıcı atayın"
@@ -123,7 +123,7 @@ export default function Categories() {
                 setEditing(null);
                 setOpen(true);
               }}
-              className="btn-primary"
+              className="btn-primary min-h-[40px] sm:min-h-0"
             >
               <Plus size={16} /> Yeni Kategori
             </button>
@@ -131,7 +131,7 @@ export default function Categories() {
         }
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:mb-6 sm:gap-4 md:grid-cols-3">
         <StatCard label="Toplam Kategori" value={categories.length} icon={Tags} />
         <StatCard label="Aktif" value={categories.filter((c) => c.aktif).length} color="green" />
         <StatCard label="Toplam Ürün" value={products.length} color="blue" />
@@ -142,12 +142,12 @@ export default function Categories() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Kategori ara..."
-          className="input max-w-xs"
+          className="input max-w-none sm:max-w-xs"
         />
       </div>
 
       <div className="card overflow-hidden p-0">
-        <div className="grid grid-cols-12 gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs font-medium uppercase text-slate-500">
+        <div className="hidden grid-cols-12 gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs sm:grid font-medium uppercase text-slate-500">
           <div className="col-span-1"></div>
           <div className="col-span-1">Sıra</div>
           <div className="col-span-4">Ad</div>
@@ -199,25 +199,26 @@ function SortableRow({ cat, index, productCount, printers, onToggle, onEdit, onD
     <div
       ref={setNodeRef}
       style={style}
-      className="grid grid-cols-12 items-center gap-2 border-b border-slate-100 px-4 py-3 hover:bg-slate-50"
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-100 px-3 py-3 hover:bg-slate-50 sm:grid sm:grid-cols-12 sm:gap-2 sm:px-4"
     >
       <div className="col-span-1">
-        <button {...attributes} {...listeners} className="cursor-grab text-slate-400 hover:text-slate-700">
+        <button {...attributes} {...listeners} className="-m-1 cursor-grab touch-none p-2.5 text-slate-400 hover:text-slate-700 sm:m-0 sm:p-0">
           <GripVertical size={18} />
         </button>
       </div>
       <div className="col-span-1 text-sm text-slate-500">{index + 1}</div>
-      <div className="col-span-4 font-medium text-slate-900">{cat.ad}</div>
+      <div className="col-span-4 min-w-0 flex-1 break-words font-medium text-slate-900">{cat.ad}</div>
       <div className="col-span-2">
         <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
           {productCount} ürün
         </span>
       </div>
-      <div className="col-span-2">
+      <div className="h-0 basis-full sm:hidden" />
+      <div className="col-span-2 min-w-0 flex-1 sm:flex-none">
         <select
           value={cat.yaziciId || ''}
           onChange={(e) => onPrinterChange(e.target.value)}
-          className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm"
+          className="min-h-[40px] w-full rounded border border-slate-200 bg-white px-2 py-2 text-sm sm:min-h-0 sm:py-1"
         >
           <option value="">Varsayılan</option>
           {printers.map((p) => (
@@ -230,12 +231,12 @@ function SortableRow({ cat, index, productCount, printers, onToggle, onEdit, onD
       <div className="col-span-1">
         <Toggle checked={cat.aktif} onChange={onToggle} />
       </div>
-      <div className="col-span-1 text-right">
-        <div className="inline-flex gap-1">
-          <button onClick={onEdit} className="btn-ghost px-2 py-1">
+      <div className="col-span-1 ml-auto text-right sm:ml-0">
+        <div className="inline-flex gap-2 sm:gap-1">
+          <button onClick={onEdit} className="btn-ghost min-h-[40px] min-w-[40px] justify-center p-2.5 sm:min-h-0 sm:min-w-0 sm:px-2 sm:py-1">
             <Pencil size={14} />
           </button>
-          <button onClick={onDelete} className="btn-ghost px-2 py-1 text-red-600 hover:bg-red-50">
+          <button onClick={onDelete} className="btn-ghost min-h-[40px] min-w-[40px] justify-center p-2.5 sm:min-h-0 sm:min-w-0 sm:px-2 sm:py-1 text-red-600 hover:bg-red-50">
             <Trash2 size={14} />
           </button>
         </div>
@@ -337,7 +338,7 @@ function CategoryModal({ open, onClose, editing, printers, maxSira }) {
           <summary className="cursor-pointer text-sm font-medium text-slate-700">
             Çeviriler (QR menü — opsiyonel)
           </summary>
-          <div className="mt-3 grid grid-cols-2 gap-3">
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">İngilizce ad</label>
               <input {...register('ceviri.en.ad')} className="input" placeholder="English name" />

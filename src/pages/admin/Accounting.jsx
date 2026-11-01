@@ -120,16 +120,16 @@ export default function Accounting() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Muhasebe Aktarımı"
         subtitle="Logo / Mikro vb. için günlük satış + KDV dökümü (Excel / CSV)"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <input type="date" value={bas} onChange={(e) => setBas(e.target.value)} className="input max-w-[150px]" />
+            <input type="date" value={bas} onChange={(e) => setBas(e.target.value)} className="input min-w-0 flex-1 sm:max-w-[150px] sm:flex-none" />
             <span className="text-slate-400">—</span>
-            <input type="date" value={bit} onChange={(e) => setBit(e.target.value)} className="input max-w-[150px]" />
-            <button onClick={handleFetch} disabled={loading} className="btn-primary disabled:opacity-50">
+            <input type="date" value={bit} onChange={(e) => setBit(e.target.value)} className="input min-w-0 flex-1 sm:max-w-[150px] sm:flex-none" />
+            <button onClick={handleFetch} disabled={loading} className="btn-primary w-full disabled:opacity-50 sm:w-auto">
               <Download size={16} /> {loading ? 'Getiriliyor...' : 'Getir'}
             </button>
           </div>
@@ -138,13 +138,15 @@ export default function Accounting() {
 
       {loaded && (
         <>
-          <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="mb-4 grid grid-cols-2 gap-3 sm:mb-6 sm:gap-4 md:grid-cols-3">
             <StatCard label="KDV Matrahı" value={formatTL(fromKurus(toplam.matrahK))} icon={Calculator} />
             <StatCard label={`KDV (%${vergiOrani})`} value={formatTL(fromKurus(toplam.kdvK))} color="amber" />
-            <StatCard label="Toplam Ciro" value={formatTL(fromKurus(toplam.toplamK))} color="green" />
+            <div className="col-span-2 md:col-span-1">
+              <StatCard label="Toplam Ciro" value={formatTL(fromKurus(toplam.toplamK))} color="green" />
+            </div>
           </div>
 
-          <div className="mb-4 flex gap-2">
+          <div className="mb-4 flex flex-wrap gap-2">
             <button onClick={handleExcel} disabled={daily.length === 0} className="btn-secondary disabled:opacity-50">
               <FileSpreadsheet size={16} /> Excel (.xlsx)
             </button>
@@ -153,7 +155,30 @@ export default function Accounting() {
             </button>
           </div>
 
-          <div className="card overflow-hidden p-0">
+          {/* Telefon: gün kartları */}
+          <div className="space-y-2 sm:hidden">
+            {daily.length === 0 ? (
+              <div className="card py-8 text-center text-sm text-slate-500">Bu aralıkta kayıt yok.</div>
+            ) : (
+              daily.map((r) => (
+                <div key={r.gun} className="card p-3 text-sm">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="font-medium text-slate-900">{r.gun}</span>
+                    <span className="text-base font-semibold tabular-nums">{formatTL(fromKurus(r.toplamK))}</span>
+                  </div>
+                  <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600">
+                    <div className="flex justify-between gap-2"><dt>Nakit</dt><dd className="tabular-nums">{formatTL(fromKurus(r.nakitK))}</dd></div>
+                    <div className="flex justify-between gap-2"><dt>Kart</dt><dd className="tabular-nums">{formatTL(fromKurus(r.kartK))}</dd></div>
+                    <div className="flex justify-between gap-2"><dt>Yemek K.</dt><dd className="tabular-nums">{formatTL(fromKurus(r.yemekK))}</dd></div>
+                    <div className="flex justify-between gap-2"><dt>Matrah</dt><dd className="tabular-nums">{formatTL(fromKurus(r.matrahK))}</dd></div>
+                    <div className="col-span-2 flex justify-between gap-2 text-amber-700"><dt>KDV</dt><dd className="tabular-nums">{formatTL(fromKurus(r.kdvK))}</dd></div>
+                  </dl>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="card hidden overflow-hidden p-0 sm:block">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
                 <tr>

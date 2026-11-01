@@ -80,6 +80,21 @@ export default function AdminLayout() {
     setOpen(false);
   }, [location.pathname]);
 
+  // Admin panelinde telefonda yakınlaştırma serbest (tablo/rapor okumak için); POS tableti
+  // kazara zoom olmasın diye index.html'deki kısıtlı viewport'u kullanmaya devam eder.
+  useEffect(() => {
+    const meta = document.querySelector('meta[name="viewport"]');
+    if (!meta) return undefined;
+    const prev = meta.getAttribute('content');
+    meta.setAttribute('content', 'width=device-width, initial-scale=1.0, viewport-fit=cover');
+    return () => {
+      if (prev) meta.setAttribute('content', prev);
+    };
+  }, []);
+
+  // Mobil üst barda gösterilecek geçerli sayfa adı
+  const currentLabel = NAV.find((n) => location.pathname.startsWith(n.to))?.label;
+
   const handleLogout = async () => {
     await logout();
     navigate('/admin/login');
@@ -94,7 +109,7 @@ export default function AdminLayout() {
 
       {/* Sidebar — masaüstünde sabit, mobilde kayan çekmece */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-64 transform flex-col border-r border-slate-200 bg-white transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-[85vw] max-w-xs transform flex-col border-r border-slate-200 bg-white pt-[env(safe-area-inset-top)] transition-transform duration-200 lg:static lg:z-auto lg:w-64 lg:max-w-none lg:translate-x-0 lg:pt-0 ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -117,7 +132,7 @@ export default function AdminLayout() {
               key={to}
               to={to}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
+                `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition lg:py-2 ${
                   isActive
                     ? 'bg-blue-50 font-medium text-blue-700'
                     : 'text-slate-600 hover:bg-slate-100'
@@ -130,8 +145,8 @@ export default function AdminLayout() {
           ))}
         </nav>
         <div className="border-t border-slate-200 p-3">
-          <div className="mb-2 px-1 text-xs text-slate-500">
-            <p className="font-semibold text-slate-700">{user?.email}</p>
+          <div className="mb-2 min-w-0 px-1 text-xs text-slate-500">
+            <p className="truncate font-semibold text-slate-700">{user?.email}</p>
             <p>Rol: {rol}</p>
           </div>
           <button onClick={handleLogout} className="btn-ghost w-full justify-start">
@@ -147,17 +162,22 @@ export default function AdminLayout() {
       {/* İçerik sütunu */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobil üst bar (hamburger) */}
-        <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-2.5 lg:hidden">
-          <button onClick={() => setOpen(true)} className="btn-ghost -ml-1" aria-label="Menü">
+        <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] lg:hidden">
+          <button onClick={() => setOpen(true)} className="btn-ghost -ml-1 shrink-0" aria-label="Menü">
             <Menu size={22} />
           </button>
           <img
             src="/branding/ala-konya-logo.png"
             alt={settings.restoranAd || 'Yönetim'}
-            className="h-8 w-auto"
+            className="h-8 w-auto shrink-0"
           />
+          {currentLabel && (
+            <span className="min-w-0 flex-1 truncate text-right text-sm font-semibold text-slate-700">
+              {currentLabel}
+            </span>
+          )}
         </header>
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
           <OfflineBanner />
           <Outlet />
         </main>

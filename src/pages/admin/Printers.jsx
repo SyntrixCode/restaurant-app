@@ -151,7 +151,7 @@ export default function Printers() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Yazıcılar"
         subtitle="Mutfak / bar yazıcıları ve kategori yönlendirme"
@@ -160,7 +160,7 @@ export default function Printers() {
             <button
               onClick={handlePrintRoutingMap}
               disabled={listPrinting}
-              className="btn-secondary disabled:opacity-50"
+              className="btn-secondary min-h-[40px] sm:min-h-0 disabled:opacity-50"
               title="Her aktif yazıcıya, o yazıcıdan çıkacak ürünlerle DEMO fişi basar. Üstünde 'DEMO' ibaresi olur, sipariş/ciro oluşmaz."
             >
               <ClipboardList size={16} /> {listPrinting ? 'Basılıyor…' : 'DEMO Fiş Bas (Tüm Yazıcılar)'}
@@ -170,7 +170,7 @@ export default function Printers() {
                 setEditing(null);
                 setOpen(true);
               }}
-              className="btn-primary"
+              className="btn-primary min-h-[40px] sm:min-h-0"
             >
               <Plus size={16} /> Yeni Yazıcı
             </button>
@@ -190,8 +190,8 @@ export default function Printers() {
         )}
         {printers.map((p) => (
           <div key={p.id} className="card flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="flex min-w-0 flex-wrap items-center gap-2 break-words text-lg font-semibold text-slate-900">
                 <PrinterIcon size={18} />
                 {p.ad}
                 {p.varsayilan && (
@@ -205,7 +205,7 @@ export default function Printers() {
                 onChange={(v) => patchDoc('printers', p.id, { aktif: v })}
               />
             </div>
-            <p className="font-mono text-sm text-slate-600">
+            <p className="break-all font-mono text-sm text-slate-600">
               {(p.baglanti || 'ethernet') === 'usb'
                 ? 'USB bağlantısı'
                 : `${p.ip}:${p.port || 9100}`}
@@ -231,21 +231,21 @@ export default function Printers() {
               </p>
             )}
             <div className="mt-2 flex flex-wrap gap-2">
-              <button onClick={() => handleTest(p)} className="btn-ghost flex-1 text-xs text-emerald-700 hover:bg-emerald-50">
+              <button onClick={() => handleTest(p)} className="btn-ghost min-h-[40px] flex-1 text-xs sm:min-h-0 text-emerald-700 hover:bg-emerald-50">
                 <Zap size={14} /> Test Yazdır
               </button>
               {p.kasaBagli && (
-                <button onClick={() => handleOpenDrawer(p)} className="btn-ghost flex-1 text-xs text-amber-700 hover:bg-amber-50">
+                <button onClick={() => handleOpenDrawer(p)} className="btn-ghost min-h-[40px] flex-1 text-xs sm:min-h-0 text-amber-700 hover:bg-amber-50">
                   <Wallet size={14} /> Kasayı Aç
                 </button>
               )}
               {p.siparisZili && (
-                <button onClick={() => handleBuzzer(p)} className="btn-ghost flex-1 text-xs text-blue-700 hover:bg-blue-50">
+                <button onClick={() => handleBuzzer(p)} className="btn-ghost min-h-[40px] flex-1 text-xs sm:min-h-0 text-blue-700 hover:bg-blue-50">
                   <Bell size={14} /> Zili Çal
                 </button>
               )}
               {!p.varsayilan && (
-                <button onClick={() => setDefault(p)} className="btn-ghost flex-1 text-xs">
+                <button onClick={() => setDefault(p)} className="btn-ghost min-h-[40px] flex-1 text-xs sm:min-h-0">
                   <Star size={14} /> Varsayılan Yap
                 </button>
               )}
@@ -254,13 +254,13 @@ export default function Printers() {
                   setEditing(p);
                   setOpen(true);
                 }}
-                className="btn-ghost flex-1 text-xs"
+                className="btn-ghost min-h-[40px] flex-1 text-xs sm:min-h-0"
               >
                 <Pencil size={14} /> Düzenle
               </button>
               <button
                 onClick={() => handleDelete(p)}
-                className="btn-ghost flex-1 text-xs text-red-600 hover:bg-red-50"
+                className="btn-ghost min-h-[40px] flex-1 text-xs sm:min-h-0 text-red-600 hover:bg-red-50"
               >
                 <Trash2 size={14} /> Sil
               </button>

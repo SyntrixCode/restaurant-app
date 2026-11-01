@@ -161,22 +161,22 @@ export default function StaffReport() {
   const handlePrint = () => window.print();
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Personel Günlük Raporu"
         subtitle="Garson ve kasiyer bazlı günlük performans"
         actions={
-          <div className="flex items-center gap-2 print:hidden">
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
             <input
               type="date"
               value={gun}
               onChange={(e) => setGun(e.target.value)}
-              className="input max-w-[160px]"
+              className="input w-full max-w-none sm:w-auto sm:max-w-[160px]"
             />
-            <button onClick={handleExport} className="btn-secondary">
+            <button onClick={handleExport} className="btn-secondary min-h-[44px] sm:min-h-0">
               <ClipboardList size={16} /> Excel
             </button>
-            <button onClick={handlePrint} className="btn-secondary">
+            <button onClick={handlePrint} className="btn-secondary min-h-[44px] sm:min-h-0">
               <Printer size={16} /> Yazdır
             </button>
           </div>
@@ -186,7 +186,7 @@ export default function StaffReport() {
       <div id="personel-rapor" className="space-y-6">
         {/* Garsonlar */}
         <div className="card">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
             <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
               <Users size={18} /> Garsonlar
             </h3>
@@ -195,7 +195,19 @@ export default function StaffReport() {
           {garsonRows.length === 0 ? (
             <p className="py-6 text-center text-sm text-slate-500">Bu güne ait sipariş yok.</p>
           ) : (
-            <table className="w-full text-sm">
+            <>
+            <ul className="divide-y divide-slate-100 sm:hidden">
+              {garsonRows.map((r) => (
+                <li key={r.id} className="flex items-center justify-between gap-3 py-2.5">
+                  <div className="min-w-0">
+                    <div className="break-words font-medium text-slate-900">{r.ad}</div>
+                    <div className="text-xs text-slate-500">{r.siparis} sipariş · {r.kisi || '-'} kişi</div>
+                  </div>
+                  <div className="shrink-0 font-semibold tabular-nums">{formatTL(r.ciro)}</div>
+                </li>
+              ))}
+            </ul>
+            <table className="hidden w-full text-sm sm:table">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500">
                   <th className="py-2">Garson</th>
@@ -215,12 +227,13 @@ export default function StaffReport() {
                 ))}
               </tbody>
             </table>
+            </>
           )}
         </div>
 
         {/* Kasiyerler */}
         <div className="card">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
             <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
               <Wallet size={18} /> Kasiyerler
             </h3>
@@ -229,7 +242,19 @@ export default function StaffReport() {
           {kasiyerRows.length === 0 ? (
             <p className="py-6 text-center text-sm text-slate-500">Bu güne ait ödeme yok.</p>
           ) : (
-            <table className="w-full text-sm">
+            <>
+            <ul className="divide-y divide-slate-100 sm:hidden">
+              {kasiyerRows.map((r) => (
+                <li key={r.id} className="flex items-center justify-between gap-3 py-2.5">
+                  <div className="min-w-0">
+                    <div className="break-words font-medium text-slate-900">{r.ad}</div>
+                    <div className="text-xs text-slate-500">{r.odeme} ödeme</div>
+                  </div>
+                  <div className="shrink-0 font-semibold tabular-nums">{formatTL(r.tahsilat)}</div>
+                </li>
+              ))}
+            </ul>
+            <table className="hidden w-full text-sm sm:table">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500">
                   <th className="py-2">Kasiyer</th>
@@ -247,12 +272,13 @@ export default function StaffReport() {
                 ))}
               </tbody>
             </table>
+            </>
           )}
         </div>
 
         {/* Kuryeler */}
         <div className="card">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
             <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
               <Truck size={18} /> Kuryeler
             </h3>
@@ -263,7 +289,24 @@ export default function StaffReport() {
           {kuryeRows.length === 0 ? (
             <p className="py-6 text-center text-sm text-slate-500">Bu güne ait teslimat yok.</p>
           ) : (
-            <table className="w-full text-sm">
+            <>
+            <ul className="divide-y divide-slate-100 sm:hidden">
+              {kuryeRows.map((r) => (
+                <li key={r.id} className="py-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 break-words font-medium text-slate-900">{r.ad}</div>
+                    <div className="shrink-0 font-semibold tabular-nums">{formatTL(r.ciro)}</div>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs tabular-nums text-slate-500">
+                    <span>{r.teslimat} teslimat</span>
+                    <span>Ort. {fmtDuration(r.ortalamaSureSec)}</span>
+                    <span className="text-emerald-700">En kısa {fmtDuration(r.enKisaSec)}</span>
+                    <span className="text-amber-700">En uzun {fmtDuration(r.enUzunSec)}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <table className="hidden w-full text-sm sm:table">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500">
                   <th className="py-2">Kurye</th>
@@ -297,6 +340,7 @@ export default function StaffReport() {
                 ))}
               </tbody>
             </table>
+            </>
           )}
         </div>
       </div>

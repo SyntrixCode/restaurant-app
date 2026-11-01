@@ -95,7 +95,7 @@ export default function AdminSuppliers() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Tedarikçiler"
         subtitle="Tedarikçi rehberi, cari hesap (borç) ve fatura/stok girişi"
@@ -112,15 +112,15 @@ export default function AdminSuppliers() {
         }
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
         <StatCard label="Toplam Tedarikçi" value={suppliers.length} icon={Truck} />
         <StatCard label="Aktif" value={aktifSayisi} color="green" />
         <StatCard label="Pasif" value={suppliers.length - aktifSayisi} color="amber" />
         <StatCard label="Toplam Borç" value={formatTL(toplamBorc)} color="red" icon={Wallet} />
       </div>
 
-      <div className="mb-4 flex items-center gap-2">
-        <div className="relative max-w-xs flex-1">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative w-full flex-1 sm:max-w-xs">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             value={search}
@@ -142,7 +142,7 @@ export default function AdminSuppliers() {
             const borc = Number(s.bakiye || 0);
             return (
               <div key={s.id} className={`card ${s.aktif === false ? 'opacity-60' : ''}`}>
-                <div className="mb-2 flex items-start justify-between">
+                <div className="mb-2 flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <h3 className="truncate text-lg font-semibold text-slate-900">{s.ad}</h3>
                     {s.kategori && (
@@ -160,7 +160,7 @@ export default function AdminSuppliers() {
                   {s.telefon && (
                     <p className="flex items-center gap-1.5">
                       <Phone size={11} className="text-slate-400" />
-                      <a href={`tel:${s.telefon}`} className="hover:underline">
+                      <a href={`tel:${s.telefon}`} className="inline-flex min-h-[40px] items-center hover:underline sm:min-h-0">
                         {s.telefon}
                       </a>
                     </p>
@@ -168,7 +168,7 @@ export default function AdminSuppliers() {
                   {s.email && (
                     <p className="flex items-center gap-1.5">
                       <Mail size={11} className="text-slate-400" />
-                      <a href={`mailto:${s.email}`} className="hover:underline">
+                      <a href={`mailto:${s.email}`} className="inline-flex min-h-[40px] items-center break-all hover:underline sm:min-h-0">
                         {s.email}
                       </a>
                     </p>
@@ -200,7 +200,7 @@ export default function AdminSuppliers() {
                 <div className="mt-3 flex flex-wrap justify-end gap-1 border-t border-slate-100 pt-3">
                   <button
                     onClick={() => setCariForId(s.id)}
-                    className="btn-ghost px-2 py-1 text-sm text-emerald-700 hover:bg-emerald-50"
+                    className="btn-ghost min-h-[40px] px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 sm:min-h-0 sm:px-2 sm:py-1"
                   >
                     <Receipt size={14} /> Cari / Fatura
                   </button>
@@ -209,13 +209,13 @@ export default function AdminSuppliers() {
                       setEditing(s);
                       setOpen(true);
                     }}
-                    className="btn-ghost px-2 py-1 text-sm"
+                    className="btn-ghost min-h-[40px] px-3 py-2 text-sm sm:min-h-0 sm:px-2 sm:py-1"
                   >
                     <Pencil size={14} /> Düzenle
                   </button>
                   <button
                     onClick={() => handleDelete(s)}
-                    className="btn-ghost px-2 py-1 text-sm text-red-600 hover:bg-red-50"
+                    className="btn-ghost min-h-[40px] min-w-[40px] px-3 py-2 text-sm text-red-600 hover:bg-red-50 sm:min-h-0 sm:min-w-0 sm:px-2 sm:py-1"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -358,7 +358,7 @@ function TedarikciCariModal({ supplier, onClose }) {
               {borc < 0 && <span className="ml-1 text-sm font-normal">(avans)</span>}
             </p>
           </div>
-          <div className="flex items-end gap-2">
+          <div className="grid w-full grid-cols-2 items-end gap-2 sm:flex sm:w-auto">
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Ödeme Yap (borç düş)</label>
               <input
@@ -367,7 +367,7 @@ function TedarikciCariModal({ supplier, onClose }) {
                 value={odemeTutar}
                 onChange={(e) => setOdemeTutar(e.target.value)}
                 placeholder="0,00"
-                className="input max-w-[120px]"
+                className="input sm:max-w-[120px]"
               />
             </div>
             <div>
@@ -375,7 +375,7 @@ function TedarikciCariModal({ supplier, onClose }) {
               <select
                 value={odemeYontemi}
                 onChange={(e) => setOdemeYontemi(e.target.value)}
-                className="input max-w-[110px]"
+                className="input sm:max-w-[110px]"
               >
                 <option value="nakit">Nakit</option>
                 <option value="kart">Kart</option>
@@ -383,10 +383,10 @@ function TedarikciCariModal({ supplier, onClose }) {
                 <option value="diger">Diğer</option>
               </select>
             </div>
-            <button onClick={handleOdeme} disabled={busy} className="btn-secondary disabled:opacity-50">
+            <button onClick={handleOdeme} disabled={busy} className="btn-secondary min-h-[40px] justify-center disabled:opacity-50 sm:min-h-0">
               <Wallet size={16} /> Öde
             </button>
-            <button onClick={() => setFaturaOpen(true)} className="btn-primary">
+            <button onClick={() => setFaturaOpen(true)} className="btn-primary min-h-[40px] justify-center sm:min-h-0">
               <Plus size={16} /> Fatura Ekle
             </button>
           </div>
@@ -405,8 +405,8 @@ function TedarikciCariModal({ supplier, onClose }) {
             <div className="max-h-72 space-y-2 overflow-y-auto">
               {faturalarSorted.map((f) => (
                 <details key={f.id} className="rounded-lg border border-slate-200">
-                  <summary className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm">
-                    <span className="flex items-center gap-2">
+                  <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+                    <span className="flex flex-wrap items-center gap-2">
                       <span className="font-medium text-slate-900">
                         {f.faturaNo ? `#${f.faturaNo}` : 'Fatura'}
                       </span>
@@ -417,7 +417,7 @@ function TedarikciCariModal({ supplier, onClose }) {
                           target="_blank"
                           rel="noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-0.5 text-xs text-blue-600 hover:underline"
+                          className="inline-flex min-h-[40px] items-center gap-0.5 text-xs text-blue-600 hover:underline sm:min-h-0"
                         >
                           <ExternalLink size={11} /> belge
                         </a>
@@ -433,7 +433,7 @@ function TedarikciCariModal({ supplier, onClose }) {
                         }}
                         disabled={busy}
                         title="Faturayı sil (borç + stok geri alınır)"
-                        className="rounded p-1 text-red-500 hover:bg-red-50 disabled:opacity-40"
+                        className="rounded p-2.5 text-red-500 hover:bg-red-50 disabled:opacity-40 sm:p-1"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -459,8 +459,8 @@ function TedarikciCariModal({ supplier, onClose }) {
                   )}
 
                   {/* Faturadaki tablo düzeni */}
-                  <div className="max-h-72 overflow-auto border-t border-slate-100">
-                    <table className="w-full text-[11px]">
+                  <div className="table-scroll max-h-72 overflow-auto border-t border-slate-100">
+                    <table className="w-full min-w-[640px] text-[11px]">
                       <thead className="sticky top-0 bg-slate-50 text-slate-500">
                         <tr className="text-left">
                           <th className="px-2 py-1 font-medium">#</th>
@@ -529,8 +529,8 @@ function TedarikciCariModal({ supplier, onClose }) {
               Hareket yok.
             </p>
           ) : (
-            <div className="max-h-52 overflow-y-auto rounded-lg border border-slate-200">
-              <table className="w-full text-xs">
+            <div className="table-scroll max-h-52 overflow-auto rounded-lg border border-slate-200">
+              <table className="w-full min-w-[460px] text-xs">
                 <tbody className="divide-y divide-slate-100">
                   {hareketlerSorted.map((h) => (
                     <tr key={h.id}>
@@ -777,7 +777,7 @@ function FaturaModal({ supplier, onClose, onSaved }) {
       size="xl"
       footer={
         <>
-          <div className="mr-auto text-sm">
+          <div className="w-full text-sm sm:mr-auto sm:w-auto">
             <span className="text-xs text-slate-500">KDV hariç {formatTL(toplamHaric)} · </span>
             Ödenecek (KDV dahil):{' '}
             <span className="text-lg font-bold text-slate-900">{formatTL(toplam)}</span>
@@ -826,11 +826,11 @@ function FaturaModal({ supplier, onClose, onSaved }) {
         </div>
 
         {/* PDF'den otomatik oku */}
-        <div className="flex items-center gap-3 rounded-lg border border-violet-200 bg-violet-50 p-3">
+        <div className="flex flex-col gap-3 rounded-lg border border-violet-200 bg-violet-50 p-3 sm:flex-row sm:items-center">
           <button
             onClick={handlePdfRead}
             disabled={!file || aiBusy}
-            className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+            className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
           >
             {aiBusy ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
             {aiBusy ? 'Okunuyor…' : "PDF'den Oku"}
@@ -856,7 +856,7 @@ function FaturaModal({ supplier, onClose, onSaved }) {
                     () => toast.error('Kopyalanamadı'),
                   );
                 }}
-                className="btn-secondary px-2 py-1"
+                className="btn-secondary min-h-[40px] px-3 py-2 sm:min-h-0 sm:px-2 sm:py-1"
               >
                 Kopyala
               </button>
@@ -871,7 +871,7 @@ function FaturaModal({ supplier, onClose, onSaved }) {
 
         {/* Kalemler */}
         <div>
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <label className="text-sm font-medium text-slate-700">Kalemler</label>
             <div className="flex items-center gap-1">
               <button
@@ -881,12 +881,12 @@ function FaturaModal({ supplier, onClose, onSaved }) {
                     { tip: 'diger', refId: '', ad: '', miktar: '', birim: 'adet', birimFiyat: '', anaBirim: '', kdv: 20, stokKodu: '' },
                   ])
                 }
-                className="btn-ghost px-2 py-1 text-sm text-slate-600"
+                className="btn-ghost min-h-[40px] px-3 py-2 text-sm text-slate-600 sm:min-h-0 sm:px-2 sm:py-1"
                 title="Stok dışı kalem (temizlik, peçete vb.)"
               >
                 <PackageX size={14} /> Stok Dışı
               </button>
-              <button onClick={addKalem} className="btn-ghost px-2 py-1 text-sm text-emerald-700">
+              <button onClick={addKalem} className="btn-ghost min-h-[40px] px-3 py-2 text-sm text-emerald-700 sm:min-h-0 sm:px-2 sm:py-1">
                 <Plus size={14} /> Kalem Ekle
               </button>
             </div>
@@ -942,7 +942,7 @@ function FaturaModal({ supplier, onClose, onSaved }) {
                       <p className="mt-0.5 px-1 text-[10px] text-slate-400">Stok Kodu: {k.stokKodu}</p>
                     )}
                   </div>
-                  <div className="col-span-3 sm:col-span-2">
+                  <div className="col-span-6 sm:col-span-2">
                     <input
                       type="number"
                       step="0.01"
@@ -952,7 +952,7 @@ function FaturaModal({ supplier, onClose, onSaved }) {
                       className="input"
                     />
                   </div>
-                  <div className="col-span-3 sm:col-span-2">
+                  <div className="col-span-6 sm:col-span-2">
                     {isDiger ? (
                       <input
                         value={k.birim}
@@ -979,7 +979,7 @@ function FaturaModal({ supplier, onClose, onSaved }) {
                       </select>
                     )}
                   </div>
-                  <div className="col-span-3 sm:col-span-2">
+                  <div className="col-span-6 sm:col-span-2">
                     <input
                       type="number"
                       step="0.01"
@@ -989,7 +989,7 @@ function FaturaModal({ supplier, onClose, onSaved }) {
                       className="input"
                     />
                   </div>
-                  <div className="col-span-2 sm:col-span-1">
+                  <div className="col-span-4 sm:col-span-1">
                     <select
                       value={k.kdv ?? 20}
                       onChange={(e) => setKalem(idx, { kdv: Number(e.target.value) })}
@@ -1003,11 +1003,11 @@ function FaturaModal({ supplier, onClose, onSaved }) {
                       ))}
                     </select>
                   </div>
-                  <div className="col-span-1 flex justify-end">
+                  <div className="col-span-2 flex justify-end sm:col-span-1">
                     {kalemler.length > 1 && (
                       <button
                         onClick={() => removeKalem(idx)}
-                        className="btn-ghost px-2 py-1.5 text-red-500 hover:bg-red-50"
+                        className="btn-ghost p-2.5 text-red-500 hover:bg-red-50 sm:px-2 sm:py-1.5"
                       >
                         <X size={15} />
                       </button>
@@ -1223,7 +1223,7 @@ function SupplierModal({ open, editing, onClose }) {
           {errors.ad && <p className="mt-1 text-xs text-red-600">{errors.ad.message}</p>}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Kategori</label>
             <input {...register('kategori')} className="input" placeholder="Et / Sebze / İçecek..." />
@@ -1234,7 +1234,7 @@ function SupplierModal({ open, editing, onClose }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Telefon</label>
             <input {...register('telefon')} className="input" placeholder="0212 ..." />

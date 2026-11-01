@@ -46,7 +46,7 @@ export default function CariHesaplar() {
   };
 
   return (
-    <div className="p-4 md:p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Cari Hesaplar"
         subtitle="Patron/veresiye — kişiye yazılan hesaplar ve borç (alacak) takibi"
@@ -62,7 +62,7 @@ export default function CariHesaplar() {
         }
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="mb-4 sm:mb-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
         <StatCard label="Toplam Alacak" value={formatTL(toplamAlacak)} color="red" icon={Wallet} />
         <StatCard label="Cari Sayısı" value={list.length} icon={Users} />
         <StatCard label="Borçlu" value={borcluSayisi} color="amber" icon={CreditCard} />
@@ -78,7 +78,48 @@ export default function CariHesaplar() {
         />
       </div>
 
-      <div className="card overflow-x-auto p-0">
+      <div className="space-y-2 sm:hidden">
+        {filtered.length === 0 && (
+          <div className="card py-10 text-center text-slate-500">
+            {list.length === 0 ? 'Henüz cari yok. "Yeni Cari" ile ekleyin.' : 'Eşleşen cari yok.'}
+          </div>
+        )}
+        {filtered.map((c) => {
+          const bk = Number(c.bakiye || 0);
+          return (
+            <div key={c.id} className="card p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="break-words font-medium text-slate-900">{c.ad}</p>
+                  <p className="font-mono text-sm text-slate-600">{c.telefon || '—'}</p>
+                </div>
+                <span className={`shrink-0 text-base font-semibold tabular-nums ${bk > 0 ? 'text-rose-600' : bk < 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                  {formatTL(bk)}
+                </span>
+              </div>
+              <div className="mt-2 flex gap-1">
+                <button onClick={() => setDetail(c)} className="btn-secondary min-h-[40px] flex-1">
+                  <History size={16} /> Geçmiş
+                </button>
+                <button onClick={() => setEditing(c)} className="btn-ghost min-h-[40px] min-w-[40px] p-2.5" title="Düzenle">
+                  <Pencil size={16} />
+                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => handleDelete(c)}
+                    className="btn-ghost min-h-[40px] min-w-[40px] p-2.5 text-red-600 hover:bg-red-50"
+                    title="Sil"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="card hidden overflow-x-auto p-0 sm:block">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
             <tr>
@@ -203,44 +244,44 @@ function CariReportModal({ caris, onClose }) {
   const tarihAraligi = from === to ? from.split('-').reverse().join('.') : `${from.split('-').reverse().join('.')} – ${to.split('-').reverse().join('.')}`;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-slate-900/70 p-4 print:static print:bg-white print:p-0">
+    <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-slate-900/70 p-2 sm:p-4 print:static print:bg-white print:p-0">
       <div className="my-4 w-full max-w-3xl rounded-xl bg-white shadow-2xl print:my-0 print:max-w-none print:rounded-none print:shadow-none">
         {/* Kontroller (yazdırmada gizli) */}
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-3 print:hidden">
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
             {[['today', 'Bugün'], ['7', 'Son 7 Gün'], ['30', 'Son 30 Gün'], ['custom', 'Özel']].map(([k, l]) => (
               <button
                 key={k}
                 onClick={() => setPreset(k)}
-                className={`rounded-md px-3 py-1.5 text-sm ${preset === k ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'}`}
+                className={`rounded-md px-3 py-2 min-h-[40px] sm:min-h-0 sm:py-1.5 text-sm ${preset === k ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'}`}
               >
                 {l}
               </button>
             ))}
           </div>
           {preset === 'custom' && (
-            <div className="flex items-center gap-1">
-              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="input max-w-[150px]" />
+            <div className="flex w-full items-center gap-1 sm:w-auto">
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="input min-w-0 sm:max-w-[150px]" />
               <span className="text-slate-400">→</span>
-              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="input max-w-[150px]" />
+              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="input min-w-0 sm:max-w-[150px]" />
             </div>
           )}
-          <select value={scope} onChange={(e) => setScope(e.target.value)} className="input max-w-[180px]">
+          <select value={scope} onChange={(e) => setScope(e.target.value)} className="input w-full sm:max-w-[180px]">
             <option value="all">Tüm Cariler</option>
             {(caris || []).slice().sort((a, b) => (a.ad || '').localeCompare(b.ad || '', 'tr')).map((c) => (
               <option key={c.id} value={c.id}>{c.ad}</option>
             ))}
           </select>
-          <div className="ml-auto flex gap-2">
-            <button onClick={() => window.print()} className="btn-primary text-sm">
+          <div className="flex w-full gap-2 sm:ml-auto sm:w-auto">
+            <button onClick={() => window.print()} className="btn-primary min-h-[40px] flex-1 text-sm sm:min-h-0 sm:flex-none">
               <Printer size={14} /> Yazdır / PDF
             </button>
-            <button onClick={onClose} className="btn-ghost text-sm"><X size={14} /> Kapat</button>
+            <button onClick={onClose} className="btn-ghost min-h-[40px] text-sm sm:min-h-0"><X size={14} /> Kapat</button>
           </div>
         </div>
 
         {/* Yazdırılabilir rapor */}
-        <div id="cari-rapor" className="p-6">
+        <div id="cari-rapor" className="p-3 sm:p-6">
           <div className="mb-4 text-center">
             <h1 className="text-xl font-bold text-slate-900">{settings.restoranAd || 'Restoran'}</h1>
             <p className="text-sm font-semibold text-slate-700">CARİ HESAP RAPORU</p>
@@ -255,9 +296,9 @@ function CariReportModal({ caris, onClose }) {
                 const urunList = Object.entries(c.urunler).sort((a, b) => b[1].tutar - a[1].tutar);
                 return (
                   <div key={c.cariId} className="mb-5 break-inside-avoid rounded-lg border border-slate-200">
-                    <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
+                    <div className="flex flex-col gap-1 border-b border-slate-200 bg-slate-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                       <span className="font-bold text-slate-900">{c.cariAd}</span>
-                      <span className="text-sm text-slate-600">
+                      <span className="text-sm text-slate-600 sm:text-right">
                         Dönem borç: <strong className="text-rose-600">{formatTL(c.borc)}</strong>
                         {c.tahsilat > 0 && <> · Tahsilat: <strong className="text-emerald-600">{formatTL(c.tahsilat)}</strong></>}
                         {' '}· Güncel bakiye: <strong>{formatTL(bakiyeById[c.cariId] || 0)}</strong>
@@ -297,7 +338,7 @@ function CariReportModal({ caris, onClose }) {
               })}
 
               {scope === 'all' && byCari.length > 1 && (
-                <div className="mt-4 flex justify-between border-t-2 border-slate-300 pt-2 text-base font-bold">
+                <div className="mt-4 flex flex-col gap-1 border-t-2 border-slate-300 pt-2 text-base font-bold sm:flex-row sm:justify-between">
                   <span>GENEL TOPLAM</span>
                   <span>
                     Borç: <span className="text-rose-600">{formatTL(grandBorc)}</span>
@@ -474,7 +515,7 @@ function DetailModal({ cari, onClose }) {
       size="lg"
       footer={<button onClick={onClose} className="btn-secondary">Kapat</button>}
     >
-      <div className="mb-4 rounded-xl bg-slate-50 p-4 text-center">
+      <div className="mb-4 rounded-xl bg-slate-50 p-3 text-center sm:p-4">
         <p className="text-xs uppercase tracking-wide text-slate-500">Güncel Bakiye (Borç)</p>
         <p className={`text-2xl font-bold tabular-nums ${bakiye > 0 ? 'text-rose-600' : 'text-slate-800'}`}>
           {formatTL(bakiye)}
@@ -498,7 +539,7 @@ function DetailModal({ cari, onClose }) {
             placeholder="Açıklama (opsiyonel)"
             className="input"
           />
-          <button onClick={handleTahsilat} disabled={busy} className="btn-primary whitespace-nowrap disabled:opacity-50">
+          <button onClick={handleTahsilat} disabled={busy} className="btn-primary min-h-[44px] whitespace-nowrap disabled:opacity-50 sm:min-h-0">
             Tahsil Et
           </button>
         </div>
@@ -506,8 +547,8 @@ function DetailModal({ cari, onClose }) {
       </div>
 
       {/* Hareket geçmişi */}
-      <div className="max-h-[40vh] overflow-y-auto">
-        <table className="w-full text-sm">
+      <div className="table-scroll max-h-[40vh] overflow-y-auto">
+        <table className="w-full min-w-[480px] text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
             <tr>
               <th className="px-2 py-2">Tarih</th>
@@ -585,7 +626,7 @@ function DetailModal({ cari, onClose }) {
                             <div className="mt-2 flex justify-end">
                               <button
                                 onClick={(e) => { e.stopPropagation(); setFisData({ order: od && typeof od === 'object' ? od : null, hareket: h, items: hItems }); }}
-                                className="btn-secondary text-xs"
+                                className="btn-secondary min-h-[40px] text-xs sm:min-h-0"
                               >
                                 <Printer size={14} /> Fiş Bas
                               </button>
@@ -639,10 +680,10 @@ function CariReceiptModal({ order, hareket, items: itemsProp, cari, onClose }) {
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2 print:hidden">
           <h3 className="font-semibold">Cari Hesap Fişi</h3>
           <div className="flex gap-2">
-            <button onClick={() => window.print()} className="btn-primary text-sm">
+            <button onClick={() => window.print()} className="btn-primary min-h-[40px] text-sm sm:min-h-0">
               <Printer size={14} /> Yazdır
             </button>
-            <button onClick={onClose} className="btn-ghost text-sm">
+            <button onClick={onClose} className="btn-ghost min-h-[40px] text-sm sm:min-h-0">
               <X size={14} /> Kapat
             </button>
           </div>

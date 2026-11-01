@@ -86,7 +86,7 @@ export default function AdminSettings() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <form onSubmit={handleSubmit(onSubmit)}>
         <PageHeader
           title="Ayarlar"
@@ -95,7 +95,7 @@ export default function AdminSettings() {
             <button
               type="submit"
               disabled={isSubmitting || !isDirty}
-              className="btn-primary disabled:opacity-50"
+              className="btn-primary min-h-[40px] sm:min-h-0 disabled:opacity-50"
             >
               <Save size={16} /> {isDirty ? 'Değişiklikleri Kaydet' : 'Kaydedildi'}
             </button>
@@ -135,7 +135,7 @@ export default function AdminSettings() {
             <Field label="Google Haritalar (konum) linki" error={errors.googleMapsUrl}>
               <input {...register('googleMapsUrl')} className="input" placeholder="https://maps.app.goo.gl/..." />
             </Field>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="WhatsApp numarası" error={errors.whatsappNumarasi}>
                 <input {...register('whatsappNumarasi')} className="input" placeholder="+90 850 309 7983" />
               </Field>
@@ -383,7 +383,7 @@ export default function AdminSettings() {
           <button
             type="submit"
             disabled={isSubmitting || !isDirty}
-            className="btn-primary disabled:opacity-50"
+            className="btn-primary min-h-[44px] w-full disabled:opacity-50 sm:min-h-0 sm:w-auto"
           >
             <Save size={16} /> {isDirty ? 'Kaydet' : 'Kaydedildi'}
           </button>
@@ -408,7 +408,7 @@ function Section({ title, icon: Icon, children }) {
 function Field({ label, error, children }) {
   return (
     <div>
-      <label className="mb-1 block text-xs font-medium text-slate-700">{label}</label>
+      <label className="mb-1 block break-words text-xs font-medium text-slate-700">{label}</label>
       {children}
       {error && <p className="mt-1 text-xs text-red-600">{error.message}</p>}
     </div>
@@ -418,7 +418,7 @@ function Field({ label, error, children }) {
 function ToggleField({ label, hint, control, name }) {
   return (
     <div className="flex items-start justify-between gap-3 rounded-lg bg-slate-50 p-3">
-      <div className="min-w-0">
+      <div className="min-w-0 break-words">
         <p className="text-sm font-medium text-slate-800">{label}</p>
         {hint && <p className="mt-0.5 text-xs text-slate-500">{hint}</p>}
       </div>
